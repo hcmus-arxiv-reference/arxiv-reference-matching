@@ -2,9 +2,31 @@
 
 Đồ án Nhập môn Khoa học Dữ liệu: thu thập bài báo arXiv, phân tích nguồn LaTeX thành cấu trúc phân cấp, rồi ghép các trích dẫn BibTeX với metadata tham khảo bằng một pipeline học máy.
 
-> **Trạng thái:** tài liệu định hướng triển khai, chưa phải báo cáo kết quả. Cây thư mục dưới đây là thiết kế đề xuất; các module, lệnh chạy và pipeline chưa được triển khai/kiểm thử trong lần soạn README này. Tài liệu chưa phân công thành viên.
+> **Trạng thái (2026-10-16):** phần lớn nội dung dưới đây là định hướng, cây thư mục và lệnh pipeline là đề xuất. Hiện có `src/common/{schema,config,hf_io,metrics}.py`; 54 test đạt (kèm 15 subtest). Hugging Face được kiểm tra bằng mock, chưa thử upload/download thật; chưa có crawler hoặc Parser chạy trên dữ liệu thật. Hai bảng Crawling đã đối chiếu, các bảng khác trong code vẫn là dự thảo. Xem [review hạ tầng](docs/infrastructure-review.md), [review schema](docs/schema-review.md) và [bối cảnh đã chốt](CONTEXT.md).
+
+Kiểm tra các module hiện có từ root repo (đã chạy với Python 3.14.3):
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q
+```
+
+Tắt tự nạp plugin để tránh plugin pytest cài ngoài dự án ảnh hưởng bộ test.
+Copy `.env.example` thành `.env` và điền cấu hình cục bộ khi chạy tác vụ thật;
+test dùng cấu hình tổng hợp, không cần token. Không commit `.env` hoặc dữ liệu.
+
+Sau khi điền `HF_TOKEN`, `HF_REPO_ID`, `MEMBER_NAME`, tạo/xác minh dataset
+private bằng lệnh sau (gọi mạng thật, không upload dữ liệu):
+
+```sh
+.venv/bin/python -m scripts.check_hf
+```
 
 Nhóm trưởng: [NTBao-coder](https://github.com/NTBao-coder). Thành viên: [ngochai06](https://github.com/ngochai06), [nhminh107](https://github.com/nhminh107), [langtucod0n](https://github.com/langtucod0n).
+
+[Checklist dành cho nhóm trưởng](docs/team-lead-checklist.md) theo dõi việc đã
+xác minh, các quyết định còn mở và bằng chứng cần có trước khi chạy hàng loạt/nộp bài.
 
 - [Đề tổng quan](https://hcmus-cs-ta.github.io/lab-book/intro-ds/statement/)
 - [Milestone 1: Crawling](https://hcmus-cs-ta.github.io/lab-book/intro-ds/statement/crawling/)
