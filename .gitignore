@@ -1,0 +1,22 @@
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+
+# Downloaded/generated data
+data/
+outputs/
+*.parquet
+*.tar.gz
+*.gz
+*.tex
+*.bib
+
+# Python and local tooling
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
