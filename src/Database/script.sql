@@ -4,7 +4,8 @@ CREATE TABLE PAPERS (
     authors TEXT,
     submission_date DATE,
     revised_date DATE,
-    venue DATE
+    venue DATE,
+    content TEXT
 );
 
 CREATE TABLE PAPER_REFERENCES
