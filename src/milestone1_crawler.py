@@ -71,7 +71,7 @@ class Throttle:
 
 ARXIV_THROTTLE = Throttle(3.0)
 S2_THROTTLE = Throttle(1.1 if S2_API_KEY else 3.2)
-ARXIV_CLIENT = arxiv.Client(page_size=100, delay_seconds=3.0, num_entries=3)
+ARXIV_CLIENT = arxiv.Client(page_size=100, delay_seconds=3.0, num_retries=3)
 
 
 # ----------------------------------------------------------------------
@@ -218,7 +218,7 @@ def read_json(path):
 def append_log(rec):
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     with LOG_FILE.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(rec, ensure_ascii=False + "\n"))
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 def rss_mb():
     if psutil is None:
@@ -270,7 +270,7 @@ def discover_many(ids, batch_size=50):
         if (paper_dir / "done.json").exists():
             continue        # đã xong, khỏi hỏi
         if (paper_dir / "meta.json").exists():
-            found(pid) = read_json(paper_dir / "meta.json")     # đã hỏi từ lần chạy trước
+            found[pid] = read_json(paper_dir / "meta.json")     # đã hỏi từ lần chạy trước
         else:
             todo.append(pid)
 
@@ -298,7 +298,7 @@ def discover_many(ids, batch_size=50):
                 write_json(DATA_DIR / safe_dirname(pid) / "meta.json", meta)
             found[pid] = meta           # None = arXiv không có bài này
 
-        return found
+    return found
 
 def download_version(paper_id, version, paper_dir):
     """Tải 1 version. Đã làm rồi (có status.json) thì bỏ qua = checkpoint."""
@@ -372,13 +372,13 @@ def process_paper(paper_id, pool, metas=None):
     if done_file.exists():
         return "skipped"
 
-    paper_dir.mkdir(parent=True, exist_ok=True)
+    paper_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()
 
     metas = metas or {}
     meta_file = paper_dir / "meta.json"
     if paper_id in metas:   
-        meta = metas[paper_dir]         # từ lần hỏi theo lô (None = không có bài)
+        meta = metas[paper_id]         # từ lần hỏi theo lô (None = không có bài)
     elif meta_file.exists():
         meta = read_json(meta_file)
     else:
@@ -397,7 +397,11 @@ def process_paper(paper_id, pool, metas=None):
 
     versions = [download_version(paper_id, v, paper_dir)
                 for v in range(1, meta["n_versions"] + 1)]
-    n_refs, n_refs_arxiv = refs_future.result()     # lỗi ở luồng phụ sẽ nổ ra ở đây
+    try:
+        n_refs, n_refs_arxiv = refs_future.result()
+    except Exception as exc:
+        print(f"  [warn] Semantic Scholar failed for {paper_id}: {exc!r}")
+        n_refs, n_refs_arxiv = None, None
 
     summary = {
         "id": paper_id,
