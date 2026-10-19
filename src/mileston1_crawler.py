@@ -362,3 +362,102 @@ def fetch_and_save_refs(paper_id, paper_dir):
     write_json(refs_file, with_arxiv)   # bảng cuối chỉ cần có arXiv ID
     return len(slim), len(with_arxiv)
 
+ 
+# ----------------------------------------------------------------------
+# 7. Xử lý 1 bài
+# ----------------------------------------------------------------------
+def process_paper(paper_id, pool, metas=None):
+    paper_dir = DATA_DIR / safe_dirname(paper_id)
+    done_file = paper_dir / "done.json"
+    if done_file.exists():
+        return "skipped"
+
+    paper_dir.mkdir(parent=True, exist_ok=True)
+    t0 = time.perf_counter()
+
+    metas = metas or {}
+    meta_file = paper_dir / "meta.json"
+    if paper_id in metas:   
+        meta = metas[paper_dir]         # từ lần hỏi theo lô (None = không có bài)
+    elif meta_file.exists():
+        meta = read_json(meta_file)
+    else:
+        meta = discover_paper(paper_id)     # dự phòng: hỏi lẻ
+
+    if meta is None:
+        append_log({"id": paper_id, "status": "not_found"})
+        return "not_found"
+    if not meta_file.exists():
+        write_json(meta_file, meta)
+    
+    discover_seconds = meta.get("discover_seconds")
+
+    # Luồng phụ hỏi Semantic Scholar trong lúc luồng chính tải source arXiv
+    refs_future = pool.submit(fetch_and_save_refs, paper_id, paper_dir)
+
+    versions = [download_version(paper_id, v, paper_dir)
+                for v in range(1, meta["n_versions"] + 1)]
+    n_refs, n_refs_arxiv = refs_future.result()     # lỗi ở luồng phụ sẽ nổ ra ở đây
+
+    summary = {
+        "id": paper_id,
+        "status": "done",
+        "n_versions": meta["n_versions"],
+        "versions_with_tex": sum(1 for v in versions if v["status"] == "ok"),
+        "bytes_downloaded": sum(v["bytes_downloaded"] for v in versions),
+        "bytes_before": sum(v["bytes_before"] for v in versions),
+        "bytes_after": sum(v["bytes_after"] for v in versions),
+        "n_refs": n_refs,
+        "n_refs_with_arxiv_id": n_refs_arxiv,
+        "discover_seconds": discover_seconds,
+        "seconds": round(time.perf_counter() - t0, 3),
+        "rss_mb": rss_mb(),
+    }
+    write_json(done_file, summary)  # đánh dấu xong: chạy lại sẽ bỏ qua bài này
+    append_log(summary)
+    return "done"
+
+# ----------------------------------------------------------------------
+# 8. Chương trình chính
+# ----------------------------------------------------------------------
+def main():
+    ap = argparse.ArgumentParser(description="Milestone 1 starter crawler")
+    ap.add_argument("--id", action="append", help="một arXiv ID (có thể lặp lại)")
+    ap.add_argument("--ids-file", help="file text, mỗi dòng một arXiv ID")
+    ap.add_argument("--limit", type=int, help="chỉ chạy N bài đầu (để thử)")
+    ap.add_argument("--discover-batch", type=int, default=50,
+                    help="số ID hỏi arXiv mỗi lần (tối đa 100); 0 = hỏi lẻ từng bài")
+    args = ap.parse_args()
+
+    ids = list(args.id or [])
+    if args.ids_file:
+        for line in Path(args.ids_file).read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                ids.append(line)
+
+    if args.limit:
+        ids = ids[: args.limit]
+    if not ids:
+        ap.error("no ids given (use --id or --ids-file)")
+
+    counts = {}
+    t_start = time.perf_counter()
+    metas = discover_many(ids, args.discover_batch) if args.discover_batch > 0 else {}
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        for i, pid in enumerate(ids, 1):
+            try:
+                result = process_paper(pid, pool, metas)
+            except Exception as exc:   # một bài lỗi không làm hỏng cả lần chạy
+                result = "error"
+                append_log({"id": pid, "status": "error", "error": repr(exc)})
+            counts[result] = counts.get(result, 0) + 1
+            print(f"[{i}/{len(ids)}] {pid}: {result}")
+ 
+    total = round(time.perf_counter() - t_start, 1)
+    print(f"Finished in {total}s. Summary: {counts}")
+ 
+ 
+if __name__ == "__main__":
+    main()
+ 
