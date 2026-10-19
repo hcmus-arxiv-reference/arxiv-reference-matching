@@ -190,3 +190,175 @@ def extract_tex_bib(data, out_dir):
     return "other", [], 0, len(data)        # ví dụ file Word
 
 
+# ----------------------------------------------------------------------
+# 5. Các hàm tiện ích nhỏ
+# ----------------------------------------------------------------------
+def safe_dirname(paper_id):
+    """2310.12345 -> 2310-12345 ; hep-th/9901001 -> hep-th-9901001"""
+    return paper_id.replace("/", "-").replace(".", "-")
+
+def split_versioned_id(entry_id):
+    """'http://arxiv.org/abs/2310.12345v4' -> ('2310.12345', 4)"""
+    m = re.search(r"abs/(.+?)(?:v(\d+))?$", entry_id)
+    if not m:
+        raise ValueError(f"cannot parse entry_id: {entry_id}")
+
+    return m.group(1), int(m.group(2) or 1)
+
+def write_json(path, obj):
+    """Ghi file tạm rồi đổi tên: lỡ bị ngắt giữa chừng cũng không để lại file hỏng."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
+
+def read_json(path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+def append_log(rec):
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with LOG_FILE.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False + "\n"))
+
+def rss_mb():
+    if psutil is None:
+        return None
+    return round(psutil.Process().memory_info().rss / 1024 / 1024, 1)
+
+
+# ----------------------------------------------------------------------
+# 6. Ba việc chính
+# ----------------------------------------------------------------------
+def meta_from_result(r, base_id, n_versions, discover_seconds):
+    return {
+        "arxiv_id": base_id,
+        "n_versions": n_versions,
+        "title": r.title,
+        "authors": [a.name for a in r.authors],
+        "published": r.published.isoformat(),
+        "updated": r.updated.isoformat(),
+        "journal_ref": r.journal_ref,
+        "discover_seconds": discover_seconds,
+    }
+
+def discover_paper(paper_id):
+    """Hỏi arXiv API cho MỘT bài (dùng khi hỏi theo lô bị lỗi)."""
+    t0 = time.perf_counter()
+    ARXIV_THROTTLE.wait()
+    try:
+        results = list(ARXIV_CLIENT.results(arxiv.Search(id_list=[paper_id])))
+    finally:
+        ARXIV_THROTTLE.mark()
+
+    if not results:
+        return None
+
+    r = results[0]
+    base_id, n_versions = split_versioned_id(r.entry_id)
+    return meta_from_result(r, base_id, n_versions, round(time.perf_counter() - t0, 3))
+
+def discover_many(ids, batch_size=50):
+    """
+    Hỏi arXiv API THEO LÔ (nhiều ID trong một lần hỏi) để tiết kiệm số lần hỏi.
+    Trả về dict: id -> meta (dict), hoặc None nếu arXiv không có bài đó.
+    ID không có mặt trong dict = lô bị lỗi, process_paper sẽ tự hỏi lẻ.
+    Dùng ID gốc, KHÔNG kèm đuôi version.
+    """
+    found, todo = {}, []
+    for pid in ids:
+        paper_dir = DATA_DIR / safe_dirname(pid)
+        if (paper_dir / "done.json").exists():
+            continue        # đã xong, khỏi hỏi
+        if (paper_dir / "meta.json").exists():
+            found(pid) = read_json(paper_dir / "meta.json")     # đã hỏi từ lần chạy trước
+        else:
+            todo.append(pid)
+
+    for i in range(0, len(todo), batch_size):
+        chunk = todo[i:i + batch_size]
+        t0 = time.perf_counter()
+        ARXIV_THROTTLE.wait()
+        try:
+            results = list(ARXIV_CLIENT.results(arxiv.Search(id_list=chunk)))
+        except Exception as exc:
+            print(f"discover batch {i // batch_size} failed ({exc!r}); will ask one by one")
+            continue
+        finally:
+            ARXIV_THROTTLE.mark()
+
+        per_paper = round((time.perf_counter() - t0) / len(chunk), 3) # chia đều cho mỗi bài
+        by_id = {}
+        for r in results:
+            base_id, n_versions = split_versioned_id(r.entry_id)
+            by_id[base_id] = meta_from_result(r, base_id, n_versions, per_paper)
+
+        for pid in chunk:
+            meta = by_id.get(pid)
+            if meta is not None:
+                write_json(DATA_DIR / safe_dirname(pid) / "meta.json", meta)
+            found[pid] = meta           # None = arXiv không có bài này
+
+        return found
+
+def download_version(paper_id, version, paper_dir):
+    """Tải 1 version. Đã làm rồi (có status.json) thì bỏ qua = checkpoint."""
+    vdir = paper_dir / f"v{version}"
+    status_file = vdir / "status.json"
+    if status_file.exists():
+        return read_json(status_file)
+
+    t0 = time.perf_counter()
+    url = f"https://export.arxiv.org/src/{paper_id}v{version}"
+    data = fetch_bytes(url, ARXIV_THROTTLE)
+    vdir.mkdir(parents=True, exist_ok=True)
+
+    if data is None:
+        rec = {"version": version, "kind": "not_found", "status": "empty", "files": [],
+               "bytes_downloaded": 0, "bytes_before": 0, "byte_after": 0}
+    else:
+        kind, files, after, everything = extract_tex_bib(data, vdir)
+        rec = {
+            "version": version,
+            "kind": kind,
+            "status": "ok" if files else "empty",   # empty = bản ghi rỗng
+            "files": files,
+            "bytes_downloaded": len(data),  # file nén tải về
+            "bytes_before": everything,     # giải nén đầy đủ (có ảnh)
+            "bytes_after": after,           # chỉ .tex và .bib
+        }
+
+    rec["seconds"] = round(time.perf_counter() - t0, 3)
+    write_json(status_file, rec)
+    return rec
+
+def fetch_and_save_refs(paper_id, paper_dir):
+    """Hỏi Semantic Scholar. Trả về (số tham khảo, số tham khảo có arXiv ID)."""
+    refs_file = paper_dir / "references.json"
+    all_file = paper_dir / "references_all.json"
+    if refs_file.exists() and all_file.exists():
+        return len(read_json(all_file)), len(read_json(refs_file))
+
+    url = (f"https://api.semanticscholar.org/graph/v1/paper/arXiv:{paper_id}"
+           f"?fields={S2_FIELDS}")
+
+    headers = {"x-api-key": S2_API_KEY} if S2_API_KEY else {}
+    raw = fetch_bytes(url, S2_THROTTLE, headers)
+    if raw is None:
+        return None, None
+
+    slim = []
+    for r in json.loads(raw).get("references") or []:
+        ext = r.get("externalIds") or {}
+        slim.append({
+            "s2_id": r.get("paperId"),
+            "arxiv_id": ext.get("ArXiv"),
+            "title": r.get("title"),
+            "authors": [a.get("name") for a in (r.get("authors") or [])],
+            "date": r.get("publicationDate"),
+        })
+
+    with_arxiv = [x for x in slim if x["arxiv_id"]]
+    write_json(all_file, slim)          # giữ hết trong máy
+    write_json(refs_file, with_arxiv)   # bảng cuối chỉ cần có arXiv ID
+    return len(slim), len(with_arxiv)
+
