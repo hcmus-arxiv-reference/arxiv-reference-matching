@@ -35,6 +35,15 @@ Tài liệu này dành cho agent lập trình (Codex) làm việc **thay mặt N
 
 - Người dùng bổ sung yêu cầu kiểm tra tính đúng của crawler và kết nối dataset Hugging Face. Sau khi người dùng điền `.env`, `scripts.check_hf` đã gọi API thật thành công (exit code 0) ngày 2026-10-19: dataset đã được tạo hoặc xác minh là private. Chưa upload dữ liệu, chưa kiểm thử upload/download thật. Không ghi token hoặc giá trị cấu hình riêng vào tài liệu.
 
+### Cập nhật sau bản sửa crawler và pipeline upload (2026-10-19)
+
+- Người dùng yêu cầu rõ: **fix lỗi crawl và tạo pipeline Python API đẩy dữ liệu crawl lên Hugging Face**. Phạm vi sửa crawler/tích hợp S2/upload trong yêu cầu này đã được cho phép; không tự mở rộng sang Parser/Matching hoặc thay schema.
+- Chín ca lỗi đã tái hiện nay đã sửa, bỏ marker xfail. Bộ test hiện đạt **100 test, 15 subtest**, không có xfail. Có test HTTP bị cắt, checksum/resume, per-Version errors, S2 pagination, merge Parquet và upload atomic với `parent_commit`.
+- API `src.crawl.api.run_crawl`, CLI `scripts.crawl`: `--upload`, `--upload-only`, `--skip-references`, `--refresh`, `--batch-size`. Chỉ upload Publication đầy đủ theo chế độ đã chọn; giữ dữ liệu khác trên Hub. Không sửa schema chung.
+- Đã chạy thật ba Publication: `2508.02872` đủ v1/v2 TeX, `2508.02874` v1 `non_tex`, `2508.02873` đủ v1/v2 nhưng v3 còn `IncompleteRead`. S2 thành công cả ba; chỉ hai Publication đầy đủ được upload lên dataset private. Cache thử ở `data/crawl-smoke/`, không commit dữ liệu/bí mật.
+- Đọc lại Hugging Face đã validate 2 dòng `papers`, 35 dòng `references`, so checksum 12 file raw/metadata. Chạy lại hai Publication: 3 Version skipped, không lỗi, upload `unchanged`, không tạo commit mới. Đây là kiểm chứng mạng thật, không chỉ mock.
+- Xem `docs/crawl-pipeline.md` để biết kiểm chứng upload/resume và giới hạn. Review ban đầu được giữ như lịch sử, không dùng số xfail/lỗi cũ để mô tả code hiện tại. Chưa chạy toàn Range, chưa hoàn thành benchmark hay đóng băng schema toàn dự án.
+
 ## 2. Thuật ngữ (bắt buộc dùng đúng)
 
 | Thuật ngữ | Nghĩa |

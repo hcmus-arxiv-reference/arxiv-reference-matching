@@ -53,3 +53,22 @@ Kiểm tra Hugging Face ngày 2026-10-19: sau khi người dùng điền `.env`,
 `scripts.check_hf` gọi API thật thành công (exit code 0), tạo hoặc xác minh
 dataset private. Chưa upload dữ liệu và chưa kiểm thử upload/download thật.
 Các ghi nhận thiếu cấu hình phía trên là trạng thái lịch sử ngày 2026-10-16.
+
+## Cập nhật sau yêu cầu sửa crawler và thêm pipeline upload (2026-10-19)
+
+Người dùng đã yêu cầu rõ việc sửa crawler và xây API Python upload dữ liệu
+crawl lên Hugging Face, mở phạm vi cho công việc này. `src/crawl/api.py`
+cung cấp `run_crawl`; `scripts.crawl` hỗ trợ `--upload`, `--upload-only`,
+`--skip-references`, `--refresh`. Schema chung không thay đổi.
+
+Chín ca lỗi review đã sửa, test hiện đạt 100 test và 15 subtest, không còn
+xfail. Đã chạy thật ba Publication: `2508.02872` có hai Version TeX đầy đủ,
+`2508.02874` có một Version không TeX (giữ receipt rỗng), `2508.02873` có
+v1/v2 nhưng v3 bị response thiếu byte. S2 đã lấy thành công cho cả ba.
+Chỉ hai Publication hoàn chỉnh được upload vào dataset private. Hướng dẫn
+và giới hạn ở [docs/crawl-pipeline.md](docs/crawl-pipeline.md).
+Không đánh dấu xong toàn Range hoặc các DoD cần 3–5 Publication hoàn chỉnh.
+
+Đã đọc lại dataset private: 2 dòng papers, 35 dòng references đúng schema;
+12 file raw/metadata khớp checksum. Rerun hai Publication bỏ qua 3 Version,
+không lỗi và không tạo commit upload mới (`unchanged`).

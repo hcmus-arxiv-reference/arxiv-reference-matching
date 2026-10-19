@@ -2,7 +2,7 @@
 
 Đồ án Nhập môn Khoa học Dữ liệu: thu thập bài báo arXiv, phân tích nguồn LaTeX thành cấu trúc phân cấp, rồi ghép các trích dẫn BibTeX với metadata tham khảo bằng một pipeline học máy.
 
-> **Trạng thái (2026-10-19):** đã có source crawler Python và CLI trong `src/crawl/`, `scripts/crawl.py`. Kết quả test: **57 đạt, 9 xfail (lỗi còn mở), 15 subtest đạt**; đây là test offline, chưa xác minh crawl thật hoặc độ phủ mọi Version. Review đã tái hiện lỗi discovery, nhận diện source và resume; **chưa đủ điều kiện chạy toàn Range hoặc đánh dấu hoàn thành Milestone 1**. Xem [review crawler](docs/crawl-review.md). Hạ tầng `src/common/` đã có; Parser chưa triển khai và schema toàn dự án chưa đóng băng.
+> **Trạng thái (2026-10-19):** đã sửa các lỗi crawler trong review và có API Python/CLI crawl → validate → upload dataset Hugging Face private. **100 test và 15 subtest đạt, không còn xfail.** Đã thử dữ liệu thật và upload hai Publication đủ dữ liệu; một Publication khác còn thiếu source v3 do response HTTP bị cắt. Xem [hướng dẫn pipeline](docs/crawl-pipeline.md). Parser chưa triển khai, schema toàn dự án chưa đóng băng.
 
 Kiểm tra các module hiện có từ root repo (lần review mới dùng Python 3.14.7):
 
@@ -28,42 +28,32 @@ private bằng lệnh sau (gọi mạng thật, không upload dữ liệu):
 .venv/bin/python -m scripts.check_hf
 ```
 
-## Crawl theo range ID
+## Crawl và upload Hugging Face
 
-Crawler đã được tách thành các module trong `src/crawl/`:
-
-- `http_client.py`: User-Agent, tuần tự trong một client, khoảng nghỉ mặc định 3 giây và retry lỗi tạm thời; chưa chặn cấu hình thấp hơn 3 giây.
-- `discovery.py`: đọc metadata Atom; hiện chưa xác định đúng số Version từ hậu tố ID và chưa bảo đảm đủ ngày sửa đổi.
-- `source.py`: tải source và giữ `.tex`/`.bib` trong tar; còn lỗi phân loại PDF/HTML và trạng thái `non_tex`.
-- `manifest.py`: checkpoint JSONL; bỏ qua bản ghi `success`, nhưng chưa kiểm tra lại file/checksum và còn lỗi dòng cuối bị cắt.
-- `semantic_scholar.py`: client độc lập, phân trang tối đa 1.000 bản ghi mặc định; chưa nối vào pipeline/CLI.
-- `pipeline.py`: điều phối discovery và source download, lỗi một bài không dừng cả range.
-
-Các lệnh dưới đây mô tả CLI hiện có. Cần sửa các lỗi trong review trước khi
-thu thập corpus chính thức; chưa chạy thử tải thật trong lần cập nhật này.
-
-Chạy thử vài ID:
+Cấu hình `.env` theo `.env.example`; cần `CONTACT_EMAIL` cho arXiv và
+`HF_TOKEN`, `HF_REPO_ID`, `MEMBER_NAME` khi upload. Dataset phải private.
 
 ```sh
-.venv/bin/python -m scripts.crawl \
-  --id 2508.02872 --id 2508.02873 --min-interval 3
+# Crawl một bài, xuất dữ liệu cục bộ.
+.venv/bin/python -m scripts.crawl --id 2508.02872
+
+# Crawl một đoạn Range và upload dữ liệu đã validate.
+.venv/bin/python -m scripts.crawl --start 2872 --end 2874 --upload
+
+# Upload lại cache, không crawl lại.
+.venv/bin/python -m scripts.crawl --start 2872 --end 2874 --upload-only
 ```
 
-Chạy range đã cấu hình trong `.env` (`2508.02872`–`2508.07871`):
+API Python: `from src.crawl.api import run_crawl`;
+`run_crawl(["2508.02872"], upload=True)`.
+Mặc định lấy đủ references S2; `--skip-references` là chế độ source/metadata-only.
+Chạy lại cùng lệnh để resume; `--refresh` cập nhật metadata và danh sách Version.
+Không tự upload Publication đang thiếu Version hoặc references bị lỗi.
 
-```sh
-.venv/bin/python -m scripts.crawl
-```
-
-Hoặc giới hạn một đoạn để kiểm tra:
-
-```sh
-.venv/bin/python -m scripts.crawl --start 2872 --end 2876
-```
-
-Kết quả nằm trong `data/metadata/`, `data/raw/<publication-key>/v<n>/` và
-checkpoint ở `data/manifests/crawl.jsonl`. Chạy lại đúng lệnh sẽ resume; không
-đặt `--min-interval` thấp hơn 3 giây khi gọi arXiv.
+File thô lên `raw/<member>/<publication-key>/v<n>/`; bảng lên
+`tables/<member>/papers.parquet` và `references.parquet`. Upload merge với dữ
+liệu đã có, giữ Publication ngoài batch và thư mục của thành viên khác.
+Xem [cấu trúc, API, kiểm thử và giới hạn](docs/crawl-pipeline.md).
 
 Nhóm trưởng: [NTBao-coder](https://github.com/NTBao-coder). Thành viên: [ngochai06](https://github.com/ngochai06), [nhminh107](https://github.com/nhminh107), [langtucod0n](https://github.com/langtucod0n).
 

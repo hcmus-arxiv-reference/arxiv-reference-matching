@@ -1,4 +1,9 @@
-# Review source crawler — 2026-10-19
+# Review source crawler ban đầu — 2026-10-19
+
+> **Đã có bản sửa sau review:** chín ca tái hiện bên dưới hiện đều đạt; bộ test
+> đã mở rộng lên 100 test và 15 subtest, không còn xfail. Đã triển khai pipeline
+> upload và chạy thử mạng thật. Xem [trạng thái hiện tại](crawl-pipeline.md).
+> Nội dung còn lại lưu bằng chứng của bản ban đầu, không mô tả code mới.
 
 Đã có source Python, nhưng chưa đủ bằng chứng để kết luận hoàn thành Crawling.
 Lần này kiểm tra và lưu bản code hiện có; chưa sửa các lỗi bên dưới, chưa chạy
