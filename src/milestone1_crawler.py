@@ -1,10 +1,10 @@
 """
-milestone1_starter.py - Khung chạy Milestone 1 (crawl arXiv + Semantic Scholar)
+milestone1_crawler.py - Khung chạy Milestone 1 (crawl arXiv + Semantic Scholar)
  
 Chạy thử 1 bài:
-    python milestone1_starter.py --id 1706.03762
+    python milestone1_crawler.py --id 1706.03762
 Chạy nhiều bài:
-    python milestone1_starter.py --ids-file ids.txt
+    python milestone1_crawler.py --ids-file ids.txt
  
 Biến môi trường (nên đặt):
     CONTACT_EMAIL   email của bạn (đưa vào User-Agent, giống để lại danh thiếp)
@@ -314,7 +314,7 @@ def download_version(paper_id, version, paper_dir):
 
     if data is None:
         rec = {"version": version, "kind": "not_found", "status": "empty", "files": [],
-               "bytes_downloaded": 0, "bytes_before": 0, "byte_after": 0}
+               "bytes_downloaded": 0, "bytes_before": 0, "bytes_after": 0}
     else:
         kind, files, after, everything = extract_tex_bib(data, vdir)
         rec = {
