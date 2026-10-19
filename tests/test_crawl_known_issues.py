@@ -1,8 +1,4 @@
-"""Reproduce open crawler defects without network calls.
-
-Strict xfail records an unmet requirement, not a successful correctness check.
-When a defect is fixed, remove its marker and keep the regression test.
-"""
+"""Regression tests for the nine crawler defects found in the initial review."""
 
 import io
 import tarfile
@@ -33,22 +29,18 @@ def client(response: HttpResponse) -> HttpClient:
                       transport=lambda *_: response)
 
 
-@pytest.mark.xfail(strict=True, reason="Discovery ignores latest-version suffix")
 def test_latest_version_suffix_counts_all_versions() -> None:
     assert parse_feed(atom("2508.02872v4")).versions == 4
 
 
-@pytest.mark.xfail(strict=True, reason="Discovery drops legacy archive prefix")
 def test_legacy_arxiv_identifier_is_preserved() -> None:
     assert parse_feed(atom("hep-th/9901001v4")).arxiv_id == "hep-th/9901001"
 
 
-@pytest.mark.xfail(strict=True, reason="journal_ref is in the arXiv namespace")
 def test_journal_reference_populates_venue() -> None:
     assert parse_feed(atom("2508.02872v1")).venue == "Example Journal"
 
 
-@pytest.mark.xfail(strict=True, reason="Non-tar payload is blindly named single.tex")
 @pytest.mark.parametrize("payload", [b"%PDF-1.7\n", b"<html>Service unavailable</html>"])
 def test_non_tex_payload_never_becomes_tex(tmp_path: Path, payload: bytes) -> None:
     try:
@@ -60,7 +52,6 @@ def test_non_tex_payload_never_becomes_tex(tmp_path: Path, payload: bytes) -> No
     assert not list(tmp_path.rglob("*.tex"))
 
 
-@pytest.mark.xfail(strict=True, reason="source.ok loses non_tex state on resume")
 def test_empty_source_stays_empty_on_resume(tmp_path: Path) -> None:
     archive = io.BytesIO()
     with tarfile.open(fileobj=archive, mode="w:gz"):
@@ -71,7 +62,6 @@ def test_empty_source_stays_empty_on_resume(tmp_path: Path) -> None:
     assert downloader.download("2508.02872", 1).status == "non_tex"
 
 
-@pytest.mark.xfail(strict=True, reason="Append joins new record to truncated JSON tail")
 def test_manifest_recovers_after_truncated_tail(tmp_path: Path) -> None:
     path = tmp_path / "crawl.jsonl"
     path.write_text('{"arxiv_id":', encoding="utf-8")
@@ -81,7 +71,6 @@ def test_manifest_recovers_after_truncated_tail(tmp_path: Path) -> None:
     assert Manifest(path).get("2508.02872", 1) == record
 
 
-@pytest.mark.xfail(strict=True, reason="Exhausted HTTP 503 becomes unavailable")
 def test_transient_error_is_not_missing_source(tmp_path: Path) -> None:
     downloader = ArxivSourceDownloader(
         client(HttpResponse(503, {}, b"Service unavailable")), tmp_path / "raw")
@@ -92,7 +81,6 @@ def test_transient_error_is_not_missing_source(tmp_path: Path) -> None:
     assert result.status not in {"success", "non_tex", "unavailable"}
 
 
-@pytest.mark.xfail(strict=True, reason="Source exception is recorded as discovery error")
 def test_pipeline_records_failure_for_the_version(tmp_path: Path) -> None:
     class Discovery:
         def discover(self, arxiv_id):

@@ -1,16 +1,23 @@
-"""Download and safely extract the text parts of an arXiv source archive."""
-
+"""Content-aware, bounded source extraction and checksum-verified resume."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 import gzip
 import hashlib
+import io
+import json
 from pathlib import Path, PurePosixPath
+import re
 import shutil
 import tarfile
 import tempfile
+import zipfile
 
-from .http_client import HttpClient
+from .http_client import HttpClient, HttpStatusError
+from .storage import key, write_json
+
+MAX_EXTRACT_BYTES = 256 * 1024 * 1024
+MAX_FILES = 10000
 
 
 @dataclass(frozen=True)
@@ -20,79 +27,165 @@ class SourceResult:
     checksum: str
     tex_files: tuple[str, ...]
     bib_files: tuple[str, ...]
+    http_status: int = 200
+    cached: bool = False
 
 
 def _safe_member(name: str) -> bool:
     path = PurePosixPath(name)
-    return not path.is_absolute() and ".." not in path.parts
+    return bool(name) and not path.is_absolute() and ".." not in path.parts and "\\" not in name
 
 
-def _copy_text(path: Path, target: Path) -> bool:
-    if path.suffix.lower() not in {".tex", ".bib"}:
-        return False
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(path, target)
-    return True
+def _digest(path: Path) -> str:
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def extract_source(payload: bytes, destination: Path) -> tuple[list[str], list[str]]:
-    """Extract only `.tex` and `.bib`; return relative paths by type."""
+    """Keep original TeX/BibTeX bytes; PDF/docx yield an empty Version.
+
+    Unknown payloads and HTML fail rather than being recorded as missing TeX.
+    Archive links and traversal paths are never extracted. Limits apply before
+    allocation/copy, including gzip expansion and unselected tar members.
+    """
     destination.mkdir(parents=True, exist_ok=True)
+    if destination.is_symlink():
+        raise ValueError("Source destination must not be a symlink")
+    if payload.startswith(b"\x1f\x8b"):
+        with gzip.GzipFile(fileobj=io.BytesIO(payload)) as stream:
+            payload = stream.read(MAX_EXTRACT_BYTES + 1)
+    if len(payload) > MAX_EXTRACT_BYTES:
+        raise ValueError("Source exceeds extraction limit")
     tex, bib = [], []
-    with tempfile.TemporaryDirectory() as temp:
-        temporary = Path(temp)
-        archive = temporary / "source"
-        archive.write_bytes(payload)
-        if tarfile.is_tarfile(archive):
-            with tarfile.open(archive, "r:*") as tar:
-                members = [m for m in tar.getmembers() if m.isfile() and _safe_member(m.name)]
-                tar.extractall(temporary / "unpacked", members=members)
-            source_root = temporary / "unpacked"
-            candidates = [p for p in source_root.rglob("*") if p.is_file()]
-        else:
-            try:
-                raw = gzip.decompress(payload)
-            except gzip.BadGzipFile:
-                raw = payload
-            source_root = temporary / "single.tex"
-            source_root.write_bytes(raw)
-            candidates = [source_root]
-        for candidate in candidates:
-            if candidate.suffix.lower() not in {".tex", ".bib"}:
-                continue
-            relative = candidate.relative_to(source_root if source_root.is_dir() else candidate.parent)
-            target = destination / relative
-            if _copy_text(candidate, target):
-                (tex if candidate.suffix.lower() == ".tex" else bib).append(str(relative))
+    try:
+        archive = tarfile.open(fileobj=io.BytesIO(payload), mode="r:")
+    except tarfile.ReadError:
+        archive = None
+    if archive is not None:
+        with archive:
+            total, count = 0, 0
+            for member in archive:
+                count += 1
+                total += max(0, member.size)
+                if count > MAX_FILES or total > MAX_EXTRACT_BYTES:
+                    raise ValueError("Archive exceeds extraction limit")
+                if not member.isfile() or not _safe_member(member.name):
+                    continue
+                relative = PurePosixPath(member.name)
+                suffix = relative.suffix.lower()
+                if suffix not in {".tex", ".bib"}:
+                    continue
+                target = destination.joinpath(*relative.parts)
+                if any(p.is_symlink() for p in (target, *target.parents)):
+                    raise ValueError("Symlink in extraction path")
+                if target.exists():
+                    raise ValueError("Duplicate archive destination")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with archive.extractfile(member) as source, target.open("xb") as output:
+                    shutil.copyfileobj(source, output)
+                (tex if suffix == ".tex" else bib).append(relative.as_posix())
+    else:
+        raw = payload.lstrip()
+        if raw.startswith(b"%PDF-"):
+            return [], []
+        if zipfile.is_zipfile(io.BytesIO(payload)):
+            with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+                names = archive.namelist()
+                if len(names) <= MAX_FILES and "word/document.xml" in names:
+                    return [], []
+            raise ValueError("Unsupported ZIP source")
+        if (not raw or b"\x00" in raw or re.search(br"<(?:!doctype\s+html|html)\b", raw[:4096], re.I)
+                or not re.search(br"\\(?:documentclass|documentstyle|begin|input|def|section|bye)\b", raw)):
+            raise ValueError("Unsupported source content (not verified TeX/PDF/docx)")
+        (destination / "single.tex").write_bytes(payload)
+        tex.append("single.tex")
     return sorted(tex), sorted(bib)
+
+
+def verified_source(path: Path) -> SourceResult | None:
+    """Only accept new receipts whose exact TeX/BibTeX inventory still matches."""
+    try:
+        if path.is_symlink():
+            return None
+        receipt = json.loads((path / "source.json").read_text())
+        if (receipt["format"] != 1 or receipt["status"] not in {"success", "non_tex"}
+                or key(receipt["arxiv_id"]) != path.parent.name
+                or type(receipt["version"]) is not int or receipt["version"] < 1
+                or f"v{receipt['version']}" != path.name):
+            return None
+        files = receipt["files"]
+        if not isinstance(files, dict):
+            return None
+        found = {p.relative_to(path).as_posix() for p in path.rglob("*")
+                 if p.suffix.lower() in {".tex", ".bib"} and p.is_file()}
+        if found != set(files):
+            return None
+        for name, digest in files.items():
+            if not _safe_member(name):
+                return None
+            source = path / name
+            if any(p.is_symlink() for p in (source, *source.parents)) or _digest(source) != digest:
+                return None
+        tex = tuple(sorted(n for n in files if n.lower().endswith(".tex")))
+        bib = tuple(sorted(n for n in files if n.lower().endswith(".bib")))
+        if (receipt["status"] == "success") != bool(tex):
+            return None
+        return SourceResult(receipt["status"], path, receipt["checksum"], tex, bib, cached=True)
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
 
 
 class ArxivSourceDownloader:
     def __init__(self, client: HttpClient, root: str | Path = "data/raw") -> None:
-        self.client = client
-        self.root = Path(root)
+        self.client, self.root = client, Path(root)
 
     def download(self, arxiv_id: str, version: int) -> SourceResult:
-        path = self.root / arxiv_id.replace("/", "-").replace(".", "-") / f"v{version}"
-        marker = path / "source.ok"
-        if marker.exists():
-            return SourceResult("success", path, marker.read_text().strip(), tuple(), tuple())
+        publication_key = key(arxiv_id)
+        if type(version) is not int or version < 1:
+            raise ValueError("Version must be a positive integer")
+        path = self.root / publication_key / f"v{version}"
+        cached = verified_source(path)
+        if cached:
+            return cached
         response = self.client.get(f"https://export.arxiv.org/src/{arxiv_id}v{version}")
+        if response.status in {404, 410}:
+            return SourceResult("unavailable", path, "", (), (), response.status)
         if response.status != 200:
-            path.mkdir(parents=True, exist_ok=True)
-            (path / "source.empty").write_text(f"HTTP {response.status}\n", encoding="utf-8")
-            return SourceResult("unavailable", path, "", tuple(), tuple())
+            raise HttpStatusError(response.status, "arXiv source")
+        content_type = next((v for k, v in response.headers.items() if k.lower() == "content-type"), "").lower()
+        if "text/html" in content_type or "application/json" in content_type:
+            raise ValueError("Source endpoint returned an error document")
         checksum = hashlib.sha256(response.body).hexdigest()
-        self.root.parent.mkdir(parents=True, exist_ok=True)
-        temporary = Path(tempfile.mkdtemp(prefix="arxiv-source-", dir=self.root.parent))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if any(p.is_symlink() for p in (path, *path.parents)):
+            raise ValueError("Symlink in source destination")
+        temporary = Path(tempfile.mkdtemp(prefix=".source-", dir=path.parent))
+        backup = path.with_name(f".{path.name}.previous")
         try:
             tex, bib = extract_source(response.body, temporary)
-            path.parent.mkdir(parents=True, exist_ok=True)
+            status = "success" if tex else "non_tex"
+            write_json(temporary / "source.json", {
+                "format": 1, "arxiv_id": arxiv_id, "version": version,
+                "status": status, "checksum": checksum,
+                "files": {n: _digest(temporary / n) for n in tex + bib},
+            })
+            if backup.exists():
+                # A prior process stopped after moving the old cache aside.
+                if not path.exists():
+                    backup.rename(path)
+                else:
+                    shutil.rmtree(backup)
             if path.exists():
-                shutil.rmtree(path)
-            temporary.rename(path)
-            marker.write_text(checksum + "\n", encoding="utf-8")
+                path.rename(backup)
+            try:
+                temporary.rename(path)
+            except OSError:
+                if backup.exists() and not path.exists():
+                    backup.rename(path)
+                raise
+            if backup.exists():
+                shutil.rmtree(backup)
         finally:
             if temporary.exists():
                 shutil.rmtree(temporary)
-        return SourceResult("success" if tex else "non_tex", path, checksum, tuple(tex), tuple(bib))
+        return SourceResult(status, path, checksum, tuple(tex), tuple(bib))
