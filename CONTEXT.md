@@ -37,9 +37,18 @@ yêu cầu người dùng. Bốn module hạ tầng đã đặt tại
 Hugging Face dùng mock, chưa thử kết nối/upload/download thật.
 Xem [review hạ tầng](docs/infrastructure-review.md) để biết giới hạn metrics
 và phần schema chưa chốt.
-Chưa triển khai crawler hoặc parser, chưa tải source, chưa kiểm thử pipeline
-và chưa đóng băng schema toàn dự án. Manifest theo Version và cách biểu diễn
-lần xuất hiện trong hierarchy mới là đề xuất trong
-[docs/schema-review.md](docs/schema-review.md), chưa thay schema tương ứng.
+Cập nhật 2026-10-19: đã có source crawler và manifest JSONL theo Version,
+CLI `scripts/crawl.py`, cùng ba test crawl. Kết quả test offline: 57 đạt, 9 xfail (lỗi còn mở),
+15 subtest đạt trên Python 3.14.7; chưa chạy crawl thật hoặc xác minh resume trên
+corpus thật. [Review crawler](docs/crawl-review.md) ghi các lỗi đã tái hiện;
+chưa đánh dấu Crawling hoàn thành. Parser chưa triển khai, schema toàn dự án
+chưa đóng băng. Đã đọc cả ba trang đề; Matching hiện quy định sáu bảng,
+danh sách bảy bảng trong README cũ đã được đánh dấu lỗi thời.
+Cách biểu diễn lần xuất hiện trong hierarchy vẫn cần chốt theo
+[docs/schema-review.md](docs/schema-review.md).
 
 Chi tiết đối chiếu: [docs/crawling-requirements.md](docs/crawling-requirements.md).
+
+Kiểm tra Hugging Face ngày 2026-10-19: `scripts.check_hf` dừng với exit code 2
+vì thiếu `HF_TOKEN`, `HF_REPO_ID`. Đã yêu cầu điền `.env` cục bộ; chưa gọi
+API hoặc upload dữ liệu. Người dùng đã yêu cầu kết nối dataset private.

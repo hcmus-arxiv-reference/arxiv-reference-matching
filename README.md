@@ -2,15 +2,20 @@
 
 Đồ án Nhập môn Khoa học Dữ liệu: thu thập bài báo arXiv, phân tích nguồn LaTeX thành cấu trúc phân cấp, rồi ghép các trích dẫn BibTeX với metadata tham khảo bằng một pipeline học máy.
 
-> **Trạng thái (2026-10-16):** phần lớn nội dung dưới đây là định hướng, cây thư mục và lệnh pipeline là đề xuất. Hiện có `src/common/{schema,config,hf_io,metrics}.py`; 54 test đạt (kèm 15 subtest). Hugging Face được kiểm tra bằng mock, chưa thử upload/download thật; chưa có crawler hoặc Parser chạy trên dữ liệu thật. Hai bảng Crawling đã đối chiếu, các bảng khác trong code vẫn là dự thảo. Xem [review hạ tầng](docs/infrastructure-review.md), [review schema](docs/schema-review.md) và [bối cảnh đã chốt](CONTEXT.md).
+> **Trạng thái (2026-10-19):** đã có source crawler Python và CLI trong `src/crawl/`, `scripts/crawl.py`. Kết quả test: **57 đạt, 9 xfail (lỗi còn mở), 15 subtest đạt**; đây là test offline, chưa xác minh crawl thật hoặc độ phủ mọi Version. Review đã tái hiện lỗi discovery, nhận diện source và resume; **chưa đủ điều kiện chạy toàn Range hoặc đánh dấu hoàn thành Milestone 1**. Xem [review crawler](docs/crawl-review.md). Hạ tầng `src/common/` đã có; Parser chưa triển khai và schema toàn dự án chưa đóng băng.
 
-Kiểm tra các module hiện có từ root repo (đã chạy với Python 3.14.3):
+Kiểm tra các module hiện có từ root repo (lần review mới dùng Python 3.14.7):
 
 ```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q
 ```
+
+Nếu đường dẫn repo chứa dấu `:` (như `HK1_26:27`), Python từ chối tạo
+virtualenv tại đó. Tạo ở đường dẫn không chứa `:`, ví dụ
+`python3 -m venv /tmp/arxiv-reference-venv`, rồi thay `.venv/bin/python`
+trong các lệnh bằng `/tmp/arxiv-reference-venv/bin/python`.
 
 Tắt tự nạp plugin để tránh plugin pytest cài ngoài dự án ảnh hưởng bộ test.
 Copy `.env.example` thành `.env` và điền cấu hình cục bộ khi chạy tác vụ thật;
@@ -22,6 +27,43 @@ private bằng lệnh sau (gọi mạng thật, không upload dữ liệu):
 ```sh
 .venv/bin/python -m scripts.check_hf
 ```
+
+## Crawl theo range ID
+
+Crawler đã được tách thành các module trong `src/crawl/`:
+
+- `http_client.py`: User-Agent, tuần tự trong một client, khoảng nghỉ mặc định 3 giây và retry lỗi tạm thời; chưa chặn cấu hình thấp hơn 3 giây.
+- `discovery.py`: đọc metadata Atom; hiện chưa xác định đúng số Version từ hậu tố ID và chưa bảo đảm đủ ngày sửa đổi.
+- `source.py`: tải source và giữ `.tex`/`.bib` trong tar; còn lỗi phân loại PDF/HTML và trạng thái `non_tex`.
+- `manifest.py`: checkpoint JSONL; bỏ qua bản ghi `success`, nhưng chưa kiểm tra lại file/checksum và còn lỗi dòng cuối bị cắt.
+- `semantic_scholar.py`: client độc lập, phân trang tối đa 1.000 bản ghi mặc định; chưa nối vào pipeline/CLI.
+- `pipeline.py`: điều phối discovery và source download, lỗi một bài không dừng cả range.
+
+Các lệnh dưới đây mô tả CLI hiện có. Cần sửa các lỗi trong review trước khi
+thu thập corpus chính thức; chưa chạy thử tải thật trong lần cập nhật này.
+
+Chạy thử vài ID:
+
+```sh
+.venv/bin/python -m scripts.crawl \
+  --id 2508.02872 --id 2508.02873 --min-interval 3
+```
+
+Chạy range đã cấu hình trong `.env` (`2508.02872`–`2508.07871`):
+
+```sh
+.venv/bin/python -m scripts.crawl
+```
+
+Hoặc giới hạn một đoạn để kiểm tra:
+
+```sh
+.venv/bin/python -m scripts.crawl --start 2872 --end 2876
+```
+
+Kết quả nằm trong `data/metadata/`, `data/raw/<publication-key>/v<n>/` và
+checkpoint ở `data/manifests/crawl.jsonl`. Chạy lại đúng lệnh sẽ resume; không
+đặt `--min-interval` thấp hơn 3 giây khi gọi arXiv.
 
 Nhóm trưởng: [NTBao-coder](https://github.com/NTBao-coder). Thành viên: [ngochai06](https://github.com/ngochai06), [nhminh107](https://github.com/nhminh107), [langtucod0n](https://github.com/langtucod0n).
 
@@ -363,7 +405,12 @@ Chỉ cân nhắc mô hình pretrained/LLM sau baseline; đề nêu nhóm dùng 
 
 ## 10. Dataset cuối và báo cáo
 
-Bảy bảng theo schema Milestone 3:
+**Lưu ý đối chiếu 2026-10-19:** đề Matching hiện liệt kê sáu bảng
+`papers`, `references`, `elements`, `hierarchy`, `bibtex`, `predictions`.
+Danh sách bảy bảng bên dưới là thiết kế cũ, không dùng làm hợp đồng triển khai.
+Schema Python chưa được thay đổi hoặc đóng băng; xem [review mới](docs/crawl-review.md).
+
+Danh sách cũ để đối chiếu:
 
 - `papers`: metadata bài báo.
 - `elements`: nội dung phần tử đã deduplicate, gồm loại phần tử.

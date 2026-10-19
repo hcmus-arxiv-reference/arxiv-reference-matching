@@ -25,6 +25,16 @@ Tài liệu này dành cho agent lập trình (Codex) làm việc **thay mặt N
 - Có bất nhất chưa giải quyết: kế hoạch bên dưới nói **6 bảng**, README nói **7 bảng** với tên khác. Các tên bảng ngoài hai bảng Crawling chỉ là dự kiến cho tới khi đối chiếu đề Parsing/Matching và được người dùng xác nhận; không tự chọn một phía để triển khai.
 - Hạ tầng có test đạt không đồng nghĩa đã đạt toàn bộ DoD giai đoạn 2: schema toàn dự án chưa đóng băng. Manifest theo Version vẫn là đề xuất chưa triển khai. `metrics.peak_rss_mb` chỉ đo đỉnh từ khi khởi động của tiến trình hiện tại, không đo RAM trung bình/tiến trình con; `dir_size_mb` là ảnh chụp dung lượng hiện tại, không phải disk đỉnh.
 
+### Cập nhật kiểm tra ngày 2026-10-19
+
+- Người dùng yêu cầu kiểm tra source crawl hiện có, cập nhật tài liệu và commit/push lên GitHub. Phạm vi lần này là lưu và review code được cung cấp; chưa sửa lỗi crawler hoặc thay schema.
+- Đã có `src/crawl/{discovery,http_client,source,manifest,pipeline,semantic_scholar}.py`, CLI `scripts/crawl.py`, ba test crawl ban đầu và 9 ca tái hiện lỗi (`xfail(strict=True)`). Manifest không còn chỉ là đề xuất, nhưng resume chưa đạt yêu cầu.
+- Đã cài requirements và chạy toàn bộ test offline: **57 test đạt, 9 xfail (lỗi còn mở), 15 subtest đạt** trên Python 3.14.7, PyArrow 26.0.0, pytest 9.1.1, huggingface_hub 2.2.0. Virtualenv đặt ngoài repo vì đường dẫn repo chứa dấu `:`. Chưa crawl thật, chưa kiểm thử kết nối Hugging Face thật trong lần này.
+- Review tái hiện lỗi đếm Version từ Atom, mất prefix ID cũ, venue sai namespace, PDF/HTML thành TeX, `non_tex` đổi thành `success` khi resume, mất bản ghi sau dòng checkpoint bị cắt và HTTP 503 bị ghi `unavailable`. Chi tiết và giới hạn ở `docs/crawl-review.md`; không coi test xanh là crawler hoàn tất.
+- Đã đọc được cả ba trang đề qua tải URL trực tiếp. Trang Matching hiện chỉ rõ **6 bảng**, nên danh sách 7 bảng trong README cũ không còn là nguồn triển khai. Các khác biệt kiểu/nullability trong schema vẫn cần người dùng xác nhận; chưa thay đổi `src/common/schema.py`, chưa đóng băng schema hay chuyển giai đoạn.
+
+- Người dùng bổ sung yêu cầu kiểm tra tính đúng của crawler và kết nối dataset Hugging Face. `scripts.check_hf` đã chạy, exit code 2 vì còn thiếu `HF_TOKEN`, `HF_REPO_ID`; đã yêu cầu điền `.env` cục bộ. Chưa gọi API Hugging Face hay upload dữ liệu.
+
 ## 2. Thuật ngữ (bắt buộc dùng đúng)
 
 | Thuật ngữ | Nghĩa |
