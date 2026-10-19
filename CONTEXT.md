@@ -49,6 +49,7 @@ Cách biểu diễn lần xuất hiện trong hierarchy vẫn cần chốt theo
 
 Chi tiết đối chiếu: [docs/crawling-requirements.md](docs/crawling-requirements.md).
 
-Kiểm tra Hugging Face ngày 2026-10-19: `scripts.check_hf` dừng với exit code 2
-vì thiếu `HF_TOKEN`, `HF_REPO_ID`. Đã yêu cầu điền `.env` cục bộ; chưa gọi
-API hoặc upload dữ liệu. Người dùng đã yêu cầu kết nối dataset private.
+Kiểm tra Hugging Face ngày 2026-10-19: sau khi người dùng điền `.env`,
+`scripts.check_hf` gọi API thật thành công (exit code 0), tạo hoặc xác minh
+dataset private. Chưa upload dữ liệu và chưa kiểm thử upload/download thật.
+Các ghi nhận thiếu cấu hình phía trên là trạng thái lịch sử ngày 2026-10-16.

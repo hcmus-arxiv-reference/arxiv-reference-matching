@@ -33,7 +33,7 @@ Tài liệu này dành cho agent lập trình (Codex) làm việc **thay mặt N
 - Review tái hiện lỗi đếm Version từ Atom, mất prefix ID cũ, venue sai namespace, PDF/HTML thành TeX, `non_tex` đổi thành `success` khi resume, mất bản ghi sau dòng checkpoint bị cắt và HTTP 503 bị ghi `unavailable`. Chi tiết và giới hạn ở `docs/crawl-review.md`; không coi test xanh là crawler hoàn tất.
 - Đã đọc được cả ba trang đề qua tải URL trực tiếp. Trang Matching hiện chỉ rõ **6 bảng**, nên danh sách 7 bảng trong README cũ không còn là nguồn triển khai. Các khác biệt kiểu/nullability trong schema vẫn cần người dùng xác nhận; chưa thay đổi `src/common/schema.py`, chưa đóng băng schema hay chuyển giai đoạn.
 
-- Người dùng bổ sung yêu cầu kiểm tra tính đúng của crawler và kết nối dataset Hugging Face. `scripts.check_hf` đã chạy, exit code 2 vì còn thiếu `HF_TOKEN`, `HF_REPO_ID`; đã yêu cầu điền `.env` cục bộ. Chưa gọi API Hugging Face hay upload dữ liệu.
+- Người dùng bổ sung yêu cầu kiểm tra tính đúng của crawler và kết nối dataset Hugging Face. Sau khi người dùng điền `.env`, `scripts.check_hf` đã gọi API thật thành công (exit code 0) ngày 2026-10-19: dataset đã được tạo hoặc xác minh là private. Chưa upload dữ liệu, chưa kiểm thử upload/download thật. Không ghi token hoặc giá trị cấu hình riêng vào tài liệu.
 
 ## 2. Thuật ngữ (bắt buộc dùng đúng)
 

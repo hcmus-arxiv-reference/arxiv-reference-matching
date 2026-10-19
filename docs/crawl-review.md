@@ -110,11 +110,13 @@ thay thế xác nhận của người dùng hoặc tiêu chí hoàn thành giai 
 ## Kết nối Hugging Face
 
 Yêu cầu bổ sung của người dùng: kiểm tra tính đúng của crawler và kết nối
-dataset Hugging Face. Đã chạy `python -m scripts.check_hf`: exit code 2 vì
-thiếu `HF_TOKEN`, `HF_REPO_ID` trong cấu hình hiện tại. `MEMBER_NAME` đã có.
-Chưa gọi API Hugging Face, chưa tạo repo và chưa upload dữ liệu trong lượt này.
+dataset Hugging Face. Lần đầu `python -m scripts.check_hf` dừng với exit code 2 vì thiếu cấu hình.
+Sau khi người dùng điền `.env`, lệnh đã gọi API thật và trả exit code 0
+ngày 2026-10-19: dataset được tạo hoặc xác minh là private. Chưa upload dữ
+liệu, chưa kiểm thử upload/download thật. Không lưu token hoặc tên dataset
+riêng vào tài liệu công khai.
 
-Người dùng cần điền cấu hình vào `.env` cục bộ, không gửi token trong chat:
+Cấu hình kết nối đặt trong `.env` cục bộ, không gửi token trong chat:
 
 ```dotenv
 HF_TOKEN=
