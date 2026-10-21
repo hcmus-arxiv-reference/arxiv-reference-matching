@@ -1,0 +1,10 @@
+requests>=2.32,<3
+python-dotenv>=1,<2
+filelock>=3,<4
+pandas>=2.2,<3
+pyarrow>=17,<27
+psutil>=6,<8
+matplotlib>=3.9,<4
+jupyterlab>=4,<5
+ipykernel>=6,<8
+pytest>=8,<10
