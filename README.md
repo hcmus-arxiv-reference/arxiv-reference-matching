@@ -55,6 +55,10 @@ File thô lên `raw/<member>/<publication-key>/v<n>/`; bảng lên
 liệu đã có, giữ Publication ngoài batch và thư mục của thành viên khác.
 Xem [cấu trúc, API, kiểm thử và giới hạn](docs/crawl-pipeline.md).
 
+Lượt tải local toàn Range 5.000 ID dùng `scripts.crawl_range`, có checkpoint,
+tiến độ và retry phần thiếu. Xem [vận hành toàn Range](docs/full-range-crawl.md)
+để theo dõi, dừng an toàn và tiếp tục; không chạy thêm khi worker cũ còn hoạt động.
+
 Nhóm trưởng: [NTBao-coder](https://github.com/NTBao-coder). Thành viên: [ngochai06](https://github.com/ngochai06), [nhminh107](https://github.com/nhminh107), [langtucod0n](https://github.com/langtucod0n).
 
 [Checklist dành cho nhóm trưởng](docs/team-lead-checklist.md) theo dõi việc đã

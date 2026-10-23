@@ -44,6 +44,22 @@ Tài liệu này dành cho agent lập trình (Codex) làm việc **thay mặt N
 - Đọc lại Hugging Face đã validate 2 dòng `papers`, 35 dòng `references`, so checksum 12 file raw/metadata. Chạy lại hai Publication: 3 Version skipped, không lỗi, upload `unchanged`, không tạo commit mới. Đây là kiểm chứng mạng thật, không chỉ mock.
 - Xem `docs/crawl-pipeline.md` để biết kiểm chứng upload/resume và giới hạn. Review ban đầu được giữ như lịch sử, không dùng số xfail/lỗi cũ để mô tả code hiện tại. Chưa chạy toàn Range, chưa hoàn thành benchmark hay đóng băng schema toàn dự án.
 
+### Cập nhật vận hành Range ngày 2026-10-23
+
+- Người dùng yêu cầu ưu tiên crawl về local toàn Range 5.000 ID trước và tiếp
+  tục công việc. Đã khởi chạy `scripts.crawl_range` ngày 22/10/2026 trong
+  `data/crawl-smoke/` để dùng lại cache đã xác minh; không upload lượt này.
+- Trình chạy có tiến độ `manifests/range-run.json`, checkpoint từng tác vụ,
+  tối đa ba lượt retry phần thiếu, nghỉ 30 phút giữa lượt; xuất bảng tổng hợp
+  toàn Range ở cuối lượt/dừng có kiểm soát. Không đổi schema chung.
+- Test sau bổ sung: **104 test và 15 subtest đạt**. Snapshot 17:12 ngày 23/10:
+  222 Publication đủ dữ liệu, 361 Version đã xác minh, đang chạy lượt đầu.
+  Không dùng snapshot này làm số liệu hiện tại; đọc manifest và kiểm tra PID.
+- Cache `2508.02873` đã có v3 hợp lệ; thông tin thiếu v3 ngày 19/10 ở phần
+  lịch sử không còn phản ánh cache hiện tại. Range vẫn chưa hoàn tất.
+- Không khởi chạy crawler thứ hai khi worker còn sống. Hướng dẫn vận hành,
+  retry/dừng và các giới hạn: `docs/full-range-crawl.md`.
+
 ## 2. Thuật ngữ (bắt buộc dùng đúng)
 
 | Thuật ngữ | Nghĩa |
