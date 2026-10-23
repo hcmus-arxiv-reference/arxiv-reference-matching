@@ -1,0 +1,467 @@
+"""
+milestone1_crawler.py - Khung chạy Milestone 1 (crawl arXiv + Semantic Scholar)
+ 
+Chạy thử 1 bài:
+    python milestone1_crawler.py --id 1706.03762
+Chạy nhiều bài:
+    python milestone1_crawler.py --ids-file ids.txt
+ 
+Biến môi trường (nên đặt):
+    CONTACT_EMAIL   email của bạn (đưa vào User-Agent, giống để lại danh thiếp)
+    S2_API_KEY      key Semantic Scholar (KHÔNG commit lên repo!)
+ 
+Cài thư viện:
+    pip install arxiv psutil
+"""
+
+import argparse
+import gzip
+import io
+import json
+import os
+import posixpath
+import re
+import tarfile
+import time
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+import arxiv
+
+try:
+    import psutil # tùy chọn, dùng để đo RAM
+except ImportError:
+    psutil = None
+
+
+# ----------------------------------------------------------------------
+# 1. Cấu hình
+# ----------------------------------------------------------------------
+CONTACT = os.environ.get("CONTACT_EMAIL", "24120368@student.hcmus.edu.vn")
+USER_AGENT = f"IntroDS-student-crawler/0.1 (mailto:{CONTACT})"
+S2_API_KEY = os.environ.get("S2_API_KEY")
+
+DATA_DIR = Path("data")
+LOG_FILE = Path("logs") / "run_log.jsonl"
+
+S2_FIELDS = (
+    "title,references.title,references.authors,"
+    "references.publicationDate,references.externalIds,references.paperId"
+)
+
+
+# ----------------------------------------------------------------------
+# 2. "Xếp hàng lịch sự": đảm bảo cách nhau tối thiểu N giây giữa 2 lần gọi
+# ----------------------------------------------------------------------
+class Throttle:
+    def __init__(self, min_gap):
+        self.min_gap = min_gap
+        self.last_end = 0.0
+
+    def wait(self):
+        gap = time.monotonic() - self.last_end
+        if gap < self.min_gap:
+            time.sleep(self.min_gap - gap)
+
+    def mark(self):
+        self.last_end = time.monotonic()
+
+
+ARXIV_THROTTLE = Throttle(3.0)
+S2_THROTTLE = Throttle(1.1 if S2_API_KEY else 3.2)
+ARXIV_CLIENT = arxiv.Client(page_size=100, delay_seconds=3.0, num_retries=3)
+
+
+# ----------------------------------------------------------------------
+# 3. Tải về có thử lại (retry)
+# ----------------------------------------------------------------------
+def _retry_after(err, default):
+    value = err.headers.get("Retry-After") if err.headers else None
+    try:
+        return max(float(value), 1.0)
+    except (ValueError, TypeError):
+        return default
+
+def fetch_bytes(url, throttle, headers=None, retries=4):
+    """Tải url, trả về bytes. 404 -> None. Lỗi tạm thời -> thử lại, chờ lâu dần."""
+    all_headers = {"User-Agent": USER_AGENT}
+    all_headers.update(headers or {})
+    for attempt in range(retries + 1):
+        throttle.wait()
+        try:
+            req = urllib.request.Request(url, headers=all_headers)
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return resp.read()
+        except urllib.error.HTTPError as err:
+            if err.code == 404:
+                return None
+            if err.code == 403:
+                raise RuntimeError(
+                    f"403 for {url}: check host (export.arxiv.org) and User-Agent"
+                )
+            if err.code in (429, 500, 502, 503, 504) and attempt < retries:
+                time.sleep(_retry_after(err, 5 * 2 ** attempt))
+                continue
+            raise
+        except (urllib.error.URLError, TimeoutError):
+            if attempt < retries:
+                time.sleep(5 * 2 ** attempt)
+                continue
+            raise
+        finally:
+            throttle.mark()
+
+
+# ----------------------------------------------------------------------
+# 4. Nhận dạng và giải nén: chỉ giữ .tex và .bib
+# ----------------------------------------------------------------------
+def _safe_rel(name):
+    """Chuẩn hóa đường dẫn trong file nén; trả None nếu nguy hiểm (../ hoặc tuyệt đối)."""
+    p = posixpath.normpath(name.replace("\\", "/"))
+    if p.startswith("/") or p == ".." or p.startswith("../") or p == ".":
+        return None
+    
+    return p
+
+def _save_tar(tar, out_dir):
+    """Trả về (danh sách file giữ lại, dung lượng giữ lại, dung lượng của TẤT CẢ file)."""
+    files, kept, everything = [], 0, 0
+    for member in tar.getmembers():
+        if not member.isfile():
+            continue
+
+        everything += member.size
+        rel = _safe_rel(member.name)
+        if rel is None or not rel.lower().endswith((".tex", ".bib")):
+            continue
+
+        fobj = tar.extractfile(member)
+        if fobj is None:
+            continue
+
+        content = fobj.read()
+        dest = out_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(content)
+        files.append(rel)
+        kept += len(content)
+
+    return files, kept, everything
+
+def extract_tex_bib(data, out_dir):
+    """
+    Nhận dạng loại file bằng NỘI DUNG (không tin đuôi file).
+    Trả về (kind, files, bytes_after, bytes_all).
+      bytes_after = dung lượng các file .tex/.bib giữ lại
+      bytes_all   = dung lượng giải nén của TẤT CẢ file (gồm cả ảnh) = "trước khi bỏ ảnh"
+    kind: 'tar' | 'gz_single' | 'pdf' | 'other'
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if data[:4] == b"%PDF":
+        return "pdf", [], 0, len(data)
+
+    # Túi nén (.tar hoặc .tar.gz)
+    try:
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tar:
+            files, kept, everything = _save_tar(tar, out_dir)
+            return "tar", files, kept, everything
+    except tarfile.ReadError:
+        pass
+
+    # File .gz đơn (chỉ 1 file bên trong)
+    if data[:2] == b"\x1f\x8b":
+        try:
+            raw = gzip.decompress(data)
+        except (OSError, EOFError):
+            return "other", [], 0, len(data)
+
+        if raw[:4] == b"%PDF":
+            return "pdf", [], 0, len(raw)
+
+        if b"\x00" in raw[:4096]:       # có byte 0 -> nhiều khả năng là file nhị phân
+            return "other", [], 0, len(raw)
+        
+        (out_dir / "main.tex").write_bytes(raw)
+        return "gz_single", ["main.tex"], len(raw), len(raw)
+
+    return "other", [], 0, len(data)        # ví dụ file Word
+
+
+# ----------------------------------------------------------------------
+# 5. Các hàm tiện ích nhỏ
+# ----------------------------------------------------------------------
+def safe_dirname(paper_id):
+    """2310.12345 -> 2310-12345 ; hep-th/9901001 -> hep-th-9901001"""
+    return paper_id.replace("/", "-").replace(".", "-")
+
+def split_versioned_id(entry_id):
+    """'http://arxiv.org/abs/2310.12345v4' -> ('2310.12345', 4)"""
+    m = re.search(r"abs/(.+?)(?:v(\d+))?$", entry_id)
+    if not m:
+        raise ValueError(f"cannot parse entry_id: {entry_id}")
+
+    return m.group(1), int(m.group(2) or 1)
+
+def write_json(path, obj):
+    """Ghi file tạm rồi đổi tên: lỡ bị ngắt giữa chừng cũng không để lại file hỏng."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
+
+def read_json(path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+def append_log(rec):
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with LOG_FILE.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+def rss_mb():
+    if psutil is None:
+        return None
+    return round(psutil.Process().memory_info().rss / 1024 / 1024, 1)
+
+
+# ----------------------------------------------------------------------
+# 6. Ba việc chính
+# ----------------------------------------------------------------------
+def meta_from_result(r, base_id, n_versions, discover_seconds):
+    return {
+        "arxiv_id": base_id,
+        "n_versions": n_versions,
+        "title": r.title,
+        "authors": [a.name for a in r.authors],
+        "published": r.published.isoformat(),
+        "updated": r.updated.isoformat(),
+        "journal_ref": r.journal_ref,
+        "discover_seconds": discover_seconds,
+    }
+
+def discover_paper(paper_id):
+    """Hỏi arXiv API cho MỘT bài (dùng khi hỏi theo lô bị lỗi)."""
+    t0 = time.perf_counter()
+    ARXIV_THROTTLE.wait()
+    try:
+        results = list(ARXIV_CLIENT.results(arxiv.Search(id_list=[paper_id])))
+    finally:
+        ARXIV_THROTTLE.mark()
+
+    if not results:
+        return None
+
+    r = results[0]
+    base_id, n_versions = split_versioned_id(r.entry_id)
+    return meta_from_result(r, base_id, n_versions, round(time.perf_counter() - t0, 3))
+
+def discover_many(ids, batch_size=50):
+    """
+    Hỏi arXiv API THEO LÔ (nhiều ID trong một lần hỏi) để tiết kiệm số lần hỏi.
+    Trả về dict: id -> meta (dict), hoặc None nếu arXiv không có bài đó.
+    ID không có mặt trong dict = lô bị lỗi, process_paper sẽ tự hỏi lẻ.
+    Dùng ID gốc, KHÔNG kèm đuôi version.
+    """
+    found, todo = {}, []
+    for pid in ids:
+        paper_dir = DATA_DIR / safe_dirname(pid)
+        if (paper_dir / "done.json").exists():
+            continue        # đã xong, khỏi hỏi
+        if (paper_dir / "meta.json").exists():
+            found[pid] = read_json(paper_dir / "meta.json")     # đã hỏi từ lần chạy trước
+        else:
+            todo.append(pid)
+
+    for i in range(0, len(todo), batch_size):
+        chunk = todo[i:i + batch_size]
+        t0 = time.perf_counter()
+        ARXIV_THROTTLE.wait()
+        try:
+            results = list(ARXIV_CLIENT.results(arxiv.Search(id_list=chunk)))
+        except Exception as exc:
+            print(f"discover batch {i // batch_size} failed ({exc!r}); will ask one by one")
+            continue
+        finally:
+            ARXIV_THROTTLE.mark()
+
+        per_paper = round((time.perf_counter() - t0) / len(chunk), 3) # chia đều cho mỗi bài
+        by_id = {}
+        for r in results:
+            base_id, n_versions = split_versioned_id(r.entry_id)
+            by_id[base_id] = meta_from_result(r, base_id, n_versions, per_paper)
+
+        for pid in chunk:
+            meta = by_id.get(pid)
+            if meta is not None:
+                write_json(DATA_DIR / safe_dirname(pid) / "meta.json", meta)
+            found[pid] = meta           # None = arXiv không có bài này
+
+    return found
+
+def download_version(paper_id, version, paper_dir):
+    """Tải 1 version. Đã làm rồi (có status.json) thì bỏ qua = checkpoint."""
+    vdir = paper_dir / f"v{version}"
+    status_file = vdir / "status.json"
+    if status_file.exists():
+        return read_json(status_file)
+
+    t0 = time.perf_counter()
+    url = f"https://export.arxiv.org/src/{paper_id}v{version}"
+    data = fetch_bytes(url, ARXIV_THROTTLE)
+    vdir.mkdir(parents=True, exist_ok=True)
+
+    if data is None:
+        rec = {"version": version, "kind": "not_found", "status": "empty", "files": [],
+               "bytes_downloaded": 0, "bytes_before": 0, "bytes_after": 0}
+    else:
+        kind, files, after, everything = extract_tex_bib(data, vdir)
+        rec = {
+            "version": version,
+            "kind": kind,
+            "status": "ok" if files else "empty",   # empty = bản ghi rỗng
+            "files": files,
+            "bytes_downloaded": len(data),  # file nén tải về
+            "bytes_before": everything,     # giải nén đầy đủ (có ảnh)
+            "bytes_after": after,           # chỉ .tex và .bib
+        }
+
+    rec["seconds"] = round(time.perf_counter() - t0, 3)
+    write_json(status_file, rec)
+    return rec
+
+def fetch_and_save_refs(paper_id, paper_dir):
+    """Hỏi Semantic Scholar. Trả về (số tham khảo, số tham khảo có arXiv ID)."""
+    refs_file = paper_dir / "references.json"
+    all_file = paper_dir / "references_all.json"
+    if refs_file.exists() and all_file.exists():
+        return len(read_json(all_file)), len(read_json(refs_file))
+
+    url = (f"https://api.semanticscholar.org/graph/v1/paper/arXiv:{paper_id}"
+           f"?fields={S2_FIELDS}")
+
+    headers = {"x-api-key": S2_API_KEY} if S2_API_KEY else {}
+    raw = fetch_bytes(url, S2_THROTTLE, headers)
+    if raw is None:
+        return None, None
+
+    slim = []
+    for r in json.loads(raw).get("references") or []:
+        ext = r.get("externalIds") or {}
+        slim.append({
+            "s2_id": r.get("paperId"),
+            "arxiv_id": ext.get("ArXiv"),
+            "title": r.get("title"),
+            "authors": [a.get("name") for a in (r.get("authors") or [])],
+            "date": r.get("publicationDate"),
+        })
+
+    with_arxiv = [x for x in slim if x["arxiv_id"]]
+    write_json(all_file, slim)          # giữ hết trong máy
+    write_json(refs_file, with_arxiv)   # bảng cuối chỉ cần có arXiv ID
+    return len(slim), len(with_arxiv)
+
+ 
+# ----------------------------------------------------------------------
+# 7. Xử lý 1 bài
+# ----------------------------------------------------------------------
+def process_paper(paper_id, pool, metas=None):
+    paper_dir = DATA_DIR / safe_dirname(paper_id)
+    done_file = paper_dir / "done.json"
+    if done_file.exists():
+        return "skipped"
+
+    paper_dir.mkdir(parents=True, exist_ok=True)
+    t0 = time.perf_counter()
+
+    metas = metas or {}
+    meta_file = paper_dir / "meta.json"
+    if paper_id in metas:   
+        meta = metas[paper_id]         # từ lần hỏi theo lô (None = không có bài)
+    elif meta_file.exists():
+        meta = read_json(meta_file)
+    else:
+        meta = discover_paper(paper_id)     # dự phòng: hỏi lẻ
+
+    if meta is None:
+        append_log({"id": paper_id, "status": "not_found"})
+        return "not_found"
+    if not meta_file.exists():
+        write_json(meta_file, meta)
+    
+    discover_seconds = meta.get("discover_seconds")
+
+    # Luồng phụ hỏi Semantic Scholar trong lúc luồng chính tải source arXiv
+    refs_future = pool.submit(fetch_and_save_refs, paper_id, paper_dir)
+
+    versions = [download_version(paper_id, v, paper_dir)
+                for v in range(1, meta["n_versions"] + 1)]
+    try:
+        n_refs, n_refs_arxiv = refs_future.result()
+    except Exception as exc:
+        print(f"  [warn] Semantic Scholar failed for {paper_id}: {exc!r}")
+        n_refs, n_refs_arxiv = None, None
+
+    summary = {
+        "id": paper_id,
+        "status": "done",
+        "n_versions": meta["n_versions"],
+        "versions_with_tex": sum(1 for v in versions if v["status"] == "ok"),
+        "bytes_downloaded": sum(v["bytes_downloaded"] for v in versions),
+        "bytes_before": sum(v["bytes_before"] for v in versions),
+        "bytes_after": sum(v["bytes_after"] for v in versions),
+        "n_refs": n_refs,
+        "n_refs_with_arxiv_id": n_refs_arxiv,
+        "discover_seconds": discover_seconds,
+        "seconds": round(time.perf_counter() - t0, 3),
+        "rss_mb": rss_mb(),
+    }
+    write_json(done_file, summary)  # đánh dấu xong: chạy lại sẽ bỏ qua bài này
+    append_log(summary)
+    return "done"
+
+# ----------------------------------------------------------------------
+# 8. Chương trình chính
+# ----------------------------------------------------------------------
+def main():
+    ap = argparse.ArgumentParser(description="Milestone 1 starter crawler")
+    ap.add_argument("--id", action="append", help="một arXiv ID (có thể lặp lại)")
+    ap.add_argument("--ids-file", help="file text, mỗi dòng một arXiv ID")
+    ap.add_argument("--limit", type=int, help="chỉ chạy N bài đầu (để thử)")
+    ap.add_argument("--discover-batch", type=int, default=50,
+                    help="số ID hỏi arXiv mỗi lần (tối đa 100); 0 = hỏi lẻ từng bài")
+    args = ap.parse_args()
+
+    ids = list(args.id or [])
+    if args.ids_file:
+        for line in Path(args.ids_file).read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                ids.append(line)
+
+    if args.limit:
+        ids = ids[: args.limit]
+    if not ids:
+        ap.error("no ids given (use --id or --ids-file)")
+
+    counts = {}
+    t_start = time.perf_counter()
+    metas = discover_many(ids, args.discover_batch) if args.discover_batch > 0 else {}
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        for i, pid in enumerate(ids, 1):
+            try:
+                result = process_paper(pid, pool, metas)
+            except Exception as exc:   # một bài lỗi không làm hỏng cả lần chạy
+                result = "error"
+                append_log({"id": pid, "status": "error", "error": repr(exc)})
+            counts[result] = counts.get(result, 0) + 1
+            print(f"[{i}/{len(ids)}] {pid}: {result}")
+ 
+    total = round(time.perf_counter() - t_start, 1)
+    print(f"Finished in {total}s. Summary: {counts}")
+ 
+ 
+if __name__ == "__main__":
+    main()
+ 
