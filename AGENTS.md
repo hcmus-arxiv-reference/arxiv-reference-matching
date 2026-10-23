@@ -64,6 +64,24 @@ Tài liệu này dành cho agent lập trình (Codex) làm việc **thay mặt N
   thiếu/lỗi. macOS đã chấp nhận thông báo thử. Bộ test hiện đạt **106 test và
   15 subtest**. Sau reboot cần khởi động lại worker/watcher từ checkpoint.
 
+### Cập nhật tích hợp crawler Liễu ngày 2026-10-24
+
+- Người dùng yêu cầu merge `feat/Lieu-crawler` vào `main` và tiếp tục crawl
+  từ source đó. Đã merge commit nguồn `0d19257`, giữ lịch sử đóng góp và
+  giữ các file hạ tầng/test/tài liệu của main mà nhánh nguồn xóa.
+- Entry point mới: `python -m src.milestone1_crawler --data-dir data/crawl-smoke`.
+  Bản tích hợp giữ discovery theo lô và S2 song song với source của Liễu,
+  dùng lại client HTTP, schema, checksum/receipt và S2 pagination của main.
+  Không thay schema Parquet hoặc đổi đường dẫn cache. `range-run.json` có
+  `engine: "lieu"`; không chạy thêm crawler khác khi worker này còn hoạt động.
+- Worker cũ dừng có kiểm soát ở 788 Publication đủ dữ liệu; lưu snapshot
+  manifest/1.318 receipt trước chuyển. Resume bốn Publication mẫu không tải
+  lại; smoke mạng thật `2508.03870` và `2508.03871` đều hoàn chỉnh.
+- **115 test và 15 subtest đạt**. Môi trường chạy mới là
+  `/private/tmp/arxiv-lieu-venv`; môi trường review cũ mất `pyvenv.cfg`.
+- Chi tiết phạm vi tích hợp và giới hạn công cụ thống kê gốc của Liễu:
+  `docs/lieu-integration.md`. Chưa hoàn thành toàn Range hoặc upload lượt này.
+
 ## 2. Thuật ngữ (bắt buộc dùng đúng)
 
 | Thuật ngữ | Nghĩa |

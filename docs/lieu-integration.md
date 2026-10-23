@@ -70,3 +70,18 @@ hỏng, S2 lỗi rồi retry, PDF so với 404 và exit code của benchmark.
 Test benchmark cần quyền đọc tiến trình/RAM của hệ điều hành; sandbox hạn chế
 quyền này nên lần kiểm chứng toàn bộ chạy ngoài sandbox, HTTP vẫn giả lập.
 Kết quả offline không chứng minh tốc độ hoặc độ đầy đủ của toàn Range.
+
+## Kiểm chứng chuyển worker ngày 24/10/2026
+
+- Worker cũ đã dừng có kiểm soát và xuất **788 Publication hoàn chỉnh**.
+- Lưu snapshot manifest và danh sách **1.318 receipt hợp lệ** dưới
+  `data/crawl-smoke/manifests/handover-lieu-20261024/` (ngoài Git).
+- Chạy bản Liễu trên bốn Publication mẫu cũ: đủ dữ liệu, không có Publication
+  nào cần xử lý lại (`visited_this_pass=0`), giữ bảy Version hợp lệ.
+- Chạy mạng thật hai ID mới `2508.03870`, `2508.03871`: cả hai đủ metadata,
+  source/receipt và S2; hai Version gồm một TeX và một `non_tex`.
+- Đối chiếu lại toàn bộ 1.318 receipt/checksum cũ sau smoke: nguyên vẹn.
+  Export lại toàn Range được 790 dòng `papers`, 14.174 dòng `references`.
+  Đây là snapshot trước khi khởi chạy lại, không phải số lượng cuối cùng.
+- Không dùng tốc độ của hai ID smoke để cam kết ETA toàn Range. Lỗi HTTP,
+  source không có hoặc response bị cắt vẫn có thể cần retry.
