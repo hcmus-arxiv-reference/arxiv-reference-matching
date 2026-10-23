@@ -1,8 +1,11 @@
 # Kế hoạch nhóm trưởng — Milestone 2
 
-**Dự án:** arXiv Reference Matching — nhóm 3 KHDL24, 5 thành viên.  
-**Nhóm trưởng, phụ trách Parser:** Nguyễn Thành Bảo.  
-**Ngày soạn:** 23/10/2026.  
+**Dự án:** arXiv Reference Matching — nhóm 3 KHDL24, 5 thành viên.
+
+**Nhóm trưởng, phụ trách Parser:** Nguyễn Thành Bảo.
+
+**Ngày soạn:** 23/10/2026.
+
 **Trạng thái:** kế hoạch đề xuất để nhóm chốt; chưa phải báo cáo kết quả hoặc quyết định đóng băng schema.
 
 ## 1. Mục tiêu và điểm xuất phát
