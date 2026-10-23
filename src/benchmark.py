@@ -1,9 +1,9 @@
 """
 benchmark.py - Chạy crawler và đo hiệu năng từ bên ngoài.
- 
+
 Cách chạy (dấu -- ngăn cách phần lệnh cần đo):
-    python benchmark.py -- python milestone1_starter.py --ids-file ids.txt
- 
+    python -m src.benchmark -- python -m src.milestone1_crawler --ids-file ids.txt
+
 Đo được:
     - Tổng thời gian chạy (wall time)
     - RAM tối đa và RAM trung bình (tính cả tiến trình con)
@@ -11,9 +11,9 @@ Cách chạy (dấu -- ngăn cách phần lệnh cần đo):
 Kết quả:
     stats/benchmark.json
     stats/benchmark_samples.csv   (chuỗi theo thời gian, để vẽ biểu đồ)
- 
-Quan trọng: khi đo chính thức, hãy XÓA thư mục data/ và logs/ trước,
-để số liệu phản ánh một lần chạy từ đầu (không bị checkpoint bỏ qua).
+
+Khi đo mới, dùng một thư mục data riêng còn trống, truyền cùng --data-dir
+cho benchmark và crawler. Giữ nguyên cache đã tải; ghi rõ nếu đo resume.
 Cài thư viện: pip install psutil
 """
 import argparse
@@ -24,7 +24,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
- 
+
 import psutil
 
 MB = 1024 * 1024
@@ -60,19 +60,19 @@ def main():
     ap.add_argument("--disk-interval", type=float, default=5.0, help="giây giữa 2 lần đo đĩa")
     ap.add_argument("cmd", nargs=argparse.REMAINDER)
     args = ap.parse_args()
- 
+
     cmd = args.cmd[1:] if args.cmd and args.cmd[0] == "--" else args.cmd
     if not cmd:
-        ap.error("missing command, e.g.: python benchmark.py -- python milestone1_starter.py --id 1706.03762")
- 
+        ap.error("missing command, e.g.: python -m src.benchmark -- python -m src.milestone1_crawler --id 1706.03762")
+
     data_dir = Path(args.data_dir)
     samples = []
     last_disk, last_disk_t = 0, -1e9
- 
+
     t0 = time.monotonic()
     proc = subprocess.Popen(cmd)
     ps = psutil.Process(proc.pid)
- 
+
     while proc.poll() is None:
         now = time.monotonic() - t0
         if now - last_disk_t >= args.disk_interval:
@@ -80,10 +80,10 @@ def main():
             last_disk_t = now
         samples.append((round(now, 2), round(tree_rss(ps) / MB, 1), round(last_disk / MB, 2)))
         time.sleep(args.interval)
- 
+
     wall = time.monotonic() - t0
     final_disk = dir_size(data_dir)
- 
+
     rss_values = [s[1] for s in samples]
     result = {
         "command": cmd,
@@ -95,7 +95,7 @@ def main():
         "final_disk_mb": round(final_disk / MB, 2),
         "n_samples": len(samples),
     }
- 
+
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "benchmark.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
@@ -103,12 +103,12 @@ def main():
         w = csv.writer(f)
         w.writerow(["t_seconds", "rss_mb", "disk_mb"])
         w.writerows(samples)
- 
+
     for key, value in result.items():
         print(f"{key:16s} {value}")
     sys.exit(proc.returncode or 0)
- 
- 
+
+
 if __name__ == "__main__":
     main()
- 
+

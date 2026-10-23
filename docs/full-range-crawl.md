@@ -1,5 +1,9 @@
 # Crawl toàn Range của Bảo
 
+Cập nhật 24/10/2026: dùng entry point tích hợp từ nhánh Liễu theo
+[lieu-integration.md](lieu-integration.md). Checkpoint, dữ liệu và cơ chế
+retry/thông báo dưới đây được giữ nguyên.
+
 Range: `2508.02872`–`2508.07871`, bao gồm hai đầu, **5.000 ID được giao**.
 Số ID được giao không đồng nghĩa số Publication đã tải đủ.
 
@@ -41,8 +45,8 @@ cùng tải arXiv. Kiểm tra PID trong `range-run.json` bằng `ps` khi cần.
 
 ```sh
 ARXIV_RANGE_PREFIX=2508 ARXIV_RANGE_START=2872 ARXIV_RANGE_END=7871 \
-  /private/tmp/arxiv-reference-review-venv/bin/python -u -m scripts.crawl_range \
-  --data-dir data/crawl-smoke --max-passes 3 --retry-delay 1800
+  /private/tmp/arxiv-lieu-venv/bin/python -u -m src.milestone1_crawler \
+  --data-dir data/crawl-smoke --discover-batch 50 --max-passes 3 --retry-delay 1800
 ```
 
 Đường dẫn Python trên là môi trường đã kiểm thử của máy này; nếu môi trường

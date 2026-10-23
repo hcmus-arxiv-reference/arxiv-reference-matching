@@ -6,6 +6,8 @@
 # Downloaded/generated data
 data/
 outputs/
+logs/
+stats/
 *.parquet
 *.tar.gz
 *.gz

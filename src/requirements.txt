@@ -1,4 +1,5 @@
-arxiv>=4.0
-psutil
-pandas
-plotly
+# Shared runtime (the integrated crawler uses the shared bounded HTTP client).
+-r ../requirements.txt
+# Optional notebooks/plots from Lieu's reporting workflow.
+pandas>=2
+plotly>=5

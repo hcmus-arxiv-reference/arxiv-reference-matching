@@ -22,6 +22,7 @@ from filelock import FileLock
 from src.common.config import get_settings
 from src.crawl.discovery import ArxivDiscovery
 from src.crawl.http_client import HttpClient
+from src.crawl.manifest import Manifest
 from src.crawl.pipeline import CrawlPipeline
 from src.crawl.semantic_scholar import SemanticScholarClient
 from src.crawl.source import ArxivSourceDownloader, verified_source
@@ -73,6 +74,7 @@ def run_range(pipeline, identifiers, *, max_passes=3, retry_delay=1800,
         for item in states.values():
             totals.update({k: int(v) for k, v in item.items()})
         report = {"status": status, "pid": os.getpid(), "started_at": started,
+                  "engine": getattr(pipeline, "engine", "main"),
                   "updated_at": datetime.now(timezone.utc).isoformat(),
                   "range_first": identifiers[0] if identifiers else None,
                   "range_last": identifiers[-1] if identifiers else None,
@@ -85,18 +87,23 @@ def run_range(pipeline, identifiers, *, max_passes=3, retry_delay=1800,
         return report
 
     with FileLock(str(root / ".pipeline.lock"), timeout=0):
+        pipeline.manifest = Manifest(pipeline.manifest.path)
         states = {i: inspect_publication(pipeline, i) for i in identifiers}
         save("running")
         try:
             for pass_number in range(1, max_passes + 1):
                 visited = 0
                 pending = [i for i in identifiers if not states[i]["complete"]]
-                for current in pending:
+                for position, current in enumerate(pending):
                     if (root / "STOP_RANGE").exists():
                         raise InterruptedError("stop requested")
                     if shutil.disk_usage(root).free < min_free_bytes:
                         raise OSError("Insufficient free disk space")
                     save("running")
+                    prefetch = getattr(pipeline, "prefetch", None)
+                    size = getattr(pipeline, "prefetch_size", 50)
+                    if prefetch is not None and position % size == 0:
+                        prefetch(pending[position:position + size])
                     pipeline.crawl_ids([current])
                     states[current] = inspect_publication(pipeline, current)
                     visited += 1

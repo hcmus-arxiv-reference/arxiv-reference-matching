@@ -1,3 +1,10 @@
+# Lưu ý bản tích hợp trên main
+
+Tài liệu bên dưới được nhập từ nhánh Liễu và mô tả phiên bản nguyên bản.
+Sau merge ngày 24/10/2026, dùng [hướng dẫn tích hợp](lieu-integration.md)
+cho lệnh chạy và checkpoint hiện tại. Không xóa dữ liệu/cache đang có để
+benchmark; dùng một thư mục đo riêng còn trống.
+
 # Milestone 1 - Tài liệu kỹ thuật pipeline crawl dữ liệu arXiv
 
 Môn: Introduction to Data Science - arXiv Project - Milestone 1 (Data Crawling).

@@ -78,6 +78,21 @@ class CrawlPipeline:
         reference_rows(arxiv_id, payload["rows"])
         return payload["rows"]
 
+    def _discover_publication(self, arxiv_id, *, refresh=False):
+        """Resolve and persist metadata, shared by serial and Lieu orchestration."""
+        try:
+            if refresh:
+                raise ValueError("refresh")
+            return self._load_publication(arxiv_id)
+        except (OSError, ValueError, KeyError, TypeError):
+            publication = self.discovery.discover(arxiv_id)
+            self._validate_publication(publication, arxiv_id)
+            path = self._metadata_path(arxiv_id)
+            write_json(path, {"format": 1, "publication": asdict(publication)})
+            self._record(arxiv_id, None, "discovery", "success",
+                         checksum=hashlib.sha256(path.read_bytes()).hexdigest())
+            return publication
+
     def crawl_ids(self, ids: list[str], *, refresh: bool = False) -> dict[str, int]:
         """Cache metadata until refresh=True; validate source files on every run."""
         ids = list(dict.fromkeys(require_id(i) for i in ids))
@@ -90,17 +105,7 @@ class CrawlPipeline:
                  "references_success": 0}
         for arxiv_id in ids:
             try:
-                try:
-                    prior = self.manifest.get(arxiv_id, None, "discovery")
-                    if refresh or not prior or prior.status != "success":
-                        raise ValueError("refresh")
-                    publication = self._load_publication(arxiv_id)
-                except (OSError, ValueError, KeyError, TypeError):
-                    publication = self.discovery.discover(arxiv_id)
-                    self._validate_publication(publication, arxiv_id)
-                    write_json(self._metadata_path(arxiv_id), {"format": 1, "publication": asdict(publication)})
-                    self._record(arxiv_id, None, "discovery", "success",
-                                 checksum=hashlib.sha256(self._metadata_path(arxiv_id).read_bytes()).hexdigest())
+                publication = self._discover_publication(arxiv_id, refresh=refresh)
             except Exception as error:
                 self._failure(arxiv_id, None, "discovery", error)
                 stats["errors"] += 1
