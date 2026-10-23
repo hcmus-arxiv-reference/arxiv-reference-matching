@@ -68,6 +68,18 @@ Ctrl+C/SIGTERM cũng được xử lý để giữ checkpoint và xuất phần 
 `caffeinate -i -w <PID>` đã được dùng cho lượt chạy nền để ngăn idle sleep.
 Nó không bảo đảm tiến trình tiếp tục khi đóng nắp/tắt máy hoặc mất mạng.
 
+## Thông báo khi kết thúc
+
+`scripts.watch_crawl --data-dir data/crawl-smoke` theo dõi checkpoint mỗi
+30 giây trong một tiến trình riêng. Người dùng yêu cầu thông báo khi xong
+ngày 23/10/2026; watcher gửi thông báo macOS trên máy này, không gửi email
+hoặc tin nhắn chat. Chỉ báo thành công khi worker ghi `complete`, đủ 5.000
+Publication và export đủ 5.000 dòng `papers`, danh sách pending rỗng.
+Kết thúc nhưng còn thiếu/lỗi hoặc worker mất sẽ nhận thông báo tình trạng
+khác. Receipt ở `manifests/range-notification.json` ghi macOS có chấp nhận
+lệnh thông báo hay không; Focus/quyền thông báo có thể ảnh hưởng việc hiển thị.
+Watcher cũng cần được chạy lại nếu máy khởi động lại.
+
 ## Bằng chứng và giới hạn
 
 - Ngày 22/10/2026: kiểm tra arXiv và S2 thật thành công; khởi chạy toàn Range

@@ -59,6 +59,10 @@ Tài liệu này dành cho agent lập trình (Codex) làm việc **thay mặt N
   lịch sử không còn phản ánh cache hiện tại. Range vẫn chưa hoàn tất.
 - Không khởi chạy crawler thứ hai khi worker còn sống. Hướng dẫn vận hành,
   retry/dừng và các giới hạn: `docs/full-range-crawl.md`.
+- Người dùng yêu cầu thông báo khi xong: đã bật `scripts.watch_crawl` theo dõi
+  mỗi 30 giây và thông báo macOS tại máy này, phân biệt đủ dữ liệu với còn
+  thiếu/lỗi. macOS đã chấp nhận thông báo thử. Bộ test hiện đạt **106 test và
+  15 subtest**. Sau reboot cần khởi động lại worker/watcher từ checkpoint.
 
 ## 2. Thuật ngữ (bắt buộc dùng đúng)
 
