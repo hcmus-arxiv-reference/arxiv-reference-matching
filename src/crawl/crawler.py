@@ -36,8 +36,10 @@ def save_json(path, value):
 
 class Client:
     """One connection; bounded retries with pacing and Retry-After support."""
-    def __init__(self, user_agent, attempts=4):
+    def __init__(self, user_agent, attempts=4, *, origin='https://export.arxiv.org', interval=3.1, headers=None):
         self.user_agent, self.attempts = user_agent, attempts
+        self.origin, self.interval = origin, interval
+        self.headers = {'User-Agent': user_agent, **(headers or {})}
         self.last = None
         self.requests = 0
         self.http_seconds = 0.0
@@ -51,16 +53,18 @@ class Client:
         return self._request(url, Path(path))
 
     def _request(self, url, path=None):
+        if not url.startswith(self.origin + '/'):
+            raise ValueError('Unexpected request destination')
         for attempt in range(self.attempts):
             if self.last is not None:
-                time.sleep(max(0, 3.1 - (time.monotonic() - self.last)))
+                time.sleep(max(0, self.interval - (time.monotonic() - self.last)))
             self.last = time.monotonic()
             self.requests += 1
             LOG.info('GET %s (attempt %d/%d)', url, attempt + 1, self.attempts)
             started = time.monotonic()
             try:
-                with urlopen(Request(url, headers={'User-Agent': self.user_agent}), timeout=90) as response:
-                    if not response.url.startswith('https://export.arxiv.org/'):
+                with urlopen(Request(url, headers=self.headers), timeout=90) as response:
+                    if not response.url.startswith(self.origin + '/'):
                         raise ValueError('Unexpected redirect destination')
                     if path is None:
                         data = response.read(LIMIT + 1)
@@ -97,7 +101,7 @@ class Client:
                                 LOG.warning('Invalid Retry-After; using exponential backoff')
                 if attempt + 1 == self.attempts:
                     raise
-                LOG.warning('Request failed (%s); retry in %.1fs', type(error).__name__, delay)
+                LOG.warning('Request failed (%s %s); retry in %.1fs', type(error).__name__, getattr(error, 'code', ''), delay)
                 time.sleep(delay)
             finally:
                 self.http_seconds += time.monotonic() - started
@@ -188,12 +192,25 @@ def unpack_sources(data):
 
 class Crawler:
     """Cache metadata and checkpoint each Version with file integrity hashes."""
-    def __init__(self, root, client):
+    def __init__(self, root, client, store=None):
         self.root, self.client = Path(root), client
+        self.store = store
+
+    def cached_metadata(self, identifier):
+        if self.store is not None:
+            return self.store.get_metadata(identifier)
+        path = self.metadata_path(identifier)
+        return json.loads(path.read_text(encoding='utf-8')) if path.exists() else None
+
+    def cache_metadata(self, identifier, value):
+        if self.store is not None:
+            self.store.put_metadata(identifier, value)
+        else:
+            save_json(self.metadata_path(identifier), value)
 
     def prefetch(self, identifiers, batch_size=25):
         """Batch uncached latest/older metadata; never cache missing API entries."""
-        pending = [identifier for identifier in identifiers if not self.metadata_path(identifier).exists()]
+        pending = [identifier for identifier in identifiers if self.cached_metadata(identifier) is None]
         for offset in range(0, len(pending), batch_size):
             batch = pending[offset:offset + batch_size]
             try:
@@ -209,7 +226,7 @@ class Crawler:
                     feed = ET.Element('feed')
                     feed.append(entry)
                     value = parse_metadata(ET.tostring(feed), base)
-                    save_json(self.metadata_path(requested), value)
+                    self.cache_metadata(requested, value)
             except (OSError, ValueError, ET.ParseError):
                 LOG.exception('Metadata batch failed; individual lookup remains available')
 
@@ -218,16 +235,16 @@ class Crawler:
         return self.root / base / 'metadata' / (identifier + '.json')
 
     def metadata(self, identifier, base):
-        path = base / (identifier + '.json')
-        if path.exists():
-            return json.loads(path.read_text(encoding='utf-8'))
+        cached = self.cached_metadata(identifier)
+        if cached is not None:
+            return cached
         original = re.sub(r'v\d+$', '', identifier)
         data = self.client.get('https://export.arxiv.org/api/query?' + urlencode({'id_list': identifier}))
         value = parse_metadata(data, original)
         suffix = re.search(r'v(\d+)$', identifier)
         if suffix and value['version'] != int(suffix[1]):
             raise ValueError('API returned a different Version')
-        save_json(path, value)
+        self.cache_metadata(identifier, value)
         return value
 
     def publication(self, identifier):
@@ -236,15 +253,16 @@ class Crawler:
         base = self.root / identifier
         latest = self.metadata(identifier, base / 'metadata')
         # Discovery already returned the latest Version's complete metadata.
-        latest_path = self.metadata_path(f"{identifier}v{latest['version']}")
-        if not latest_path.exists():
-            save_json(latest_path, latest)
+        latest_key = f"{identifier}v{latest['version']}"
+        if self.cached_metadata(latest_key) is None:
+            self.cache_metadata(latest_key, latest)
         results = []
         for version in range(1, latest['version'] + 1):
             folder = base / f'v{version}'
             checkpoint = folder / 'checkpoint.json'
-            if checkpoint.exists():
-                previous = json.loads(checkpoint.read_text(encoding='utf-8'))
+            previous = self.store.get_version(identifier, version) if self.store else (
+                json.loads(checkpoint.read_text(encoding='utf-8')) if checkpoint.exists() else None)
+            if previous is not None:
                 if previous['status'] in ('success', 'empty') and all(
                     (folder / name).is_file() and hashlib.sha256((folder / name).read_bytes()).hexdigest() == digest
                     for name, digest in previous['files'].items()
@@ -255,7 +273,9 @@ class Crawler:
             record = dict(arxiv_id=identifier, version=version, status='error', files={})
             try:
                 metadata = self.metadata(f'{identifier}v{version}', base / 'metadata')
-                save_json(folder / 'metadata.json', metadata)
+                folder.mkdir(parents=True, exist_ok=True)
+                if self.store is None:
+                    save_json(folder / 'metadata.json', metadata)
                 started = time.monotonic()
                 with tempfile.TemporaryDirectory(dir=folder) as temporary:
                     archive_path = Path(temporary) / 'source.download'
@@ -274,6 +294,9 @@ class Crawler:
                 record['kept_bytes'] = sum(map(len, files.values()))
             except (OSError, ValueError, ET.ParseError, EOFError, tarfile.TarError) as error:
                 record['error'] = f'{type(error).__name__}: {error}'
-            save_json(checkpoint, record)
+            if self.store is not None:
+                self.store.put_version(record)
+            else:
+                save_json(checkpoint, record)
             results.append(record)
         return results
