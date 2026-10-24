@@ -8,6 +8,23 @@
 
 **Trạng thái:** kế hoạch đề xuất để nhóm chốt; chưa phải báo cáo kết quả hoặc quyết định đóng băng schema.
 
+### Khởi động ngày 24/10/2026
+
+- Bảo yêu cầu bắt đầu M2 và dành phần của Liễu để Bảo tự làm. Phân công
+  M2 cho Liễu chưa có trong repo; đang chờ xác nhận module cần loại khỏi
+  phạm vi agent. Không suy ra phần M2 từ quyền sở hữu crawler M1.
+- Đã đọc lại ba trang đề và xác minh bộ đầu vào gồm 5 Publication,
+  8 Version: `2508.02872`, `2508.02873`, `2508.02874`, `2508.02876`,
+  `2508.03870`. Có 6 Version chứa TeX, 2 Version `non_tex`; bộ mẫu bao
+  phủ nhiều Version, source nhiều file và dữ liệu `.bib`.
+- Snapshot local riêng: `data/milestone2-samples/20261024-29ljsh77/`.
+  `snapshot.json` lưu commit, danh sách Version và SHA-256 của 52 file;
+  metadata/references được so checksum với checkpoint, source được kiểm
+  tra receipt trước và sau sao chép. Không sửa cache crawler hoặc tải lại.
+- Đây là đầu vào đã xác minh, chưa phải kết quả Parser hoặc nghiệm thu
+  G0/G2. Schema/ID/lần xuất hiện vẫn cần chốt theo mục 4; không coi yêu
+  cầu bắt đầu M2 là phê duyệt ngầm thay đổi schema dùng chung.
+
 ## 1. Mục tiêu và điểm xuất phát
 
 Milestone 2 biến source LaTeX của Milestone 1 thành cấu trúc có thể kiểm tra, chuẩn hóa và tái sử dụng cho Matching. Nhóm cần có một pipeline chung, chạy được trên dữ liệu của từng thành viên, cùng báo cáo giải thích kết quả và giới hạn.
