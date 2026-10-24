@@ -82,6 +82,28 @@ Tài liệu này dành cho agent lập trình (Codex) làm việc **thay mặt N
 - Chi tiết phạm vi tích hợp và giới hạn công cụ thống kê gốc của Liễu:
   `docs/lieu-integration.md`. Chưa hoàn thành toàn Range hoặc upload lượt này.
 
+### Khởi động Milestone 2 ngày 2026-10-24
+
+- Người dùng bỏ yêu cầu loại trừ phần của Liễu và yêu cầu triển khai theo
+  `leader.md`. Phạm vi M2 trong kế hoạch, gồm chuẩn hóa/BibTeX và QA, đã
+  được yêu cầu; không mở rộng sang Matching.
+- Đã duyệt và áp dụng: `bibtex.authors` là `list<string>`, `bibtex.year`
+  là `int32` nullable; năm không đọc được phải giữ giá trị thô trong log
+  của bộ trích. `hierarchy.parent_id` non-null, root chỉ ở `elements`.
+  Không hỏi lại ba quyết định này. G0 chưa đóng băng toàn bộ: còn ID,
+  biểu diễn lần xuất hiện, categorical/nullability khác và citation key.
+- Đã có `src/parse/source.py`, CLI `scripts.assemble_source`: lớp tìm root,
+  gom input/include, giữ provenance và diagnostic. Chưa có cây phân cấp,
+  normalization, BibTeX, dedup hoặc runner Parser toàn Range.
+- Snapshot riêng của Bảo: `data/milestone2-samples/20261024-29ljsh77/`,
+  5 Publication/8 Version, 52 file được so checksum. Chạy CLI hai lần giữ
+  nguyên nguồn và cho cùng artifact: 5 `ready`, 1 `needs_review` (hook
+  `AtBeginDocument` ở `2508.02872v1`), 2 `empty_non_tex`. Trạng thái này
+  chỉ thuộc lớp gom source, không phải parse M2 hoàn tất.
+- Hướng dẫn, giới hạn và bằng chứng: `docs/milestone2-source.md`.
+- Bộ test sau thay đổi đạt **146 test và 15 subtest**; chưa phải kiểm thử
+  pipeline M2 đầu-cuối hoặc benchmark Colab.
+
 ## 2. Thuật ngữ (bắt buộc dùng đúng)
 
 | Thuật ngữ | Nghĩa |

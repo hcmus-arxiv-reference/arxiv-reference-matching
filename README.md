@@ -2,7 +2,13 @@
 
 Đồ án Nhập môn Khoa học Dữ liệu: thu thập bài báo arXiv, phân tích nguồn LaTeX thành cấu trúc phân cấp, rồi ghép các trích dẫn BibTeX với metadata tham khảo bằng một pipeline học máy.
 
-> **Trạng thái (2026-10-19):** đã sửa các lỗi crawler trong review và có API Python/CLI crawl → validate → upload dataset Hugging Face private. **100 test và 15 subtest đạt, không còn xfail.** Đã thử dữ liệu thật và upload hai Publication đủ dữ liệu; một Publication khác còn thiếu source v3 do response HTTP bị cắt. Xem [hướng dẫn pipeline](docs/crawl-pipeline.md). Parser chưa triển khai, schema toàn dự án chưa đóng băng.
+> **Cập nhật M2 (2026-10-24):** đã triển khai lớp tìm root/gom source,
+> CLI `python -m scripts.assemble_source` và ba sửa đổi schema được Bảo duyệt.
+> Mẫu thật: 5 Version sẵn sàng ở lớp gom, 1 cần review, 2 không có TeX;
+> chưa có pipeline dựng cây/BibTeX/dedup hoàn chỉnh hoặc schema đóng băng.
+> Xem [cách chạy, kiểm chứng và giới hạn](docs/milestone2-source.md).
+
+> **Lịch sử (2026-10-19):** đã sửa các lỗi crawler trong review và có API Python/CLI crawl → validate → upload dataset Hugging Face private. **100 test và 15 subtest đạt, không còn xfail.** Đã thử dữ liệu thật và upload hai Publication đủ dữ liệu; tại thời điểm đó một Publication khác còn thiếu source v3 do response HTTP bị cắt. Xem [hướng dẫn pipeline](docs/crawl-pipeline.md). Thông tin này không thay thế trạng thái vận hành hiện tại.
 
 Kiểm tra các module hiện có từ root repo (lần review mới dùng Python 3.14.7):
 
