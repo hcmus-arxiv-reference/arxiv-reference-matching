@@ -104,6 +104,31 @@ Tài liệu này dành cho agent lập trình (Codex) làm việc **thay mặt N
 - Bộ test sau thay đổi đạt **146 test và 15 subtest**; chưa phải kiểm thử
   pipeline M2 đầu-cuối hoặc benchmark Colab.
 
+### Restart crawler sau cập nhật main ngày 2026-10-25
+
+- Người dùng yêu cầu cập nhật main rồi chạy lại crawl và kiểm tra lỗi.
+  `b27440f` thay entry point tích hợp bằng crawler standalone, làm mất
+  `BatchedDiscovery`/`LieuPipeline` và CLI resume; thêm dependency đơn lẻ
+  không đủ để dùng cache cũ. Hai regression CLI/import đã tái hiện lỗi.
+- Bản sửa `0068a74`: `src/milestone1_crawler.py` là entry point ổn định,
+  gọi `src/crawl/lieu_pipeline.py`. Source standalone mới được giữ nguyên
+  tại `src/lieu_standalone_crawler.py`; không dùng nó để resume cache Bảo.
+  Hai script analyze/diagnose của upstream đọc layout standalone, không
+  phản ánh trực tiếp `data/crawl-smoke/manifests/crawl.jsonl`.
+- **150 test và 15 subtest đạt**, gồm CLI, API import, resume không mạng
+  và log `issues` theo tác vụ/Version, không có header/token/error body.
+- Lượt cũ kết thúc 11:32 ngày 25/10: 4.941/5.000 Publication hoàn chỉnh;
+  59 còn thiếu, gồm 48 source Version HTTP 404 và 15 Publication S2 HTTP
+  404. Không coi 404 hoặc archive hỏng là Version `non_tex` hợp lệ.
+- Trước restart đã xác minh 7.763 receipt và sao lưu manifest tại
+  `data/crawl-smoke/manifests/restart-20261025-170531/`. Probe source mẫu
+  vẫn 404; probe S2 mẫu trả 429. Không suy ra lỗi vĩnh viễn từ một probe.
+- Đã khởi động lại lúc 17:07 ngày 25/10, cùng Range/cache, tối đa 3 lượt,
+  nghỉ 30 phút giữa lượt, không upload. Chỉ xử lý Publication còn thiếu,
+  dùng lại phần đã xác minh. Worker/watcher hiện hành phải tra từ các file
+  launch và `range-run.json`; không dùng PID cũ trong hội thoại để restart.
+- Chi tiết sửa và giới hạn: `docs/lieu-integration.md`.
+
 ## 2. Thuật ngữ (bắt buộc dùng đúng)
 
 | Thuật ngữ | Nghĩa |

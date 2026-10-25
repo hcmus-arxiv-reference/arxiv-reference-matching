@@ -37,6 +37,16 @@ Probe mạng ngày 25/10: source `2508.02961v1` trả 404 với cả mặc đị
 không chứng minh mọi 404 là vĩnh viễn hoặc mọi lỗi đều cùng nguyên nhân.
 Không đổi các lỗi tải thành bản ghi rỗng hoặc đánh dấu hoàn tất.
 
+Đã khởi động lại lúc 17:07 ngày 25/10 bằng commit `0068a74`, Range 5.000 ID,
+cùng `data/crawl-smoke/`, `max-passes=3`, nghỉ 1.800 giây giữa lượt. Checkpoint
+ban đầu xác nhận vẫn 4.941 Publication đủ, chỉ 59 cần xử lý. Worker, caffeinate
+và watcher macOS mới đã được kiểm tra đang chạy. Đọc manifest để lấy tiến độ
+mới nhất; không xem snapshot restart này là kết quả cuối.
+Kiểm tra lúc 17:09: đã thử 23/59 Publication, vẫn 4.941 đủ; toàn bộ 7.763
+receipt cũ giữ nguyên hash và file nguồn tiếp tục qua kiểm tra checksum.
+Các lỗi còn ghi nhận lúc đó vẫn là 48 source 404 và 15 S2 404. Báo cáo
+local có từng tác vụ ở `manifests/restart-20261025-170531/live-check.json`.
+
 Các phần ngày 24/10 dưới đây là lịch sử lần tích hợp ban đầu; lệnh resume
 vẫn dùng CLI ổn định phía trên.
 
