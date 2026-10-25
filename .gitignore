@@ -8,6 +8,7 @@ data/
 outputs/
 logs/
 stats/
+ids.txt
 *.parquet
 *.tar.gz
 *.gz

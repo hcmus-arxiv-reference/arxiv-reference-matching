@@ -1,10 +1,3 @@
-# Lưu ý bản tích hợp trên main
-
-Tài liệu bên dưới được nhập từ nhánh Liễu và mô tả phiên bản nguyên bản.
-Sau merge ngày 24/10/2026, dùng [hướng dẫn tích hợp](lieu-integration.md)
-cho lệnh chạy và checkpoint hiện tại. Không xóa dữ liệu/cache đang có để
-benchmark; dùng một thư mục đo riêng còn trống.
-
 # Milestone 1 - Tài liệu kỹ thuật pipeline crawl dữ liệu arXiv
 
 Môn: Introduction to Data Science - arXiv Project - Milestone 1 (Data Crawling).
@@ -109,6 +102,8 @@ intro-ds-arxiv-crawler/
     |-- milestone1_crawler.py    crawler chính
     |-- make_ids.py              sinh danh sách ID từ ID đầu đến ID cuối
     |-- make_stats.py            tính số liệu thống kê từ nhật ký
+    |-- analyze_errors.py        cho biết vì sao các bài bị error (đọc logs/run_log.jsonl)
+    |-- diagnose_download.py     tải thử một file bằng nhiều cách để tìm nguyên nhân khi tải bị đứt
     `-- benchmark.py             chạy crawler và đo thời gian, RAM, đĩa
 ```
 
@@ -123,6 +118,8 @@ data/   logs/   stats/   ids.txt   ids_part_*.txt   .venv/   __pycache__/   *.py
 | `milestone1_crawler.py` | Toàn bộ pipeline crawl. Chạy từ thư mục gốc của repo |
 | `make_ids.py` | Từ ID đầu và ID cuối, sinh file danh sách ID (có thể chia nhỏ) |
 | `make_stats.py` | Đọc `logs/run_log.jsonl`, tạo `stats/summary.json` và `stats/papers.csv` |
+| `analyze_errors.py` | Đọc `logs/run_log.jsonl`, chia các bài lỗi theo nhóm nguyên nhân, cho xu hướng lỗi theo thời gian |
+| `diagnose_download.py` | Tải cùng một file nguồn bằng 6 cách khác nhau (ví dụ header mặc định, `identity`, giữ kết nối, `urllib`, thử `Range`) rồi so sánh để tìm nguyên nhân khi tải bị đứt giữa chừng |
 | `benchmark.py` | Bọc quanh lệnh bất kỳ, đo thời gian, RAM, đĩa, tạo `stats/benchmark.json` |
 | `requirements.txt` | Chỉ thư viện crawler cần: `arxiv`, `requests`, `psutil` |
 
@@ -209,6 +206,7 @@ Quy tắc:
 | `--discover-batch N` | 50 | Số ID hỏi arXiv mỗi lần (tối đa 100). Đặt 0 để hỏi lẻ từng bài |
 | `--discover-only` | tắt | Chỉ hỏi thông tin các bài (tạo `meta.json`) rồi dừng, in tổng số version. Không tải source, không hỏi Semantic Scholar. Không dùng cùng `--discover-batch 0` |
 | `--gap-from-start` | tắt | Tính khoảng chờ 3 giây từ lúc **bắt đầu** lần gọi arXiv trước (nhanh hơn). Mặc định tính từ lúc **kết thúc** (thận trọng). Chỉ bật khi đã xác nhận quy tắc với giảng viên (mục 10.9) |
+| `--default-encoding` | tắt | Không gửi `Accept-Encoding: identity` (để thư viện dùng mặc định). Chỉ để **thử** khi nghi cách tải làm máy chủ cắt kết nối (mục 4.14) |
 
 Bắt buộc có `--id` hoặc `--ids-file`.
 
@@ -303,6 +301,25 @@ os.environ["CONTACT_EMAIL"] = "email-cua-ban@example.com"
 ```
 Lưu ý: phiên Colab có thể bị ngắt khi chạy lâu hoặc không hoạt động, dữ liệu trên đĩa tạm sẽ mất. Nếu chạy lâu hãy gắn Google Drive (`drive.mount`) và chạy trong thư mục trên Drive, chia phần 500 ID như trên.
 
+### 4.14 Khi có bài bị `error`
+
+Màn hình chỉ in chữ `error`; lý do nằm trong `logs/run_log.jsonl` (trường `error` và `where`). Để đọc nhanh nguyên nhân và xem số lỗi có tăng dần theo thời gian không:
+```
+python src/analyze_errors.py
+```
+Kết quả gồm: số dòng log theo trạng thái; các bài đang lỗi chia theo nhóm nguyên nhân (đĩa đầy, bị chặn 403, quá tải 429/5xx, mạng, lỗi file hệ thống, file nén hỏng, dữ liệu API lạ) kèm ví dụ và gợi ý; tỷ lệ lỗi theo từng đợt 100 lần xử lý; số bài lỗi lặp lại so với bài tự hết lỗi.
+
+Xem nhanh không cần script (Windows PowerShell): `Select-String -Path logs\run_log.jsonl -Pattern '"status": "error"' | Select-Object -Last 5 | ForEach-Object { $_.Line }`
+
+Sau khi xử lý nguyên nhân, chạy lại đúng lệnh cũ: chỉ các bài chưa xong được làm tiếp.
+
+**Lỗi `IncompleteRead` / `Connection broken`** (kết nối đứt giữa lúc tải): thông báo này chỉ cho biết kết nối bị đóng trước khi nhận đủ file; chưa nói được phía nào cắt (mạng, máy chủ hoặc CDN, proxy hoặc phần mềm diệt virus, hay cách tải của code). Để tách từng khả năng:
+1. **Dừng crawler** (arXiv chỉ cho một kết nối tại một thời điểm).
+2. Chạy `python src/diagnose_download.py --id <ID bị lỗi>` (tự chọn version chưa tải xong; dùng `--version N` để chỉ định). Script tải cùng một file bằng 6 cách, cách nhau 3,5 giây, in kết quả từng cách và một dòng kết luận.
+3. Cách làm tay bằng `curl` (Windows): `curl.exe -L -A "IntroDS-student-crawler/0.1 (mailto:<email>)" -o test.bin -w "%{http_code} %{size_download} bytes %{time_total}s\n" https://export.arxiv.org/src/<ID>v<N>`; so `size_download` với `Content-Length`.
+4. Nếu kết luận là do header `identity`, chạy crawler với `--default-encoding`.
+5. Nếu máy chủ trả `206` cho thử `Range`, có thể làm tính năng tải tiếp phần còn thiếu.
+
 ---
 
 ## 5. Luồng hoạt động
@@ -395,10 +412,12 @@ Mọi file JSON được ghi bằng **file tạm rồi đổi tên** (`write_jso
 | HTTP 404 | Coi là "không có", trả `None`, không thử lại |
 | HTTP 403 | Dừng ngay bài đó, báo lỗi rõ ràng (bị chặn), không thử lại |
 | HTTP 429, 500, 502, 503, 504 | Thử lại tối đa 4 lần sau lần đầu; chờ theo `Retry-After` nếu server gửi, không thì 5, 10, 20, 40 giây |
-| Mạng đứt, quá 60 giây | Thử lại như trên, hết lượt thì báo lỗi |
+| Mạng đứt, quá 60 giây, **kết nối đứt giữa lúc đang tải** (`ProtocolError`, `IncompleteRead`), hoặc nhận thiếu byte so với `Content-Length` | Thử lại như trên (tải lại từ đầu), hết lượt thì báo lỗi. Các lỗi này tính vào bộ đếm "bị chặn/mạng" bên dưới |
 | Một lô hỏi arXiv bị lỗi | In thông báo, bỏ qua lô, các bài trong lô được hỏi lẻ sau |
-| Lỗi trong một bài (kể cả lỗi từ Semantic Scholar) | Bắt ở `main`, ghi dòng `error` vào log, **chạy tiếp bài khác**. Bài không có `done.json` nên chạy lại sẽ làm tiếp; version đã tải xong không tải lại |
+| Lỗi trong một bài (kể cả lỗi từ Semantic Scholar) | Bắt ở `main`, ghi dòng `error` vào log (kèm `where`: dòng code nơi lỗi xảy ra), **chạy tiếp bài khác**. Bài không có `done.json` nên chạy lại sẽ làm tiếp; version đã tải xong không tải lại |
 | Version chỉ có PDF/Word hoặc không có file | Tạo `status.json` với `status = "empty"` (bản ghi rỗng), vẫn tiếp tục |
+| File nén hỏng hoặc bị cắt cụt (tải thiếu) | `kind = "corrupt"`, `status = "empty"` (bản ghi rỗng), **không** tính là `error`. Trước khi ghi file, code đọc hết luồng nén để kiểm tra, nên không để lại file dở. Muốn tải lại version đó thì xóa `v<n>/status.json` |
+| Nhiều lỗi kiểu bị chặn, mạng, quá tải liên tiếp (HTTP 403, 429, 5xx, mất mạng, quá thời gian) | Cứ 5 lỗi liên tiếp thì nghỉ (5 phút, rồi 10 phút, tối đa 30 phút) và không gửi thêm yêu cầu; 15 lỗi liên tiếp thì dừng cả lần chạy và báo cách chạy tiếp. Một bài chạy xong (`done`) đặt lại bộ đếm. Lỗi riêng của từng bài (ví dụ lỗi ghi file, hết dung lượng đĩa) không kích hoạt việc nghỉ |
 | Semantic Scholar chưa có bài (404) | `n_refs` = `null`, bài vẫn `done` |
 
 Lưu ý: `main` **trả mã thoát 0 ngay cả khi có bài `error`**. Hãy đọc dòng tổng kết hoặc chạy `make_stats.py` để biết số bài lỗi.
@@ -430,6 +449,8 @@ Hằng số cấu hình ở đầu file:
 | `ARXIV_THROTTLE` | `Throttle(3.0)` | Khoảng chờ tối thiểu giữa 2 lần gọi arXiv. Mặc định tính từ lúc lần gọi trước kết thúc; `--gap-from-start` đổi sang tính từ lúc bắt đầu |
 | `S2_THROTTLE` | `Throttle(1.1)` nếu có key, `Throttle(3.2)` nếu không | Khoảng chờ tối thiểu giữa 2 lần gọi Semantic Scholar |
 | `ARXIV_CLIENT` | `arxiv.Client(page_size=100, delay_seconds=3.0, num_retries=3)` | Đối tượng thư viện `arxiv` để hỏi thông tin bài |
+| `ACCEPT_IDENTITY` | `True` (đổi bằng `--default-encoding`) | Có gửi `Accept-Encoding: identity` hay không |
+| `NETWORK_ERRORS` | `(requests.RequestException, urllib3.exceptions.HTTPError)` | Các loại lỗi mạng được thử lại; gồm cả lỗi của `urllib3` vì dữ liệu được đọc thô |
 | `S2_FIELDS` | `title,references.title,references.authors,references.publicationDate,references.externalIds,references.paperId` | Các trường xin Semantic Scholar (không có dấu cách sau dấu phẩy) |
 
 Các hàm:
@@ -437,9 +458,11 @@ Các hàm:
 | Hàm | Làm gì | Kiểu trả về |
 |---|---|---|
 | `Throttle(min_gap, from_start=False)` | "Người gác cổng". `wait()` ngủ cho đủ `min_gap` giây tính từ lúc lần gọi trước **kết thúc** (hoặc **bắt đầu** nếu `from_start=True`); `mark()` ghi nhận lần gọi vừa kết thúc. Ngoài ra đo số lần gọi, tổng thời gian chờ, tổng thời gian gọi mạng; `summary()` trả các số này | Đối tượng; `wait()`, `mark()` trả `None`; `summary()` trả `dict` |
-| `fetch_bytes(url, throttle, headers=None, retries=4)` | Tải một URL bằng `requests.Session` (giữ kết nối mở giữa các lần gọi), có chờ lịch sự và thử lại khi lỗi tạm thời. Gửi `Accept-Encoding: identity` và đọc byte thô, nên nhận đúng các byte server gửi (không tự giải nén) | `bytes`; hoặc `None` nếu HTTP 404. HTTP 403 gây `RuntimeError`. Lỗi khác sau khi hết lượt thử gây ngoại lệ của `requests` (`HTTPError`, `ConnectionError`, `Timeout`) |
+| `fetch_bytes(url, throttle, headers=None, retries=4, raw=True)` | Tải một URL bằng `requests.Session` (giữ kết nối mở giữa các lần gọi), có chờ lịch sự và thử lại khi lỗi tạm thời. `raw=True`: đọc byte thô đúng như server gửi (cho file nguồn arXiv); `raw=False`: để thư viện tự giải nén (cho JSON của Semantic Scholar). Sau mỗi lỗi mạng, bỏ session cũ và mở kết nối mới cho lần thử sau. Khi báo lỗi, gắn thuộc tính `crawler_url` vào ngoại lệ | `bytes`; hoặc `None` nếu HTTP 404. HTTP 403 gây `RuntimeError`. Lỗi khác sau khi hết lượt thử gây ngoại lệ của `requests` hoặc `urllib3` (`ProtocolError`, `IncompleteRead`...). Nhận thiếu byte so với `Content-Length` (chế độ `raw`) cũng bị coi là lỗi và thử lại |
 | `_retry_after(value, default)` | Đọc giá trị header `Retry-After`, không đọc được thì dùng `default` | `float` (giây) |
 | `_session_for(throttle)` | Trả về `requests.Session` riêng của một "người gác cổng" (tạo lần đầu, dùng lại sau đó) | `requests.Session` |
+| `_drop_session(throttle)` | Đóng và bỏ session (kết nối) hiện tại của một "người gác cổng" | `None` |
+| `_fetch_bytes(url, throttle, headers, retries, raw)` | Phần việc thật của `fetch_bytes` (vòng thử lại); `fetch_bytes` chỉ bọc thêm việc gắn URL vào lỗi | `bytes` hoặc `None` |
 | `throttle_report(wall_seconds)` | In và ghi số liệu chờ đợi / gọi mạng của lần chạy vào `logs/throttle_runs.jsonl` | `None` |
 | `_safe_rel(name)` | Chuẩn hóa đường dẫn trong file nén, loại đường dẫn nguy hiểm | `str`, hoặc `None` nếu nguy hiểm |
 | `_save_tar(tar, out_dir)` | Duyệt túi nén, ghi các `.tex`/`.bib` ra đĩa | `(files: list[str], kept: int, everything: int)` |
@@ -483,6 +506,31 @@ Hỗ trợ ID kiểu mới (`YYMM.NNNNN`, cũng nhận 4 chữ số cho giai đo
 | `dir_size(path)` | Tổng dung lượng các file trong thư mục (byte) | `int` |
 | `tree_rss(proc)` | RAM của tiến trình và các tiến trình con (byte) | `int` |
 | `main()` | Chạy lệnh sau `--` như tiến trình con, lấy mẫu RAM và đĩa, ghi kết quả | Thoát với đúng mã thoát của lệnh được đo |
+
+### 6.5 `analyze_errors.py`
+
+| Hàm | Làm gì | Kiểu trả về |
+|---|---|---|
+| `categorize(message)` | Xếp một thông báo lỗi vào nhóm nguyên nhân theo thứ tự ưu tiên (đĩa đầy, 403, 429/5xx, mạng, file hệ thống, file nén hỏng, dữ liệu API lạ, bộ nhớ, khác) | `str` |
+| `hint_for(name)` | Gợi ý cách xử lý cho một nhóm | `str` |
+| `shorten(message, width)` | Rút gọn thông báo để in | `str` |
+| `main()` | Đọc `logs/run_log.jsonl`, in 4 phần: trạng thái, nhóm nguyên nhân, xu hướng theo đợt, lỗi lặp lại | `None` |
+
+Tham số: `--log` (mặc định `logs/run_log.jsonl`), `--bucket` (số lần xử lý mỗi đợt khi xét xu hướng, mặc định 100), `--show` (số ví dụ mỗi nhóm, mặc định 3).
+
+### 6.6 `diagnose_download.py`
+
+Tải cùng một file nguồn bằng 6 cách, cách nhau `--gap` giây (mặc định 3,5; bắt buộc từ 3 trở lên với arxiv.org): (1) `requests`, kết nối mới, header mặc định (như `curl`); (2) kết nối mới, `identity`, đọc thô (cách crawler đang dùng); (3) và (4) cùng một session dùng lại hai lần (kiểm tra việc giữ kết nối); (5) `urllib` của Python; (6) thử xin 1 KB bằng `Range`. In trạng thái, số byte nhận được so với `Content-Length`, thời gian, lỗi (nếu có), một số header của máy chủ, và một dòng kết luận.
+
+| Tham số | Ý nghĩa |
+|---|---|
+| `--id` | arXiv ID gốc |
+| `--version` | Số version; mặc định chọn version đầu tiên chưa có `status.json` |
+| `--url` | URL đầy đủ, thay cho `--id` |
+| `--data-dir` | Thư mục dữ liệu (mặc định `data`) |
+| `--gap` | Giây nghỉ giữa 2 lần tải |
+
+Hàm chính: `pick_version(paper_id, data_dir)` trả `int`; `attempt(name, fn)` chạy một cách tải và trả `dict` kết quả; `main()`.
 
 ---
 
@@ -568,7 +616,7 @@ Một version chỉ có PDF (bản ghi rỗng):
 | Trường | Kiểu | Ý nghĩa |
 |---|---|---|
 | `version` | int | Số version |
-| `kind` | string | `"tar"`, `"gz_single"`, `"pdf"`, `"other"` hoặc `"not_found"` (mục 8) |
+| `kind` | string | `"tar"`, `"gz_single"`, `"pdf"`, `"other"`, `"corrupt"` hoặc `"not_found"` (mục 8) |
 | `status` | string | `"ok"` nếu có ít nhất một file giữ lại, `"empty"` nếu không |
 | `files` | list[string] | Đường dẫn tương đối các file đã giữ (dấu `/`) |
 | `bytes_downloaded` | int | Dung lượng file **nén** tải về |
@@ -656,11 +704,11 @@ Mỗi dòng là một JSON, thêm vào cuối file (file không bị ghi đè). 
 ```json
 {"id": "2310.00001", "status": "done", "n_versions": 1, "versions_with_tex": 1, "bytes_downloaded": 357, "bytes_before": 170574, "bytes_after": 20574, "n_refs": 2, "n_refs_with_arxiv_id": 1, "discover_seconds": 0.12, "seconds": 3.4, "rss_mb": 48.0}
 {"id": "2310.00099", "status": "not_found"}
-{"id": "2310.00003", "status": "error", "error": "RuntimeError('simulated S2 failure')"}
+{"id": "2310.00003", "status": "error", "error": "ProtocolError('Connection broken: IncompleteRead(1048576 bytes read, 909298 more expected)')", "where": "milestone1_crawler.py:153 in fetch_bytes (raised in response.py:930 in _error_catcher)", "url": "https://export.arxiv.org/src/2310.00003v2"}
 ```
 - `done`: giống `done.json`.
 - `not_found`: arXiv không có bài này.
-- `error`: có lỗi; trường `error` là mô tả lỗi.
+- `error`: có lỗi; trường `error` là mô tả lỗi, `where` là dòng code của dự án nơi lỗi xảy ra (kèm dòng trong thư viện nếu lỗi bắt nguồn từ đó), `url` là địa chỉ đang tải khi lỗi (có thể `null`). Dùng các trường này khi báo lỗi cho người hỗ trợ.
 
 Bài bị bỏ qua (`skipped`) **không** ghi dòng mới. Một bài có thể có nhiều dòng (lỗi lần trước, thành công lần sau). `make_stats.py` chỉ lấy dòng cuối của mỗi ID.
 
@@ -808,7 +856,8 @@ Hãy đối chiếu tên cột chính xác với đề.
 | `kind` | `tar` | Túi nén (tar hoặc tar.gz) |
 | `kind` | `gz_single` | File gzip đơn, lưu thành `main.tex` |
 | `kind` | `pdf` | PDF (kể cả PDF nén gzip) |
-| `kind` | `other` | Loại khác (ví dụ file Word) hoặc gzip hỏng/nhị phân |
+| `kind` | `other` | Loại khác (ví dụ file Word) hoặc dữ liệu nhị phân không nhận dạng được |
+| `kind` | `corrupt` | File nén bị hỏng hoặc bị cắt cụt (tải thiếu); ghi bản ghi rỗng |
 | `kind` | `not_found` | Server trả 404 cho version này |
 
 Một túi nén không chứa `.tex`/`.bib` nào (ví dụ chỉ có ảnh) có `kind = "tar"` nhưng `status = "empty"`.
@@ -1017,6 +1066,11 @@ Dòng cuối cho thấy luồng Semantic Scholar chỉ "được che" khi nó nh
 | `fetch_bytes` với server HTTP cục bộ | 10 lần gọi liên tiếp chỉ mở 1 kết nối (keep-alive); 404 trả `None`; 403 báo `RuntimeError`; 503 và 429 có `Retry-After` thì thử lại sau khoảng 1 giây rồi thành công; hết lượt thử báo `HTTPError`; 400 báo ngay; theo chuyển hướng (redirect); server gửi `Content-Encoding: x-gzip` vẫn nhận **byte thô**; header `x-api-key` và User-Agent được gửi; mất kết nối thì báo lỗi sau khi thử lại | Đúng |
 | `Throttle` | Hai chế độ tính khoảng chờ; đếm số lần gọi, thời gian chờ, thời gian gọi mạng | Đúng; chế độ từ lúc bắt đầu nhanh hơn như kỳ vọng |
 | Mô phỏng thu nhỏ 10 lần toàn bộ pipeline | 60 bài, đúng 93 lần hỏi arXiv như tính toán; các số ở mục 10.9 | Đúng (không phải số đo thật) |
+| Xử lý lỗi | File nén bị cắt cụt ở 30%, 60%, 95%, byte bị hỏng giữa file, `.gz` đơn bị cắt: đều thành `corrupt` và không ghi file nào; lỗi ghi đĩa (hết dung lượng) vẫn báo lỗi thật; nghỉ sau lỗi mạng thứ 5 và 10 rồi dừng ở lỗi thứ 15; lỗi riêng của từng bài không kích hoạt nghỉ; một bài thành công đặt lại bộ đếm; log có trường `where` | Đúng |
+| `analyze_errors.py` | Log giả 606 dòng có tỷ lệ lỗi tăng dần và nhiều nguyên nhân | Phân nhóm, xu hướng và lỗi lặp lại đúng |
+| Kết nối đứt giữa lúc tải | Server gửi `Content-Length` 3 MB nhưng đóng kết nối sau 1,5 MB: tải lại thành công ở lần thứ 3 (chờ 5 và 10 giây); luôn đứt thì báo lỗi mạng sau khi hết lượt thử. Đã tái hiện đúng thông báo `IncompleteRead` trong log của người dùng với code cũ | Đúng |
+| Chế độ tải `raw`, `--default-encoding`, URL trong lỗi | `raw=False` trả JSON đã giải nén, `raw=True` giữ nguyên byte gzip; `--default-encoding` bỏ header `identity`; lỗi có `crawler_url` và log có trường `url`; sau lỗi mạng mở kết nối mới | Đúng |
+| `diagnose_download.py` | Bốn máy chủ thử: luôn đứt, chỉ đứt khi có header `identity`, chỉ đứt khi dùng lại kết nối, và máy chủ tốt | Kết luận in ra đúng cho từng trường hợp; nhận ra máy chủ có hỗ trợ `Range` |
 | `make_stats.py` | Chạy trên nhật ký giả có `done`, `error`, `not_found`, bài chưa chạy | Các con số khớp tính tay |
 | `benchmark.py` | Bọc một lệnh giả | Ra thời gian, RAM, đĩa, mã thoát; tạo file mẫu theo thời gian |
 | `make_ids.py` | Dải 5000 ID; ID kiểu cũ (120 ID); ID 4 chữ số; 1 ID; 5 loại lỗi nhập (khác tháng, thiếu số 0, ID kèm version, đầu lớn hơn cuối, khác số chữ số); `--chunk 500` | Đúng (5000 ID, 10 file mỗi file 500; lỗi báo rõ) |
@@ -1088,6 +1142,7 @@ Các đoạn kiểm thử trên được chạy thủ công trong lúc soạn co
 | Chạy lại khiến `wall_seconds` chỉ phản ánh phần chạy cuối | Ghi rõ trong báo cáo hoặc đo trên tập mẫu chạy liền mạch |
 | Thời gian phản hồi `r` của mỗi lần gọi bị cộng thêm vào khoảng chờ 3 giây | Đo `r` thật rồi quyết định theo mục 10.9 |
 | Giữ kết nối mở chưa kiểm chứng với arXiv thật | Chạy 100 bài đầu, so `avg_request_seconds` |
+| Khi kết nối đứt giữa lúc tải, phải tải lại file từ đầu (chưa tiếp tục phần đã nhận) | Có thể dùng `Range` để tải tiếp nếu máy chủ hỗ trợ (chưa kiểm tra arXiv có hỗ trợ không) |
 | Chưa có kiểm thử tự động trong repo | Đưa các kiểm thử ở mục 11.1 vào `tests/` |
 
 ---
@@ -1105,7 +1160,9 @@ Các đoạn kiểm thử trên được chạy thủ công trong lúc soạn co
 | Lỗi 403 | Bị chặn: kiểm tra đã đặt `CONTACT_EMAIL`, đang dùng `export.arxiv.org`; dừng một lúc rồi chạy lại, không rút ngắn khoảng chờ |
 | Nhiều lỗi 429 từ Semantic Scholar | Key chưa được đặt trong cửa sổ terminal này, hoặc đang hỏi quá nhanh. Kiểm tra biến `S2_API_KEY` |
 | Dòng `discover batch ... failed ...; will ask one by one` | Một lô hỏi arXiv lỗi mạng; script tự hỏi lẻ từng bài của lô đó. Nếu xuất hiện liên tục, kiểm tra mạng |
-| Có dòng `error` trong log | Mở dòng đó đọc trường `error`; chạy lại cùng lệnh để thử lại bài đó |
+| Có dòng `error` trong log | Chạy `python src/analyze_errors.py` để biết nhóm nguyên nhân (mục 4.14); chạy lại cùng lệnh để thử lại bài đó |
+| Số bài `error` tăng dần theo thời gian | Thường do bị chặn hoặc giới hạn tốc độ, mất mạng, đĩa đầy, hoặc chạy 2 bản cùng lúc (cùng key Semantic Scholar, cùng IP). Chạy `analyze_errors.py` xem phần xu hướng và nhóm nguyên nhân; kiểm tra dung lượng đĩa; chỉ chạy một bản tại một thời điểm |
+| `ProtocolError('Connection broken: IncompleteRead(... bytes read, ... more expected)')` | Kết nối bị đóng trước khi nhận đủ file. Có thể do mạng, máy chủ hoặc CDN, proxy hoặc phần mềm diệt virus, hoặc cách tải. Bản crawler mới tự thử lại bằng kết nối mới. Để tìm nguyên nhân: dừng crawler, chạy `python src/diagnose_download.py --id <ID>` (mục 4.14) |
 | Số bài `not_found` nhiều bất thường | Kiểm tra lại ID đầu và ID cuối, cách nhập dải ID |
 | Bị ngắt giữa chừng | Chạy lại đúng lệnh cũ |
 | Colab bị ngắt, mất dữ liệu | Chạy trong thư mục trên Google Drive, chia phần 500 ID |
@@ -1193,3 +1250,10 @@ python src/make_stats.py --ids-file ids.txt
 | 9 | Thêm đo đạc trong `Throttle` và file `logs/throttle_runs.jsonl` | Biết thời gian thật đi vào chờ đợi hay vào gọi mạng |
 | 10 | Chuyển phần tải sang `requests.Session` (giữ kết nối mở, đọc byte thô) | Giảm thời gian thiết lập kết nối mỗi lần gọi; không đổi cách nhận dạng file |
 | 11 | Thêm tùy chọn `--gap-from-start` (mặc định tắt) | Cho phép bỏ `r` khỏi vòng chờ nếu giảng viên xác nhận quy tắc |
+| 12 | Thêm `kind = "corrupt"` và đọc hết luồng nén trước khi ghi file | **Lỗi phát hiện khi kiểm thử**: file `.gz` bị cắt cụt làm `tarfile.open` ném `EOFError` mà code cũ không bắt, khiến bài bị tính là `error` thay vì bản ghi rỗng |
+| 13 | Ghi vị trí lỗi (`where`) vào dòng `error` của log | Biết lỗi xảy ra ở dòng code nào |
+| 14 | Nghỉ khi gặp nhiều lỗi bị chặn/mạng liên tiếp, dừng sau 15 lỗi | Tránh dồn dập gửi thêm yêu cầu khi đang bị chặn hoặc mất mạng, vốn làm số bài `error` tăng dần |
+| 15 | Thêm `analyze_errors.py` | Cho biết nguyên nhân các bài `error` và xu hướng theo thời gian |
+| 16 | Bắt cả lỗi của `urllib3` (`ProtocolError`/`IncompleteRead`) khi tải, kiểm tra đủ byte so với `Content-Length`, tính vào bộ đếm lỗi mạng; `where` ưu tiên dòng trong code của dự án | **Lỗi do chính code gây ra**: từ khi đổi sang đọc byte thô (dòng 10 của bảng này), lỗi đứt kết nối giữa lúc tải không được bọc bởi `requests` nên không được thử lại. Người dùng gặp lỗi này ở nhiều bài, đã tái hiện bằng server thử |
+| 17 | Sau lỗi mạng bỏ session cũ và mở kết nối mới; gắn URL vào lỗi và ghi `url` vào log; chế độ `raw=False` cho JSON | Không dùng lại kết nối có thể đã hỏng; biết chính xác URL nào lỗi |
+| 18 | Thêm `diagnose_download.py` và tùy chọn `--default-encoding` | Người dùng cho biết mạng bình thường, nên cần công cụ tách các khả năng (mạng, máy chủ, header, giữ kết nối) thay vì đoán |
