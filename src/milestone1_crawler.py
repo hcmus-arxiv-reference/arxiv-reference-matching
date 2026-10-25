@@ -1,19 +1,18 @@
 """
-milestone1_crawler.py - Khung chạy Milestone 1 (crawl arXiv + Semantic Scholar)
- 
+milestone1_crawler.py - Crawler Milestone 1 (arXiv + Semantic Scholar)
+
 Chạy thử 1 bài:
     python milestone1_crawler.py --id 1706.03762
 Chạy nhiều bài:
     python milestone1_crawler.py --ids-file ids.txt
- 
+
 Biến môi trường (nên đặt):
     CONTACT_EMAIL   email của bạn (đưa vào User-Agent, giống để lại danh thiếp)
     S2_API_KEY      key Semantic Scholar (KHÔNG commit lên repo!)
- 
-Cài thư viện:
-    pip install arxiv psutil
-"""
 
+Cài thư viện:
+    pip install arxiv requests psutil
+"""
 import argparse
 import gzip
 import io
@@ -23,29 +22,37 @@ import posixpath
 import re
 import tarfile
 import time
-import urllib.error
-import urllib.request
+import traceback
+import zlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import arxiv
+import requests
+import urllib3
 
 try:
-    import psutil # tùy chọn, dùng để đo RAM
+    import psutil  # tùy chọn, dùng để đo RAM
 except ImportError:
     psutil = None
-
 
 # ----------------------------------------------------------------------
 # 1. Cấu hình
 # ----------------------------------------------------------------------
-CONTACT = os.environ.get("CONTACT_EMAIL", "24120368@student.hcmus.edu.vn")
+CONTACT = os.environ.get("CONTACT_EMAIL", "your-email@example.com")
 USER_AGENT = f"IntroDS-student-crawler/0.1 (mailto:{CONTACT})"
 S2_API_KEY = os.environ.get("S2_API_KEY")
 
 DATA_DIR = Path("data")
 LOG_FILE = Path("logs") / "run_log.jsonl"
 
+# Khi gặp nhiều lỗi "bị chặn / mạng / quá tải" liên tiếp thì nghỉ rồi thử tiếp, thay vì dồn dập hỏi thêm
+STREAK_BEFORE_COOLDOWN = 5     # cứ 5 lỗi liên tiếp thì nghỉ một lần
+STREAK_BEFORE_STOP = 15        # 15 lỗi liên tiếp (đã nghỉ 2 lần mà vẫn lỗi) thì dừng cả lần chạy
+COOLDOWN_START = 300           # giây; nghỉ lần đầu 5 phút
+COOLDOWN_MAX = 1800            # giây; mỗi lần nghỉ gấp đôi, tối đa 30 phút
+
+# Không để dấu cách sau dấu phẩy trong danh sách field
 S2_FIELDS = (
     "title,references.title,references.authors,"
     "references.publicationDate,references.externalIds,references.paperId"
@@ -56,62 +63,147 @@ S2_FIELDS = (
 # 2. "Xếp hàng lịch sự": đảm bảo cách nhau tối thiểu N giây giữa 2 lần gọi
 # ----------------------------------------------------------------------
 class Throttle:
-    def __init__(self, min_gap):
+    """
+    "Người gác cổng": bắt chờ ít nhất min_gap giây giữa 2 lần gọi liên tiếp.
+      from_start=False (mặc định, thận trọng): tính từ lúc lần gọi trước KẾT THÚC
+                        (cách thư viện arxiv chính thức làm).
+      from_start=True : tính từ lúc lần gọi trước BẮT ĐẦU (nhanh hơn, chỉ bật khi đã xác nhận quy tắc).
+    Ngoài ra đo: số lần gọi, tổng thời gian chờ, tổng thời gian thật sự gọi mạng.
+    """
+
+    def __init__(self, min_gap, from_start=False):
         self.min_gap = min_gap
+        self.from_start = from_start
+        self.last_start = 0.0
         self.last_end = 0.0
+        self.n_requests = 0
+        self.waited = 0.0     # tổng thời gian ngủ để chờ
+        self.busy = 0.0       # tổng thời gian đang gọi mạng
 
     def wait(self):
-        gap = time.monotonic() - self.last_end
+        ref = self.last_start if self.from_start else self.last_end
+        gap = time.monotonic() - ref
         if gap < self.min_gap:
-            time.sleep(self.min_gap - gap)
+            pause = self.min_gap - gap
+            time.sleep(pause)
+            self.waited += pause
+        self.last_start = time.monotonic()
 
     def mark(self):
-        self.last_end = time.monotonic()
+        now = time.monotonic()
+        self.busy += now - self.last_start
+        self.last_end = now
+        self.n_requests += 1
+
+    def summary(self):
+        n = self.n_requests
+        return {
+            "requests": n,
+            "min_gap": self.min_gap,
+            "waited_seconds": round(self.waited, 1),
+            "busy_seconds": round(self.busy, 1),
+            "avg_request_seconds": round(self.busy / n, 3) if n else None,
+        }
 
 
-ARXIV_THROTTLE = Throttle(3.0)
-S2_THROTTLE = Throttle(1.1 if S2_API_KEY else 3.2)
+ARXIV_THROTTLE = Throttle(3.0)                          # arXiv: >= 3 giây
+S2_THROTTLE = Throttle(1.1 if S2_API_KEY else 3.2)      # S2: 1/giây (có key)
 ARXIV_CLIENT = arxiv.Client(page_size=100, delay_seconds=3.0, num_retries=3)
 
 
 # ----------------------------------------------------------------------
 # 3. Tải về có thử lại (retry)
 # ----------------------------------------------------------------------
-def _retry_after(err, default):
-    value = err.headers.get("Retry-After") if err.headers else None
+# Lỗi mạng: lỗi của requests VÀ lỗi của urllib3 (ví dụ ProtocolError / IncompleteRead khi kết nối đứt
+# giữa lúc tải). Vì ta đọc dữ liệu thô nên lỗi urllib3 không được requests bọc lại, phải bắt riêng.
+NETWORK_ERRORS = (requests.RequestException, urllib3.exceptions.HTTPError)
+
+# True: gửi "Accept-Encoding: identity" (xin file không nén thêm). False: để mặc định của thư viện.
+# Nếu nghi cách này làm máy chủ cắt kết nối, chạy với --default-encoding để thử.
+ACCEPT_IDENTITY = True
+
+_SESSIONS = {}
+
+
+def _session_for(throttle):
+    """
+    Mỗi "người gác cổng" dùng một Session riêng: giữ kết nối mở (keep-alive) giữa các lần gọi,
+    đỡ tốn thời gian bắt tay TLS mỗi lần. Vẫn chỉ MỘT kết nối tại một thời điểm.
+    Accept-Encoding: identity + đọc dữ liệu thô: nhận đúng các byte server gửi, không tự giải nén
+    (để việc nhận dạng .gz/.tar.gz bên dưới luôn đúng như trước).
+    """
+    session = _SESSIONS.get(id(throttle))
+    if session is None:
+        session = requests.Session()
+        session.headers.update({"User-Agent": USER_AGENT})
+        if ACCEPT_IDENTITY:
+            session.headers["Accept-Encoding"] = "identity"
+        _SESSIONS[id(throttle)] = session
+    return session
+
+
+def _drop_session(throttle):
+    """Bỏ session (và kết nối) hiện tại: lần thử sau sẽ mở kết nối mới."""
+    session = _SESSIONS.pop(id(throttle), None)
+    if session is not None:
+        session.close()
+
+
+def _retry_after(value, default):
     try:
         return max(float(value), 1.0)
-    except (ValueError, TypeError):
+    except (TypeError, ValueError):
         return default
 
-def fetch_bytes(url, throttle, headers=None, retries=4):
-    """Tải url, trả về bytes. 404 -> None. Lỗi tạm thời -> thử lại, chờ lâu dần."""
-    all_headers = {"User-Agent": USER_AGENT}
-    all_headers.update(headers or {})
+
+def _fetch_bytes(url, throttle, headers, retries, raw):
     for attempt in range(retries + 1):
+        session = _session_for(throttle)           # sau lỗi mạng sẽ là session (kết nối) mới
         throttle.wait()
         try:
-            req = urllib.request.Request(url, headers=all_headers)
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                return resp.read()
-        except urllib.error.HTTPError as err:
-            if err.code == 404:
-                return None
-            if err.code == 403:
-                raise RuntimeError(
-                    f"403 for {url}: check host (export.arxiv.org) and User-Agent"
-                )
-            if err.code in (429, 500, 502, 503, 504) and attempt < retries:
-                time.sleep(_retry_after(err, 5 * 2 ** attempt))
-                continue
-            raise
-        except (urllib.error.URLError, TimeoutError):
+            resp = session.get(url, headers=headers or {}, timeout=60, stream=True)
+            if raw:
+                data = resp.raw.read(decode_content=False)     # byte thô đúng như server gửi
+            else:
+                data = resp.content                            # đã giải nén nếu server nén (dùng cho JSON)
+            expected = resp.headers.get("Content-Length", "")
+            if raw and expected.isdigit() and len(data) != int(expected):
+                raise requests.exceptions.ChunkedEncodingError(
+                    f"incomplete body: got {len(data)} of {expected} bytes")
+        except NETWORK_ERRORS:                             # kể cả đứt kết nối giữa lúc tải: thử lại
+            _drop_session(throttle)
             if attempt < retries:
                 time.sleep(5 * 2 ** attempt)
                 continue
             raise
         finally:
             throttle.mark()
+        code = resp.status_code
+        if code == 404:
+            return None
+        if code == 403:
+            raise RuntimeError(
+                f"403 for {url}: check host (export.arxiv.org) and User-Agent"
+            )
+        if code in (429, 500, 502, 503, 504) and attempt < retries:
+            time.sleep(_retry_after(resp.headers.get("Retry-After"), 5 * 2 ** attempt))
+            continue
+        resp.raise_for_status()
+        return data
+
+
+def fetch_bytes(url, throttle, headers=None, retries=4, raw=True):
+    """
+    Tải url, trả về bytes. 404 -> None. Lỗi tạm thời -> thử lại, chờ lâu dần.
+    raw=True : byte thô đúng như server gửi (dùng cho file nguồn arXiv, không tự giải nén).
+    raw=False: để thư viện tự giải nén (dùng cho JSON).
+    Khi báo lỗi, gắn thêm thuộc tính crawler_url vào lỗi để log biết URL nào gây lỗi.
+    """
+    try:
+        return _fetch_bytes(url, throttle, headers, retries, raw)
+    except Exception as exc:
+        exc.crawler_url = url
+        raise
 
 
 # ----------------------------------------------------------------------
@@ -122,33 +214,60 @@ def _safe_rel(name):
     p = posixpath.normpath(name.replace("\\", "/"))
     if p.startswith("/") or p == ".." or p.startswith("../") or p == ".":
         return None
-    
     return p
 
+
+class CorruptArchive(Exception):
+    """File nén bị hỏng hoặc bị cắt cụt."""
+
+
+_READ_ERRORS = (tarfile.TarError, EOFError, zlib.error, OSError)
+
+
 def _save_tar(tar, out_dir):
-    """Trả về (danh sách file giữ lại, dung lượng giữ lại, dung lượng của TẤT CẢ file)."""
-    files, kept, everything = [], 0, 0
-    for member in tar.getmembers():
+    """
+    Trả về (danh sách file giữ lại, dung lượng giữ lại, dung lượng của TẤT CẢ file).
+    Làm 2 pha: ĐỌC hết trước (lỗi đọc = file nén hỏng), rồi mới GHI ra đĩa
+    (lỗi ghi như hết dung lượng đĩa vẫn báo lỗi thật, không bị nhầm là file hỏng).
+    """
+    try:
+        members = tar.getmembers()
+    except _READ_ERRORS as exc:
+        raise CorruptArchive(repr(exc))
+
+    everything, pending = 0, []
+    for member in members:
         if not member.isfile():
             continue
-
         everything += member.size
         rel = _safe_rel(member.name)
         if rel is None or not rel.lower().endswith((".tex", ".bib")):
             continue
+        try:
+            fobj = tar.extractfile(member)
+            content = fobj.read() if fobj is not None else None
+        except _READ_ERRORS as exc:
+            raise CorruptArchive(repr(exc))
+        if content is not None:
+            pending.append((rel, content))
 
-        fobj = tar.extractfile(member)
-        if fobj is None:
-            continue
+    # Đọc nốt phần còn lại của luồng nén: lúc này gzip mới kiểm tra mã CRC, phát hiện dữ liệu hỏng
+    try:
+        stream = getattr(tar, "fileobj", None)
+        while stream is not None and stream.read(1 << 20):
+            pass
+    except _READ_ERRORS as exc:
+        raise CorruptArchive(repr(exc))
 
-        content = fobj.read()
+    files, kept = [], 0
+    for rel, content in pending:
         dest = out_dir / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(content)
         files.append(rel)
         kept += len(content)
-
     return files, kept, everything
+
 
 def extract_tex_bib(data, out_dir):
     """
@@ -156,7 +275,7 @@ def extract_tex_bib(data, out_dir):
     Trả về (kind, files, bytes_after, bytes_all).
       bytes_after = dung lượng các file .tex/.bib giữ lại
       bytes_all   = dung lượng giải nén của TẤT CẢ file (gồm cả ảnh) = "trước khi bỏ ảnh"
-    kind: 'tar' | 'gz_single' | 'pdf' | 'other'
+    kind: 'tar' | 'gz_single' | 'pdf' | 'other' | 'corrupt'
     """
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -165,25 +284,29 @@ def extract_tex_bib(data, out_dir):
 
     # Túi nén (.tar hoặc .tar.gz)
     try:
-        with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tar:
-            files, kept, everything = _save_tar(tar, out_dir)
-            return "tar", files, kept, everything
+        tar = tarfile.open(fileobj=io.BytesIO(data), mode="r:*")
     except tarfile.ReadError:
-        pass
+        tar = None                               # không phải túi nén, thử cách khác bên dưới
+    except (EOFError, zlib.error, OSError):
+        return "corrupt", [], 0, len(data)       # luồng nén bị cắt cụt hoặc hỏng ngay từ đầu
+    if tar is not None:
+        with tar:
+            try:
+                files, kept, everything = _save_tar(tar, out_dir)
+            except CorruptArchive:
+                return "corrupt", [], 0, len(data)   # túi nén hỏng: ghi bản ghi rỗng, không coi là lỗi chương trình
+            return "tar", files, kept, everything
 
     # File .gz đơn (chỉ 1 file bên trong)
     if data[:2] == b"\x1f\x8b":
         try:
             raw = gzip.decompress(data)
-        except (OSError, EOFError):
-            return "other", [], 0, len(data)
-
+        except (OSError, EOFError, zlib.error):
+            return "corrupt", [], 0, len(data)
         if raw[:4] == b"%PDF":
             return "pdf", [], 0, len(raw)
-
-        if b"\x00" in raw[:4096]:       # có byte 0 -> nhiều khả năng là file nhị phân
+        if b"\x00" in raw[:4096]:          # có byte 0 -> nhiều khả năng là file nhị phân
             return "other", [], 0, len(raw)
-        
         (out_dir / "main.tex").write_bytes(raw)
         return "gz_single", ["main.tex"], len(raw), len(raw)
 
@@ -197,13 +320,14 @@ def safe_dirname(paper_id):
     """2310.12345 -> 2310-12345 ; hep-th/9901001 -> hep-th-9901001"""
     return paper_id.replace("/", "-").replace(".", "-")
 
+
 def split_versioned_id(entry_id):
     """'http://arxiv.org/abs/2310.12345v4' -> ('2310.12345', 4)"""
     m = re.search(r"abs/(.+?)(?:v(\d+))?$", entry_id)
     if not m:
         raise ValueError(f"cannot parse entry_id: {entry_id}")
-
     return m.group(1), int(m.group(2) or 1)
+
 
 def write_json(path, obj):
     """Ghi file tạm rồi đổi tên: lỡ bị ngắt giữa chừng cũng không để lại file hỏng."""
@@ -212,13 +336,40 @@ def write_json(path, obj):
     tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
     os.replace(tmp, path)
 
+
 def read_json(path):
     return json.loads(path.read_text(encoding="utf-8"))
+
 
 def append_log(rec):
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     with LOG_FILE.open("a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+
+def error_location(exc):
+    """
+    Dòng code của chương trình này nơi lỗi xảy ra, ví dụ
+    'milestone1_crawler.py:215 in fetch_bytes (raised in response.py:928 in _error_catcher)'.
+    """
+    frames = traceback.extract_tb(exc.__traceback__)
+    if not frames:
+        return None
+    last = frames[-1]
+    mine = [f for f in frames if Path(f.filename).name == Path(__file__).name]
+    target = mine[-1] if mine else last
+    text = f"{Path(target.filename).name}:{target.lineno} in {target.name}"
+    if target is not last:
+        text += f" (raised in {Path(last.filename).name}:{last.lineno} in {last.name})"
+    return text
+
+
+def is_blocking_error(exc):
+    """Lỗi kiểu bị chặn / mạng / quá tải (nên nghỉ rồi thử lại), khác với lỗi riêng của từng bài."""
+    if isinstance(exc, NETWORK_ERRORS):
+        return True
+    return isinstance(exc, RuntimeError) and "403" in str(exc)
+
 
 def rss_mb():
     if psutil is None:
@@ -241,6 +392,7 @@ def meta_from_result(r, base_id, n_versions, discover_seconds):
         "discover_seconds": discover_seconds,
     }
 
+
 def discover_paper(paper_id):
     """Hỏi arXiv API cho MỘT bài (dùng khi hỏi theo lô bị lỗi)."""
     t0 = time.perf_counter()
@@ -249,13 +401,12 @@ def discover_paper(paper_id):
         results = list(ARXIV_CLIENT.results(arxiv.Search(id_list=[paper_id])))
     finally:
         ARXIV_THROTTLE.mark()
-
     if not results:
         return None
-
     r = results[0]
     base_id, n_versions = split_versioned_id(r.entry_id)
     return meta_from_result(r, base_id, n_versions, round(time.perf_counter() - t0, 3))
+
 
 def discover_many(ids, batch_size=50):
     """
@@ -268,9 +419,9 @@ def discover_many(ids, batch_size=50):
     for pid in ids:
         paper_dir = DATA_DIR / safe_dirname(pid)
         if (paper_dir / "done.json").exists():
-            continue        # đã xong, khỏi hỏi
+            continue                                  # đã xong, khỏi hỏi
         if (paper_dir / "meta.json").exists():
-            found[pid] = read_json(paper_dir / "meta.json")     # đã hỏi từ lần chạy trước
+            found[pid] = read_json(paper_dir / "meta.json")   # đã hỏi từ lần chạy trước
         else:
             todo.append(pid)
 
@@ -285,20 +436,18 @@ def discover_many(ids, batch_size=50):
             continue
         finally:
             ARXIV_THROTTLE.mark()
-
-        per_paper = round((time.perf_counter() - t0) / len(chunk), 3) # chia đều cho mỗi bài
+        per_paper = round((time.perf_counter() - t0) / len(chunk), 3)   # chia đều cho mỗi bài
         by_id = {}
         for r in results:
             base_id, n_versions = split_versioned_id(r.entry_id)
             by_id[base_id] = meta_from_result(r, base_id, n_versions, per_paper)
-
         for pid in chunk:
             meta = by_id.get(pid)
             if meta is not None:
                 write_json(DATA_DIR / safe_dirname(pid) / "meta.json", meta)
-            found[pid] = meta           # None = arXiv không có bài này
-
+            found[pid] = meta                         # None = arXiv không có bài này
     return found
+
 
 def download_version(paper_id, version, paper_dir):
     """Tải 1 version. Đã làm rồi (có status.json) thì bỏ qua = checkpoint."""
@@ -317,19 +466,16 @@ def download_version(paper_id, version, paper_dir):
                "bytes_downloaded": 0, "bytes_before": 0, "bytes_after": 0}
     else:
         kind, files, after, everything = extract_tex_bib(data, vdir)
-        rec = {
-            "version": version,
-            "kind": kind,
-            "status": "ok" if files else "empty",   # empty = bản ghi rỗng
-            "files": files,
-            "bytes_downloaded": len(data),  # file nén tải về
-            "bytes_before": everything,     # giải nén đầy đủ (có ảnh)
-            "bytes_after": after,           # chỉ .tex và .bib
-        }
-
+        rec = {"version": version, "kind": kind,
+               "status": "ok" if files else "empty",   # empty = bản ghi rỗng
+               "files": files,
+               "bytes_downloaded": len(data),   # file nén tải về
+               "bytes_before": everything,      # giải nén đầy đủ (có ảnh)
+               "bytes_after": after}            # chỉ .tex và .bib
     rec["seconds"] = round(time.perf_counter() - t0, 3)
     write_json(status_file, rec)
     return rec
+
 
 def fetch_and_save_refs(paper_id, paper_dir):
     """Hỏi Semantic Scholar. Trả về (số tham khảo, số tham khảo có arXiv ID)."""
@@ -340,9 +486,8 @@ def fetch_and_save_refs(paper_id, paper_dir):
 
     url = (f"https://api.semanticscholar.org/graph/v1/paper/arXiv:{paper_id}"
            f"?fields={S2_FIELDS}")
-
     headers = {"x-api-key": S2_API_KEY} if S2_API_KEY else {}
-    raw = fetch_bytes(url, S2_THROTTLE, headers)
+    raw = fetch_bytes(url, S2_THROTTLE, headers, raw=False)
     if raw is None:
         return None, None
 
@@ -356,13 +501,12 @@ def fetch_and_save_refs(paper_id, paper_dir):
             "authors": [a.get("name") for a in (r.get("authors") or [])],
             "date": r.get("publicationDate"),
         })
-
     with_arxiv = [x for x in slim if x["arxiv_id"]]
     write_json(all_file, slim)          # giữ hết trong máy
     write_json(refs_file, with_arxiv)   # bảng cuối chỉ cần có arXiv ID
     return len(slim), len(with_arxiv)
 
- 
+
 # ----------------------------------------------------------------------
 # 7. Xử lý 1 bài
 # ----------------------------------------------------------------------
@@ -371,25 +515,22 @@ def process_paper(paper_id, pool, metas=None):
     done_file = paper_dir / "done.json"
     if done_file.exists():
         return "skipped"
-
     paper_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()
 
     metas = metas or {}
     meta_file = paper_dir / "meta.json"
-    if paper_id in metas:   
-        meta = metas[paper_id]         # từ lần hỏi theo lô (None = không có bài)
+    if paper_id in metas:
+        meta = metas[paper_id]                  # từ lần hỏi theo lô (None = không có bài)
     elif meta_file.exists():
         meta = read_json(meta_file)
     else:
-        meta = discover_paper(paper_id)     # dự phòng: hỏi lẻ
-
+        meta = discover_paper(paper_id)         # dự phòng: hỏi lẻ
     if meta is None:
         append_log({"id": paper_id, "status": "not_found"})
         return "not_found"
     if not meta_file.exists():
         write_json(meta_file, meta)
-    
     discover_seconds = meta.get("discover_seconds")
 
     # Luồng phụ hỏi Semantic Scholar trong lúc luồng chính tải source arXiv
@@ -397,11 +538,7 @@ def process_paper(paper_id, pool, metas=None):
 
     versions = [download_version(paper_id, v, paper_dir)
                 for v in range(1, meta["n_versions"] + 1)]
-    try:
-        n_refs, n_refs_arxiv = refs_future.result()
-    except Exception as exc:
-        print(f"  [warn] Semantic Scholar failed for {paper_id}: {exc!r}")
-        n_refs, n_refs_arxiv = None, None
+    n_refs, n_refs_arxiv = refs_future.result()   # lỗi ở luồng phụ sẽ nổ ra ở đây
 
     summary = {
         "id": paper_id,
@@ -417,21 +554,51 @@ def process_paper(paper_id, pool, metas=None):
         "seconds": round(time.perf_counter() - t0, 3),
         "rss_mb": rss_mb(),
     }
-    write_json(done_file, summary)  # đánh dấu xong: chạy lại sẽ bỏ qua bài này
+    write_json(done_file, summary)   # đánh dấu xong: chạy lại sẽ bỏ qua bài này
     append_log(summary)
     return "done"
+
+
+def throttle_report(wall_seconds):
+    """In và lưu số liệu: thời gian thật sự đi vào chờ đợi hay vào gọi mạng."""
+    rep = {
+        "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "wall_seconds": wall_seconds,
+        "gap_from_start": ARXIV_THROTTLE.from_start,
+        "arxiv": ARXIV_THROTTLE.summary(),
+        "semantic_scholar": S2_THROTTLE.summary(),
+    }
+    path = LOG_FILE.parent / "throttle_runs.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(rep, ensure_ascii=False) + "\n")
+    a = rep["arxiv"]
+    print(f"arXiv: {a['requests']} requests, avg {a['avg_request_seconds']}s each, "
+          f"waited {a['waited_seconds']}s, busy {a['busy_seconds']}s")
+
 
 # ----------------------------------------------------------------------
 # 8. Chương trình chính
 # ----------------------------------------------------------------------
 def main():
-    ap = argparse.ArgumentParser(description="Milestone 1 starter crawler")
+    ap = argparse.ArgumentParser(description="Milestone 1 crawler (arXiv + Semantic Scholar)")
     ap.add_argument("--id", action="append", help="một arXiv ID (có thể lặp lại)")
     ap.add_argument("--ids-file", help="file text, mỗi dòng một arXiv ID")
     ap.add_argument("--limit", type=int, help="chỉ chạy N bài đầu (để thử)")
     ap.add_argument("--discover-batch", type=int, default=50,
                     help="số ID hỏi arXiv mỗi lần (tối đa 100); 0 = hỏi lẻ từng bài")
+    ap.add_argument("--gap-from-start", action="store_true",
+                    help="tính khoảng chờ 3 giây từ lúc BẮT ĐẦU lần gọi arXiv trước (nhanh hơn). "
+                         "Mặc định tính từ lúc KẾT THÚC (thận trọng). Chỉ bật khi đã xác nhận quy tắc")
+    ap.add_argument("--default-encoding", action="store_true",
+                    help="không gửi 'Accept-Encoding: identity' (để thư viện dùng mặc định). "
+                         "Chỉ dùng để thử khi nghi cách tải làm máy chủ cắt kết nối")
+    ap.add_argument("--discover-only", action="store_true",
+                    help="chỉ hỏi thông tin các bài (meta.json) rồi dừng; để biết tổng số version")
     args = ap.parse_args()
+    ARXIV_THROTTLE.from_start = args.gap_from_start
+    global ACCEPT_IDENTITY
+    ACCEPT_IDENTITY = not args.default_encoding
 
     ids = list(args.id or [])
     if args.ids_file:
@@ -439,7 +606,6 @@ def main():
             line = line.strip()
             if line and not line.startswith("#"):
                 ids.append(line)
-
     if args.limit:
         ids = ids[: args.limit]
     if not ids:
@@ -448,20 +614,49 @@ def main():
     counts = {}
     t_start = time.perf_counter()
     metas = discover_many(ids, args.discover_batch) if args.discover_batch > 0 else {}
+    if args.discover_only:
+        n_found = n_versions = 0
+        for pid in ids:
+            meta_file = DATA_DIR / safe_dirname(pid) / "meta.json"
+            if meta_file.exists():
+                n_found += 1
+                n_versions += read_json(meta_file)["n_versions"]
+        print(f"Discovery finished: {n_found}/{len(ids)} papers have meta.json "
+              f"(the rest: not found or failed), {n_versions} versions in total")
+        throttle_report(round(time.perf_counter() - t_start, 1))
+        return
+    streak, cooldown = 0, COOLDOWN_START     # streak = số lỗi kiểu "bị chặn / mạng" liên tiếp
     with ThreadPoolExecutor(max_workers=1) as pool:
         for i, pid in enumerate(ids, 1):
+            blocking = False
             try:
                 result = process_paper(pid, pool, metas)
             except Exception as exc:   # một bài lỗi không làm hỏng cả lần chạy
                 result = "error"
-                append_log({"id": pid, "status": "error", "error": repr(exc)})
+                blocking = is_blocking_error(exc)
+                append_log({"id": pid, "status": "error", "error": repr(exc),
+                            "where": error_location(exc), "url": getattr(exc, "crawler_url", None)})
+            if blocking:
+                streak += 1
+            elif result == "done":
+                streak, cooldown = 0, COOLDOWN_START   # có bài chạy được = mạng đã ổn lại
             counts[result] = counts.get(result, 0) + 1
             print(f"[{i}/{len(ids)}] {pid}: {result}")
- 
+
+            if streak >= STREAK_BEFORE_STOP:
+                print(f"Stopping: {streak} blocking/network errors in a row. Check your connection, "
+                      "wait a while, then run the same command again (finished papers are skipped).")
+                break
+            if blocking and streak % STREAK_BEFORE_COOLDOWN == 0:
+                print(f"{streak} blocking/network errors in a row: cooling down {cooldown:.0f}s "
+                      "(not sending more requests)")
+                time.sleep(cooldown)
+                cooldown = min(cooldown * 2, COOLDOWN_MAX)
+
     total = round(time.perf_counter() - t_start, 1)
     print(f"Finished in {total}s. Summary: {counts}")
- 
- 
+    throttle_report(total)
+
+
 if __name__ == "__main__":
     main()
- 
