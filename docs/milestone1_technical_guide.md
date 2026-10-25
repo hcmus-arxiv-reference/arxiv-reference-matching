@@ -13,11 +13,13 @@ Tài liệu này viết cho các thành viên trong nhóm. Đọc xong bạn nê
 
 | Mục | Tình trạng |
 |---|---|
-| Code | 7 script Python: `milestone1_crawler.py`, `make_ids.py`, `make_stats.py`, `benchmark.py`, `merge_benchmarks.py`, `analyze_errors.py`, `diagnose_download.py` (+ `requirements.txt`) |
+| Cập nhật gần nhất | 25/10/2026: vá chống treo im lặng khi tải file lớn, thêm `estimate_time.py`, thêm số đo thật đầu tiên (mục 10.10) |
+| Code | 8 script Python: `milestone1_crawler.py`, `make_ids.py`, `make_stats.py`, `benchmark.py`, `merge_benchmarks.py`, `analyze_errors.py`, `diagnose_download.py`, `estimate_time.py` (+ `requirements.txt`) |
 | Môi trường đã thử | Python 3.12, thư viện `arxiv` 4.0.1 (kéo theo `requests`) |
 | Kiểm thử đã làm | Kiểm thử **offline bằng mạng giả** (xem mục 11) |
-| Chưa kiểm chứng | Chưa chạy trên arXiv và Semantic Scholar **thật** (môi trường soạn code không truy cập được hai trang này). Việc đầu tiên khi nhận code là thử 1 bài thật |
-| Số liệu tốc độ | Mục 10 là **ước lượng tính toán**, chưa phải số đo. Có bảng trống để điền số đo thật |
+| Đã chạy thật một phần | Từ 25/10/2026 crawler đã chạy thật trên arXiv và Semantic Scholar (Windows PowerShell, mạng cá nhân). Số đo ở mục 10.10: trên 263 version đầu, dung lượng tải trung bình 4,71 MB (trung vị 1,08 MB) và tốc độ tải khoảng 99 KB/s, nên thời gian còn lại ước tính khoảng 4,6 ngày chạy liên tục; thời gian bị chi phối bởi băng thông chứ không phải khoảng chờ 3 giây |
+| Chưa kiểm chứng | Chưa chạy xong 5000 ID, chưa đo trên Colab CPU. Bản vá chống treo (mục 17.2, dòng 24 đến 26) mới được kiểm thử bằng server giả, chưa chạy lại trên arXiv thật |
+| Số liệu tốc độ | Mục 10.1 đến 10.9 là **ước lượng tính toán**. Mục 10.10 có số đo thật đầu tiên và bảng ước tính theo băng thông (dung lượng mỗi version trong bảng vẫn là giả định). Bảng 10.8 vẫn để trống, điền sau khi đo chính thức |
 | Báo cáo Jupyter Book, README, chạy thật 5000 ID | **Chưa làm** |
 
 Phần "yêu cầu của đề" ở mục 1.5 là tóm tắt theo hiểu biết của người soạn. Hãy đối chiếu lại với đề gốc, nhất là những chỗ ghi "cần xác nhận".
@@ -75,7 +77,9 @@ Sau đó viết báo cáo thống kê và đo hiệu năng. Dữ liệu này là
 | Hạng mục | Trạng thái |
 |---|---|
 | Phân tích đề (3 milestone, chi tiết Milestone 1) | Xong |
-| Crawler `milestone1_crawler.py` (hỏi arXiv theo lô, tải từng version, hỏi Semantic Scholar, checkpoint, log) | Viết xong, test offline, **chưa test mạng thật** |
+| Crawler `milestone1_crawler.py` (hỏi arXiv theo lô, tải từng version, hỏi Semantic Scholar, checkpoint, log) | Viết xong, test offline, đã chạy thật một phần (mục 10.10) |
+| Vá chống treo im lặng: giới hạn `Retry-After`, giới hạn thời gian theo dung lượng file, in tiến độ (25/10/2026) | Xong, test bằng server HTTP cục bộ (mục 11.1); **chưa chạy lại trên arXiv thật** |
+| Ước tính thời gian còn lại từ số liệu thật: `estimate_time.py` | Xong, test bằng dữ liệu giả; chưa chạy trên toàn bộ dữ liệu thật |
 | Sinh danh sách ID liên tục `make_ids.py` | Xong, có test |
 | Thống kê `make_stats.py` | Xong, test offline |
 | Đo hiệu năng `benchmark.py` (chạy từng đoạn, chịu được việc bị ngắt) và gộp bằng `merge_benchmarks.py` | Xong, test offline bằng lệnh giả; **chưa chạy với crawler thật** |
@@ -84,7 +88,7 @@ Sau đó viết báo cáo thống kê và đo hiệu năng. Dữ liệu này là
 | Cấu trúc repo đề xuất | Có (mục 3), chưa tạo repo |
 | README và `.gitignore` | Chưa viết |
 | Báo cáo Jupyter Book | Chưa làm |
-| Chạy thử 100 bài thật, chạy bản chính 5000 ID | Chưa làm |
+| Chạy thử 100 bài thật, chạy bản chính 5000 ID | Đã chạy một phần trên máy cá nhân, rất chậm vì băng thông (mục 10.10); chưa xong, chưa chạy trên Colab |
 | Đo hiệu năng thật trên Colab CPU | Chưa làm |
 
 ---
@@ -106,6 +110,7 @@ intro-ds-arxiv-crawler/
     |-- make_stats.py            tính số liệu thống kê từ nhật ký
     |-- analyze_errors.py        cho biết vì sao các bài bị error (đọc logs/run_log.jsonl)
     |-- diagnose_download.py     tải thử một file bằng nhiều cách để tìm nguyên nhân khi tải bị đứt
+    |-- estimate_time.py         ước tính thời gian crawl còn lại từ số liệu thật trong data/
     |-- benchmark.py             chạy crawler và đo thời gian, RAM, đĩa (mỗi đoạn một thư mục --out)
     `-- merge_benchmarks.py      gộp các đoạn đo thành một kết quả cho cả lần crawl
 ```
@@ -123,6 +128,7 @@ data/   logs/   stats/   ids.txt   ids_part_*.txt   .venv/   __pycache__/   *.py
 | `make_stats.py` | Đọc `logs/run_log.jsonl`, tạo `stats/summary.json` và `stats/papers.csv` |
 | `analyze_errors.py` | Đọc `logs/run_log.jsonl`, chia các bài lỗi theo nhóm nguyên nhân, cho xu hướng lỗi theo thời gian |
 | `diagnose_download.py` | Tải cùng một file nguồn bằng 6 cách khác nhau (ví dụ header mặc định, `identity`, giữ kết nối, `urllib`, thử `Range`) rồi so sánh để tìm nguyên nhân khi tải bị đứt giữa chừng |
+| `estimate_time.py` | Đọc `data/*/meta.json` và `data/*/v*/status.json`, đo tốc độ tải thật rồi ước tính thời gian còn lại, kèm bảng "nếu tốc độ tải là X KB/s" (mục 6.7, 4.12.1) |
 | `benchmark.py` | Bọc quanh lệnh bất kỳ, đo thời gian, RAM, đĩa của **một đoạn chạy**, tạo `benchmark.json` và `benchmark_samples.csv` trong thư mục `--out` (mục 7.10). Chịu được `Ctrl+C`, từ chối ghi đè kết quả cũ |
 | `merge_benchmarks.py` | Gộp mọi thư mục `stats/runs/run_*` (và `logs/cooldowns.jsonl`) thành `stats/benchmark_total.json` và `stats/benchmark_samples_all.csv` (mục 7.10.1) |
 | `requirements.txt` | Chỉ thư viện crawler cần: `arxiv`, `requests`, `psutil` |
@@ -301,6 +307,8 @@ Chi phí "tìm bài" nằm gần hết ở `run_01`: `discover_many` hỏi arXiv
 
 Số `done.json` là số bài đã xong.
 
+Khi một file nguồn lớn đang tải, crawler in mỗi 60 giây một dòng `downloading <url>: <MB đã tải>/<tổng MB> (<KB/s>)`. Khi phải chờ lại hoặc thử lại, nó in `[retry N]`, `[net error]` hoặc `[HTTP <mã>] ... sleeping Ns`. Tải file nhỏ thì không in thêm gì (chỉ có dòng `[i/N] id: done`). Màn hình đứng im lâu mà không có dòng nào là dấu hiệu bất thường (mục 14).
+
 ### 4.10 Dừng và chạy tiếp
 
 `Ctrl+C` để dừng. Chạy lại **đúng lệnh cũ**: bài đã xong được bỏ qua, version đã tải không tải lại (mục 5.6). Nếu đang đo hiệu năng, chạy tiếp với thư mục `run_XX` kế tiếp (mục 4.8.1).
@@ -319,6 +327,14 @@ Dữ liệu vẫn vào chung `data/`.
 ```
 python src/make_stats.py --ids-file ids.txt
 ```
+
+### 4.12.1 Ước tính thời gian còn lại (nên làm sớm)
+
+```
+python src/estimate_time.py
+python src/estimate_time.py --speeds 35,500,2000,10000
+```
+Chỉ đọc `data/`, chạy lúc crawler đang chạy cũng được. Script tính tốc độ tải thật của máy bạn từ các version đã xong, rồi in thời gian còn lại ở tốc độ đó và ở các tốc độ giả định (`--speeds`, đơn vị KB/s). Dùng để quyết định có nên chạy tiếp ở máy này hay chuyển sang nơi mạng nhanh hơn (mục 10.10). Cần ít nhất 5 version đã xong, nên chạy lại khi có từ 100 bài vì dung lượng trung bình của mẫu nhỏ dao động mạnh (mục 6.7).
 
 ### 4.13 Chạy trên Google Colab
 
@@ -451,8 +467,9 @@ Mọi file JSON được ghi bằng **file tạm rồi đổi tên** (`write_jso
 |---|---|
 | HTTP 404 | Coi là "không có", trả `None`, không thử lại |
 | HTTP 403 | Dừng ngay bài đó, báo lỗi rõ ràng (bị chặn), không thử lại |
-| HTTP 429, 500, 502, 503, 504 | Thử lại tối đa 4 lần sau lần đầu; chờ theo `Retry-After` nếu server gửi, không thì 5, 10, 20, 40 giây |
-| Mạng đứt, quá 60 giây, **kết nối đứt giữa lúc đang tải** (`ProtocolError`, `IncompleteRead`), hoặc nhận thiếu byte so với `Content-Length` | Thử lại với kết nối mới, chờ 5, 10, 20, 40 giây. Với file nguồn: **giữ phần đã nhận và xin tải tiếp** (`Range`, kèm `If-Range`) nếu máy chủ hỗ trợ; không hỗ trợ thì tải lại từ đầu. Lần thử nhận thêm được byte (khi tải tiếp được) không tính là thất bại, nên file lớn bị cắt nhiều lần vẫn tải xong (tối đa 60 lần gọi cho một file). Các lỗi này tính vào bộ đếm "bị chặn/mạng" bên dưới |
+| HTTP 429, 500, 502, 503, 504 | Thử lại tối đa 4 lần sau lần đầu; chờ theo `Retry-After` nếu server gửi (**tối đa 120 giây**, để không ngủ im lặng hàng giờ), không thì 5, 10, 20, 40 giây. Mỗi lần chờ in một dòng `[HTTP <mã>] ... sleeping Ns` |
+| Mạng đứt, quá 60 giây, **kết nối đứt giữa lúc đang tải** (`ProtocolError`, `IncompleteRead`), hoặc nhận thiếu byte so với `Content-Length` | Thử lại với kết nối mới, chờ 5, 10, 20, 40 giây. Với file nguồn: **giữ phần đã nhận và xin tải tiếp** (`Range`, kèm `If-Range`) nếu máy chủ hỗ trợ; không hỗ trợ thì tải lại từ đầu. Lần thử đi **xa hơn mọi lần trước** (số byte đang giữ vượt mức cao nhất từng đạt) không tính là thất bại, nên file lớn bị cắt nhiều lần vẫn tải xong; tải đi tải lại mà không xa hơn thì bị tính lỗi (tối đa 60 lần gọi cho một file). Mỗi lần lỗi hoặc thử lại in `[net error]` hoặc `[retry N]`. Các lỗi này tính vào bộ đếm "bị chặn/mạng" bên dưới |
+| Một file tải quá lâu | Giới hạn thời gian cho MỘT file = `max(MAX_FILE_SECONDS, dung lượng / MIN_SPEED)`: tối thiểu 600 giây, file lớn được thêm giờ theo tốc độ sàn 10 KB/s (file 40 MB được khoảng 66 phút); server không báo dung lượng thì 3600 giây. Kiểm tra ở đầu mỗi lần thử **và** trong lúc đọc dữ liệu, nên kết nối nhỏ giọt cũng bị cắt. Quá giờ thì báo `RuntimeError` bắt đầu bằng `Timeout: gave up after ...`: lỗi riêng của bài đó, **không** tính vào bộ đếm "bị chặn/mạng" (không kích hoạt cooldown), và `analyze_errors.py` xếp vào nhóm mạng. Phần đã tải dở nằm trong RAM nên mất; lần chạy lại tải file đó từ đầu |
 | Một lô hỏi arXiv bị lỗi | In thông báo, bỏ qua lô, các bài trong lô được hỏi lẻ sau |
 | Lỗi trong một bài (kể cả lỗi từ Semantic Scholar) | Bắt ở `main`, ghi dòng `error` vào log (kèm `where`: dòng code nơi lỗi xảy ra), **chạy tiếp bài khác**. Bài không có `done.json` nên chạy lại sẽ làm tiếp; version đã tải xong không tải lại |
 | Version chỉ có PDF/Word hoặc không có file | Tạo `status.json` với `status = "empty"` (bản ghi rỗng), vẫn tiếp tục |
@@ -492,6 +509,10 @@ Hằng số cấu hình ở đầu file:
 | `ACCEPT_IDENTITY` | `True` (đổi bằng `--default-encoding`) | Có gửi `Accept-Encoding: identity` hay không |
 | `NETWORK_ERRORS` | `(requests.RequestException, urllib3.exceptions.HTTPError)` | Các loại lỗi mạng được thử lại; gồm cả lỗi của `urllib3` vì dữ liệu được đọc thô |
 | `MAX_ATTEMPTS` | `60` | Số lần gọi tối đa cho MỘT file (chặn vòng lặp vô tận khi mỗi lần đều tiến thêm một ít) |
+| `MAX_FILE_SECONDS` | `600` | Thời gian tối thiểu được phép dùng cho MỘT file (giây) |
+| `MIN_SPEED` | `10_000` | Tốc độ sàn (byte/giây): giới hạn của file lớn = dung lượng / `MIN_SPEED` |
+| `UNKNOWN_SIZE_SECONDS` | `3600` | Giới hạn thời gian khi server không báo dung lượng (`Content-Length`) |
+| `PROGRESS_EVERY` | `60` | Giây giữa 2 dòng báo tiến độ khi đang tải file lớn |
 | `S2_FIELDS` | `title,references.title,references.authors,references.publicationDate,references.externalIds,references.paperId` | Các trường xin Semantic Scholar (không có dấu cách sau dấu phẩy) |
 
 Các hàm:
@@ -500,11 +521,12 @@ Các hàm:
 |---|---|---|
 | `Throttle(min_gap, from_start=False)` | "Người gác cổng". `wait()` ngủ cho đủ `min_gap` giây tính từ lúc lần gọi trước **kết thúc** (hoặc **bắt đầu** nếu `from_start=True`); `mark()` ghi nhận lần gọi vừa kết thúc. Ngoài ra đo số lần gọi, tổng thời gian chờ, tổng thời gian gọi mạng; `summary()` trả các số này | Đối tượng; `wait()`, `mark()` trả `None`; `summary()` trả `dict` |
 | `fetch_bytes(url, throttle, headers=None, retries=4, raw=True)` | Tải một URL bằng `requests.Session` (giữ kết nối mở giữa các lần gọi), có chờ lịch sự và thử lại khi lỗi tạm thời. `raw=True`: đọc byte thô đúng như server gửi (cho file nguồn arXiv); `raw=False`: để thư viện tự giải nén (cho JSON của Semantic Scholar). Sau mỗi lỗi mạng, bỏ session cũ và mở kết nối mới cho lần thử sau; với `raw=True` còn tải tiếp phần còn thiếu bằng `Range` (xem `_fetch_bytes`). Khi báo lỗi, gắn thuộc tính `crawler_url` vào ngoại lệ | `bytes`; hoặc `None` nếu HTTP 404. HTTP 403 gây `RuntimeError`. Lỗi khác sau khi hết lượt thử gây ngoại lệ của `requests` hoặc `urllib3` (`ProtocolError`, `IncompleteRead`...). Nhận thiếu byte so với `Content-Length` (chế độ `raw`) cũng bị coi là lỗi và thử lại |
-| `_retry_after(value, default)` | Đọc giá trị header `Retry-After`, không đọc được thì dùng `default` | `float` (giây) |
+| `_retry_after(value, default)` | Đọc giá trị header `Retry-After`, không đọc được thì dùng `default`; giới hạn trong khoảng 1 đến 120 giây | `float` (giây) |
+| `_limit(total)` | Thời gian tối đa cho một file: `max(MAX_FILE_SECONDS, total / MIN_SPEED)`; `UNKNOWN_SIZE_SECONDS` nếu chưa biết dung lượng | `float` (giây) |
 | `_session_for(throttle)` | Trả về `requests.Session` riêng của một "người gác cổng" (tạo lần đầu, dùng lại sau đó) | `requests.Session` |
 | `_drop_session(throttle)` | Đóng và bỏ session (kết nối) hiện tại của một "người gác cổng" | `None` |
 | `_parse_content_range(value)` | Đọc header `Content-Range`, ví dụ `bytes 1048576-5000000/5000001` | `(start, end, total)` hoặc `None` nếu không đọc được |
-| `_fetch_bytes(url, throttle, headers, retries, raw)` | Vòng tải thật. Giữ dữ liệu nhận được trong bộ đệm; khi đứt giữa chừng và máy chủ có `Accept-Ranges: bytes` thì lần sau xin tiếp `Range: bytes=<đã có>-` kèm `If-Range` (ETag hoặc Last-Modified). Kiểm tra `Content-Range` khớp vị trí và tổng dung lượng; máy chủ trả 200 (bỏ qua Range), 416 hoặc `Content-Range` sai thì bỏ phần đã có và tải lại từ đầu. Lỗi vĩnh viễn (400, 401...) báo ngay, không thử lại | `bytes` hoặc `None` |
+| `_fetch_bytes(url, throttle, headers, retries, raw)` | Vòng tải thật. Giữ dữ liệu nhận được trong bộ đệm; khi đứt giữa chừng và máy chủ có `Accept-Ranges: bytes` thì lần sau xin tiếp `Range: bytes=<đã có>-` kèm `If-Range` (ETag hoặc Last-Modified). Kiểm tra `Content-Range` khớp vị trí và tổng dung lượng; máy chủ trả 200 (bỏ qua Range), 416 hoặc `Content-Range` sai thì bỏ phần đã có và tải lại từ đầu. Lỗi vĩnh viễn (400, 401...) báo ngay, không thử lại. Kiểm tra giới hạn thời gian (`_limit`) ở đầu mỗi lần thử và trong vòng đọc dữ liệu; tính "có tiến triển" theo mức byte cao nhất từng đạt; in `[retry]`, `[net error]`, `[HTTP ...]` và tiến độ mỗi 60 giây | `bytes` hoặc `None`; quá giờ thì `RuntimeError("Timeout: gave up after ...")` |
 | `throttle_report(wall_seconds)` | In và ghi số liệu chờ đợi / gọi mạng của lần chạy (kèm `cooldown_seconds`) vào `logs/throttle_runs.jsonl` | `None` |
 | `sleep_cooldown(seconds)` | Ngủ để hạ nhiệt khi gặp nhiều lỗi mạng liên tiếp và ghi thời gian ngủ **thực tế** (kể cả khi bị `Ctrl+C`) vào `logs/cooldowns.jsonl`; cộng vào biến `COOLDOWN_TOTAL` | `None` |
 | `_safe_rel(name)` | Chuẩn hóa đường dẫn trong file nén, loại đường dẫn nguy hiểm | `str`, hoặc `None` nếu nguy hiểm |
@@ -584,6 +606,19 @@ Tải cùng một file nguồn bằng 6 cách, cách nhau `--gap` giây (mặc �
 | `--gap` | Giây nghỉ giữa 2 lần tải |
 
 Hàm chính: `pick_version(paper_id, data_dir)` trả `int`; `attempt(name, fn)` chạy một cách tải và trả `dict` kết quả; `main()`.
+
+### 6.7 `estimate_time.py`
+
+Đọc `data/` (chỉ đọc, chạy khi crawler đang chạy cũng được) và ước tính thời gian crawl còn lại từ số liệu thật. Tổng số version lấy từ `data/*/meta.json`; dung lượng tải về và thời gian của từng version đã xong lấy từ `data/*/v*/status.json`. Mô hình: `thời gian một version = a + dung lượng / tốc độ`, trong đó `a` (độ trễ cố định, gồm khoảng chờ 3 giây) và tốc độ tải được ước lượng bằng hồi quy tuyến tính (`statistics.linear_regression`) trên các version đã xong; ít hơn 20 version thì dùng trung bình gộp. Thời gian còn lại = `số version còn lại x a + số version còn lại x dung lượng trung bình / tốc độ`. Phần Semantic Scholar chạy song song nên không cộng thêm (khi có `S2_API_KEY`).
+
+In ra: số bài và số version (theo `meta.json`), số version đã xong và còn lại, dung lượng tải về trung bình và trung vị, `a`, tốc độ đo được, thời gian còn lại ở tốc độ đo được (kèm khoảng khi dung lượng trung bình lệch 2 sai số chuẩn), và bảng cho các tốc độ giả định để thử "nếu chạy ở nơi mạng nhanh hơn". Kết quả in bằng chữ không dấu.
+
+| Tham số | Ý nghĩa |
+|---|---|
+| `--data-dir` | Thư mục dữ liệu (mặc định `data`) |
+| `--speeds` | Các tốc độ tải để thử, đơn vị KB/s, cách nhau dấu phẩy (mặc định `35,500,2000,10000,30000`) |
+
+Giới hạn: cần ít nhất 5 version đã xong; dung lượng có đuôi nặng (vài file rất lớn kéo trung bình lên) nên mẫu nhỏ cho kết quả dao động; các tốc độ trong bảng giả định là **giả định**, không phải số đo.
 
 ---
 
@@ -994,11 +1029,11 @@ Quy tắc riêng:
 
 ## 10. Đánh giá tốc độ
 
-> **Quan trọng:** tất cả con số trong các mục 10.1 đến 10.6 là **ước lượng tính toán** từ quy tắc giới hạn tốc độ, **chưa phải số đo thực tế**. Số đo thật sẽ điền vào mục 10.8 sau khi chạy `benchmark.py`.
+> **Quan trọng:** tất cả con số trong các mục 10.1 đến 10.6 là **ước lượng tính toán** từ quy tắc giới hạn tốc độ, **chưa phải số đo thực tế**. Số đo thật sẽ điền vào mục 10.8 sau khi chạy `benchmark.py`. Ngoại lệ: mục 10.10 có số đo thật đầu tiên (25/10/2026), cho thấy các ước lượng này **chỉ đúng khi băng thông đủ nhanh**; với mạng chậm thì thời gian tải file chi phối.
 
 ### 10.1 Điều gì quyết định tốc độ
 
-- arXiv chỉ cho phép 1 lần hỏi mỗi 3 giây, tức tối đa 20 lần/phút, 1.200 lần/giờ. Đây là **giới hạn cứng** và là điểm nghẽn chính của cả pipeline.
+- arXiv chỉ cho phép 1 lần hỏi mỗi 3 giây, tức tối đa 20 lần/phút, 1.200 lần/giờ. Đây là **giới hạn cứng** và là điểm nghẽn chính **khi file nhỏ và mạng nhanh**. Khi mạng chậm hoặc file nặng, thời gian tải (dung lượng / băng thông) lớn hơn nhiều so với 3 giây chờ và trở thành điểm nghẽn chính (mục 10.10).
 - Việc giải nén, ghi file, đọc JSON chỉ tốn mili giây so với 3 giây chờ, nên gần như không ảnh hưởng tổng thời gian.
 - `Throttle` mặc định đo khoảng 3 giây tính từ lúc lần gọi trước **kết thúc** (cách thư viện `arxiv` chính thức làm), nên mỗi vòng thực tế = 3 giây + thời gian phản hồi `r` của server. Các số ở bảng 10.3 là **mức sàn** (chưa cộng `r`); mục 10.9 cho biết cộng thêm bao nhiêu. Đây là cách làm thận trọng; có tùy chọn `--gap-from-start` nhưng mặc định tắt.
 - Hiệu năng được chấm so với các nhóm khác, nhưng không có cách hợp lệ nào để hỏi arXiv nhanh hơn. Chỗ có thể cải thiện là **giảm số lần hỏi** và **không làm lãng phí tài nguyên**.
@@ -1146,7 +1181,7 @@ Dòng cuối cho thấy luồng Semantic Scholar chỉ "được che" khi nó nh
 |---|---|---|---|
 | Giữ kết nối mở (keep-alive) | Giảm phần thiết lập kết nối trong `r` | An toàn, vẫn một kết nối. Mức giảm phụ thuộc mạng (xa máy chủ thì nhiều hơn) | Đã làm, chưa đo trên arXiv thật |
 | Chạy ở nơi mạng nhanh và gần máy chủ (ví dụ Colab) | Giảm `r` | So `avg_request_seconds` giữa nơi chạy | Cần đo |
-| `--gap-from-start` (tính 3 giây từ lúc bắt đầu lần gọi trước) | Bỏ `r` khỏi vòng chờ, tối đa bằng mức chậm hơn sàn ở bảng trên | Đúng với câu chữ "không quá 1 yêu cầu mỗi 3 giây", nhưng mạnh hơn cách thư viện `arxiv` chính thức làm, và đề có thể hiểu "giữa 2 lần hỏi" khác. Mặc định tắt, chỉ bật khi giảng viên xác nhận | Đã làm (tùy chọn) |
+| `--gap-from-start` (tính 3 giây từ lúc bắt đầu lần gọi trước) | Bỏ `r` khỏi vòng chờ, tối đa bằng mức chậm hơn sàn ở bảng trên. **Gần như vô tác dụng khi mỗi lần tải mất hơn 3 giây** (mạng chậm hoặc file nặng, mục 10.10) | Đúng với câu chữ "không quá 1 yêu cầu mỗi 3 giây", nhưng mạnh hơn cách thư viện `arxiv` chính thức làm, và đề có thể hiểu "giữa 2 lần hỏi" khác. Mặc định tắt, chỉ bật khi giảng viên xác nhận | Đã làm (tùy chọn) |
 | Lô 100 ID thay vì 50 (`--discover-batch 100`) | Bớt 50 lần hỏi, khoảng 2,5 phút (dưới 1%) | Không đáng kể | Có sẵn tham số |
 | Dùng bộ metadata offline (ví dụ bản chụp arXiv trên Kaggle) thay cho bước hỏi thông tin | Bớt khoảng 100 lần hỏi, khoảng 5 đến 6 phút; có thể có ngày từng version | Phải tải bộ dữ liệu lớn, có thể thiếu bài mới, cần kiểm tra các trường dữ liệu trước | Chưa làm, lợi nhỏ |
 | Gối đầu Semantic Scholar giữa các bài (không chờ ở cuối mỗi bài) | Khoảng 5% khi Semantic Scholar chậm | Chỉ có ích khi hay bị 429 | Chưa làm |
@@ -1163,6 +1198,60 @@ Dòng cuối cho thấy luồng Semantic Scholar chỉ "được che" khi nó nh
 2. Nếu `r` nhỏ hơn khoảng 0,3 giây: hầu như không còn gì đáng tối ưu.
 3. Nếu `r` từ 1 giây trở lên: thử đổi nơi chạy (ví dụ Colab) và so sánh; hỏi giảng viên về `--gap-from-start`.
 4. Đưa số trước và sau mỗi thay đổi vào báo cáo.
+
+### 10.10 Số đo thật đầu tiên và ước tính theo băng thông (25/10/2026)
+
+**Số đo thật.** Bài 2410.08074 (3 version), crawler chạy trên Windows, mạng cá nhân. Số lấy từ `status.json` (1 KB = 1024 byte):
+
+| Version | Dung lượng tải về | Thời gian (`seconds`) | Tốc độ trung bình | `bytes_before` | `bytes_after` (.tex, .bib) |
+|---|---|---|---|---|---|
+| v1 | 39.537.260 byte (37,7 MiB) | 1135,4 giây | khoảng 34 KB/s | 42.504.162 | 99.032 |
+| v2 | 40.367.671 byte (38,5 MiB) | 1026,8 giây | khoảng 38 KB/s | 41.051.195 | 111.028 |
+
+Theo dấu thời gian file trên máy: `references.json` xong lúc 9:07 (Semantic Scholar đã xong từ lâu), v1 xong 9:26, v2 xong 9:43. Mỗi version mất khoảng 17 đến 19 phút để tải về khoảng 40 MB mà chỉ giữ lại khoảng 100 KB `.tex`/`.bib`. Đây là một bài nặng bất thường, **không đại diện** cho cả dải ID.
+
+**Rút ra.**
+
+- Với băng thông này, thời gian tải chi phối hoàn toàn; khoảng chờ 3 giây chỉ là phần nhỏ. Vì vậy `--gap-from-start` gần như không giúp gì (mục 10.9).
+- Không có cách hợp lệ để chỉ tải phần `.tex`/`.bib`: file `.tar.gz` là một luồng nén liên tục, phải tải đủ mới đọc được. Cách giảm thời gian là tăng băng thông (chạy ở nơi mạng tốt), không phải sửa code.
+- Bản crawler cũ im lặng suốt khoảng 19 phút mỗi version nên trông như bị treo. Bản mới in tiến độ mỗi 60 giây (mục 4.9).
+- Giới hạn thời gian cố định 300 giây (đề xuất đầu tiên) sẽ làm bài này lỗi vĩnh viễn; giới hạn theo dung lượng (`_limit`, mục 5.7) cho file 40 MB khoảng 66 phút.
+
+**Ước tính ban đầu cho 5000 ID (giả định; đã được thay bằng số thật ở phần "Cập nhật" bên dưới).** Công thức: `tổng = số version x (3 giây chờ + khoảng 0,5 giây độ trễ) + tổng dung lượng / tốc độ tải` (hỏi thông tin theo lô cộng khoảng 7 phút). Các giả định, **chưa đo**: 10.000 version (2 version mỗi bài; số thật đếm bằng `meta.json` hoặc `--discover-only`), dung lượng trung bình mỗi version là 2, 5 hoặc 10 MB, và các tốc độ tải như trong bảng. Sàn cứng chỉ riêng khoảng chờ là 8 giờ 25 phút (10.100 lần hỏi x 3 giây); cộng độ trễ cố định và hỏi theo lô là khoảng 9 giờ 48 phút.
+
+| Dung lượng TB mỗi version | 35 KB/s (đo được ở trên) | 1 MB/s | 5 MB/s | 20 MB/s |
+|---|---|---|---|---|
+| 2 MB (tổng khoảng 20 GB) | 7,2 ngày | 15,4 giờ | 10,9 giờ | 10,1 giờ |
+| 5 MB (khoảng 49 GB) | 17,3 ngày | 23,7 giờ | 12,6 giờ | 10,5 giờ |
+| 10 MB (khoảng 98 GB) | 34,3 ngày | 37,6 giờ | 15,4 giờ | 11,2 giờ |
+
+Kết luận tạm: ở khoảng 35 KB/s thì không thể crawl hết 5000 ID; từ khoảng 5 MB/s trở lên thời gian tiến gần sàn khoảng 10 giờ. Tốc độ tải trên Colab **chưa đo**.
+
+**Cập nhật bằng số thật** (`estimate_time.py`, 25/10/2026, đã xong 263 trong 8.393 version):
+
+| Chỉ số | Giá trị |
+|---|---|
+| Số bài / tổng số version (đếm từ `meta.json`) | 5.000 / 8.393 (trung bình 1,68 version mỗi bài) |
+| Dung lượng tải về mỗi version | trung bình 4,71 MB, trung vị 1,08 MB |
+| Độ trễ cố định mỗi version (`a`) | 3,0 giây (đúng bằng mức sàn của khoảng chờ) |
+| Tốc độ tải đo được (hồi quy trên 263 version) | khoảng 99 KB/s |
+| Thời gian còn lại ở tốc độ đo được | khoảng 4,6 ngày (111 giờ); khoảng 3,6 đến 5,7 ngày nếu dung lượng trung bình lệch 2 sai số chuẩn |
+
+Thời gian còn lại (8.130 version, tải khoảng 38 GB) nếu tốc độ tải là:
+
+| Tốc độ tải giả định | 35 KB/s | 500 KB/s | 2.000 KB/s | 10.000 KB/s | 30.000 KB/s |
+|---|---|---|---|---|---|
+| Thời gian còn lại | 12,7 ngày | 27 giờ 33 phút | 11 giờ 58 phút | 7 giờ 49 phút | 7 giờ 7 phút |
+
+Sàn cứng chỉ riêng khoảng chờ: 6 giờ 47 phút (8.130 lần x 3 giây). Nhận xét:
+
+- Số version thật (8.393) thấp hơn giả định 10.000, và dung lượng trung bình thật (4,71 MB) gần mức giả định 5 MB.
+- Dung lượng trung vị (1,08 MB) thấp hơn nhiều so với trung bình (4,71 MB): một số ít file rất nặng chiếm phần lớn băng thông, nên khoảng ước tính còn rộng khi mẫu mới có 263 version. Chạy lại `estimate_time.py` khi có thêm dữ liệu.
+- Tốc độ trung bình 99 KB/s cao hơn con số 34 đến 38 KB/s của riêng bài 2410.08074 (bài này nặng bất thường).
+- Chạy liên tục trên máy hiện tại cần khoảng 4,6 ngày, chưa tính bị ngắt hay cooldown. Chỉ khi băng thông từ khoảng 10.000 KB/s trở lên thì thời gian mới gần sàn (khoảng 7 giờ). Tốc độ Colab vẫn **chưa đo**.
+- Dung lượng đĩa không phải vấn đề: chỉ giữ `.tex`/`.bib` (khoảng 100 KB mỗi version ở bài mẫu).
+
+**Việc cần làm.** (1) Chạy `python src/estimate_time.py` để thay các giả định bằng số thật (số version, dung lượng trung bình, tốc độ). (2) Chạy 100 bài trên Colab, chạy lại `estimate_time.py` để có tốc độ Colab thật và ghi vào bảng 10.8. (3) Chỉ chạy ở một nơi tại một thời điểm, không chạy máy cá nhân và Colab cùng lúc (mục 15). (4) Hỏi giảng viên về đo trên tập con và về file quá nặng (mục 12.2, câu 6 và 10).
 
 
 ---
@@ -1189,6 +1278,8 @@ Dòng cuối cho thấy luồng Semantic Scholar chỉ "được che" khi nó nh
 | Chế độ tải `raw`, `--default-encoding`, URL trong lỗi | `raw=False` trả JSON đã giải nén, `raw=True` giữ nguyên byte gzip; `--default-encoding` bỏ header `identity`; lỗi có `crawler_url` và log có trường `url`; sau lỗi mạng mở kết nối mới | Đúng |
 | Tải tiếp khi đứt (`Range`) | File 10 MB, máy chủ cắt mỗi 1 MB: ghép đủ qua 10 lần gọi, đúng từng byte (vượt xa 4 lần thử vì mỗi lần đều tiến thêm); lần xin tiếp có `Range` và `If-Range` đúng; file đổi giữa các lần (ETag khác): nhận lại toàn bộ bản mới, không bị trộn; không hỗ trợ `Range`: tải lại từ đầu, chờ 5 và 10 giây như trước; máy chủ báo có `Range` nhưng trả 200: vẫn đúng; 416 và `Content-Range` sai vị trí: tải lại từ đầu; lỗi 400: báo ngay sau 1 lần gọi | Đúng |
 | `diagnose_download.py` | Bốn máy chủ thử: luôn đứt, chỉ đứt khi có header `identity`, chỉ đứt khi dùng lại kết nối, và máy chủ tốt | Kết luận in ra đúng cho từng trường hợp; nhận ra máy chủ có hỗ trợ `Range` |
+| Bản vá chống treo `_fetch_bytes` (25/10/2026) | Server HTTP cục bộ, file 3 MB: tải bình thường; cắt mỗi 1 MiB có hỗ trợ `Range` (nối đủ qua 4 lần gọi, khớp từng byte, không tính thất bại vì mỗi lần đều đi xa hơn); cắt cùng một chỗ và không hỗ trợ `Range` (bỏ cuộc sau 6 lần gọi, chờ 5, 5, 10, 20, 40 giây, không lặp vô hạn); 404 trả `None`; 429 có `Retry-After: 1000` (mỗi lần chờ bị giới hạn 120 giây, hết lượt thì báo `HTTPError`); không có `Content-Length` (tải đủ); kết nối nhỏ giọt (quá giờ thì báo `Timeout: gave up after ... (still downloading)` ngay trong vòng đọc, có in dòng tiến độ kèm KB/s) | Đúng. Lúc kiểm thử, hàm ngủ được thay bằng hàm giả để chạy nhanh; chưa thử trên arXiv thật |
+| `estimate_time.py` | Dữ liệu giả 60 bài (110 version, 80 version đã xong, tốc độ giả lập 36 KB/s, độ trễ cố định 3,5 giây cộng nhiễu) | Khôi phục tốc độ khoảng 36 KB/s và độ trễ cố định khoảng 4 giây; bảng thời gian còn lại hợp lý |
 | `make_stats.py` | Chạy trên nhật ký giả có `done`, `error`, `not_found`, bài chưa chạy | Các con số khớp tính tay |
 | `benchmark.py` | Bọc một lệnh giả | Ra thời gian, RAM, đĩa, mã thoát; tạo file mẫu theo thời gian |
 | `benchmark.py` (chạy từng đoạn) | Lệnh giả bị `Ctrl+C` giữa chừng; chạy lại cùng thư mục `--out` | Vẫn ghi `benchmark.json` với `interrupted = true`; lần chạy lại cùng `--out` bị từ chối |
@@ -1198,9 +1289,10 @@ Dòng cuối cho thấy luồng Semantic Scholar chỉ "được che" khi nó nh
 
 ### 11.2 Chưa kiểm thử
 
-- **Chạy thật** trên arXiv và Semantic Scholar: cách thư viện `arxiv` phản hồi với `id_list` 50 ID, ID kiểu cũ trên máy chủ thật; định dạng thật của phản hồi Semantic Scholar (code giả định `references` là danh sách các đối tượng có `paperId`, `externalIds`, `title`, `authors`, `publicationDate`); header `Retry-After` thật; tải source thật. Việc giữ kết nối mở mới được chứng minh trên server HTTP cục bộ (không có TLS); cách máy chủ arXiv thật xử lý chưa kiểm tra.
+- **Chạy thật** trên arXiv và Semantic Scholar (đã chạy một phần từ 25/10/2026, mục 10.10; các điểm sau chưa được kiểm tra riêng): cách thư viện `arxiv` phản hồi với `id_list` 50 ID, ID kiểu cũ trên máy chủ thật; định dạng thật của phản hồi Semantic Scholar (code giả định `references` là danh sách các đối tượng có `paperId`, `externalIds`, `title`, `authors`, `publicationDate`); header `Retry-After` thật; tải source thật. Việc giữ kết nối mở mới được chứng minh trên server HTTP cục bộ (không có TLS); cách máy chủ arXiv thật xử lý chưa kiểm tra.
 - Phân trang hoặc bị cắt của danh sách tham khảo ở bài có rất nhiều tham khảo.
-- Windows, macOS, Google Colab (mới chạy thử trên Linux).
+- macOS và Google Colab (mới chạy thử trên Linux). Crawler đã chạy thật trên Windows PowerShell (mục 10.10); các script còn lại trên Windows chưa xác nhận.
+- Bản vá chống treo (mục 17.2, dòng 24 đến 26) chưa chạy lại trên arXiv thật: cần quan sát dòng tiến độ, giới hạn thời gian, và xem `Timeout:` có xuất hiện oan ở file nặng hay không.
 - `benchmark.py` bắt `Ctrl+C`, `merge_benchmarks.py` và `sleep_cooldown` với crawler thật chạy nhiều giờ, và trên Windows (mới thử bằng lệnh giả trên Linux).
 - Chạy dài nhiều giờ, bị ngắt mạng thật, bị chặn 403 hoặc 429 thật.
 - Túi nén rất lớn hoặc hỏng ở mức thực tế.
@@ -1236,6 +1328,12 @@ Các đoạn kiểm thử trên được chạy thủ công trong lúc soạn co
 | Lưu cả `references_all.json` | Giữ đủ dữ liệu cho các milestone sau; bảng cuối chỉ cần bản có arXiv ID |
 | Hỏi Semantic Scholar bằng ID gốc không kèm version | Semantic Scholar nhận `arXiv:<id>` |
 | Một bài lỗi không làm hỏng cả lần chạy | Chạy hàng nghìn bài, lỗi lẻ tẻ là bình thường |
+| Giới hạn thời gian một file theo dung lượng (`_limit`), không dùng số cố định | Số cố định 300 giây (đề xuất đầu tiên) làm bài 40 MB trên mạng 35 KB/s lỗi vĩnh viễn vì cần khoảng 1100 giây mỗi file. Theo dung lượng thì file lớn có thêm giờ, file nhỏ vẫn bị chặn ở 10 phút |
+| Kiểm tra giờ cả trong vòng đọc dữ liệu | Một kết nối nhỏ giọt không bao giờ quay lại đầu vòng thử, nên chỉ kiểm tra ở đầu vòng không chặn được; `timeout=60` của `requests` chỉ là 60 giây không nhận được byte nào |
+| Giới hạn `Retry-After` tối đa 120 giây | Server có thể gửi giá trị rất lớn; ngủ im lặng hàng giờ là nguy cơ. Nay mỗi lần chờ bị chặn trên và được in ra |
+| Lỗi quá giờ là `RuntimeError("Timeout: ...")`, không phải lỗi của `requests` | Không tính vào bộ đếm bị chặn/mạng (không kích hoạt cooldown 5 đến 30 phút chỉ vì một bài quá nặng); có chữ `Timeout` nên `analyze_errors.py` xếp vào nhóm mạng |
+| "Có tiến triển" tính theo mức byte cao nhất từng đạt | Tránh vòng lặp vô tận khi máy chủ bỏ qua `Range` và cắt cùng một chỗ; vẫn không phạt khi tải tiếp được |
+| Chỉ in khi tải lâu (60 giây) hoặc khi chờ/thử lại | Chạy 5000 ID có hàng chục nghìn lần gọi; in mọi lần gọi làm trôi màn hình |
 
 ### 12.2 Câu hỏi cần xác nhận với giảng viên thực hành
 
@@ -1248,6 +1346,7 @@ Các đoạn kiểm thử trên được chạy thủ công trong lúc soạn co
 7. **Đưa số liệu vào Jupyter Book:** repo code không chứa dữ liệu, vậy có được commit file thống kê nhỏ (`summary.json`, `papers.csv`, `benchmark.json`) vào repo báo cáo không?
 8. **Dải ID:** hai đầu có tính không? Dải có đi qua nhiều tháng không?
 9. **Bản Jupyter Book:** môn đang dùng bản 1 hay bản 2 (MyST)?
+10. **Băng thông và file nặng:** có bài mà mỗi version nặng khoảng 40 MB (chỉ vài chục KB là `.tex`/`.bib`). Trên mạng chậm, tải đủ 5000 bài mất nhiều ngày. Có được đo trên Colab (mạng nhanh), chạy trên tập con, hoặc bỏ qua file vượt một ngưỡng dung lượng (ghi rõ trong báo cáo) không? (Liên quan câu 6.)
 
 ---
 
@@ -1272,6 +1371,9 @@ Các đoạn kiểm thử trên được chạy thủ công trong lúc soạn co
 | Tải tiếp (`Range`) chỉ có tác dụng nếu máy chủ hỗ trợ; nếu không, phải tải lại file từ đầu | Chạy `diagnose_download.py` (cách thứ 6) để biết arXiv có trả `206` không. Chưa kiểm tra trên arXiv thật |
 | Crawler gửi `If-Range` kèm ETag hoặc Last-Modified. Nếu máy chủ bỏ qua nó (ví dụ ETag dạng yếu `W/...`, hoặc khác nhau giữa các node CDN) thì trả `200`, crawler tải lại từ đầu mà không tiến thêm byte; file lớn bị cắt cùng một chỗ sẽ lỗi lặp lại sau mỗi lần chạy | **Giả thuyết, chưa xác nhận trên arXiv thật.** Kiểm tra: xin `Range` kèm `If-Range` ở vị trí từng bị đứt, xem trả `206` hay `200`. Nếu `200` thì bỏ `If-Range` (code vẫn kiểm tra `Content-Range` và CRC của gzip) |
 | Chưa có kiểm thử tự động trong repo | Đưa các kiểm thử ở mục 11.1 vào `tests/` |
+| Mạng chậm: thời gian tải file (dung lượng / băng thông) chiếm gần hết thời gian crawl; ví dụ khoảng 35 KB/s thì 40 MB mất khoảng 19 phút | Chạy ở nơi băng thông tốt (Colab, cần đo); dùng `estimate_time.py` để ước tính. Không thể giảm dung lượng phải tải vì `.tar.gz` phải tải đủ mới đọc được. Hỏi giảng viên (12.2, câu 10) |
+| Phần đã tải dở của một file nằm trong RAM: `Ctrl+C`, quá giờ hoặc tắt máy làm mất, lần chạy lại tải file đó từ đầu | Nên bấm `Ctrl+C` ngay sau dòng `done` của một bài, không giữa lúc đang tải file lớn |
+| Dung lượng trung bình từ mẫu nhỏ trong `estimate_time.py` không ổn định vì phân bố có đuôi nặng | Chạy lại khi có từ 100 bài; xem cả trung vị và khoảng trong kết quả |
 
 ---
 
@@ -1291,6 +1393,8 @@ Các đoạn kiểm thử trên được chạy thủ công trong lúc soạn co
 | Có dòng `error` trong log | Chạy `python src/analyze_errors.py` để biết nhóm nguyên nhân (mục 4.14); chạy lại cùng lệnh để thử lại bài đó |
 | Số bài `error` tăng dần theo thời gian | Thường do bị chặn hoặc giới hạn tốc độ, mất mạng, đĩa đầy, hoặc chạy 2 bản cùng lúc (cùng key Semantic Scholar, cùng IP). Chạy `analyze_errors.py` xem phần xu hướng và nhóm nguyên nhân; kiểm tra dung lượng đĩa; chỉ chạy một bản tại một thời điểm |
 | `ProtocolError('Connection broken: IncompleteRead(... bytes read, ... more expected)')` | Kết nối bị đóng trước khi nhận đủ file. Có thể do mạng, máy chủ hoặc CDN, proxy hoặc phần mềm diệt virus, hoặc cách tải. Bản crawler mới tự thử lại bằng kết nối mới và tải tiếp phần còn thiếu nếu máy chủ hỗ trợ. Để tìm nguyên nhân: dừng crawler, chạy `python src/diagnose_download.py --id <ID>` (mục 4.14) |
+| Màn hình đứng im hàng chục phút ở một bài, không báo lỗi | Thường là đang tải file lớn trên mạng chậm, hoặc đang chờ lại sau lỗi 429. Bản cũ không in gì trong lúc tải; bản mới in tiến độ mỗi 60 giây. Xem bài đang kẹt ở đâu: `dir data\<id> -Recurse` (thiếu `status.json` ở thư mục `v<n>` nào thì đang tải version đó; đủ `status.json` mà thiếu `references.json` thì đang chờ Semantic Scholar); đọc `bytes_downloaded` và `seconds` trong `status.json` của các version đã xong để tính tốc độ; hoặc `py-spy dump --pid <PID>` (cài bằng `pip install py-spy`) để biết chương trình đang đứng ở dòng nào. Đừng `Ctrl+C` sớm nếu đang tải dở file lớn: phần đã tải trong RAM sẽ mất |
+| `Timeout: gave up after ...s` | Một file vượt giới hạn thời gian (mục 5.7). Nếu file nặng và mạng chậm là hợp lệ thì tăng `MAX_FILE_SECONDS` hoặc giảm `MIN_SPEED` trong `milestone1_crawler.py` (ví dụ `MIN_SPEED = 5_000` cho gấp đôi thời gian). Nếu lặp lại ở nhiều bài, chạy `estimate_time.py` xem tốc độ thật rồi kiểm tra mạng |
 | Số bài `not_found` nhiều bất thường | Kiểm tra lại ID đầu và ID cuối, cách nhập dải ID |
 | `benchmark.py: error: ... already has results` | Thư mục `--out` đã có kết quả của đoạn trước. Dùng `run_XX` kế tiếp (không ghi đè); chỉ xóa thư mục cũ khi muốn đo lại từ đầu |
 | `merge_benchmarks.py` báo `no runs found` | Tên thư mục không bắt đầu bằng `run_`, hoặc `--runs` trỏ sai chỗ |
@@ -1367,6 +1471,9 @@ python src/merge_benchmarks.py
 
 # Tính số liệu
 python src/make_stats.py --ids-file ids.txt
+
+# Ước tính thời gian crawl còn lại từ số liệu thật (chạy lúc nào cũng được)
+python src/estimate_time.py
 ```
 
 ### 17.2 Lịch sử thay đổi trong quá trình làm
@@ -1396,3 +1503,7 @@ python src/make_stats.py --ids-file ids.txt
 | 21 | `benchmark.py` ghi mẫu dần từng giây, vẫn lưu `benchmark.json` khi bị `Ctrl+C`, ghi `started_at` và `done_papers_*`; thêm `merge_benchmarks.py` gộp các đoạn | `benchmark.py` bản đầu ghi đè kết quả mỗi lần chạy và không ghi gì nếu bị ngắt; chạy 5000 ID nhiều giờ dễ bị ngắt, nên cần đo theo đoạn rồi gộp |
 | 22 | `benchmark.py` từ chối chạy nếu `--out` đã có kết quả | Tránh mất số liệu đoạn trước khi quên đổi tên thư mục `run_XX` |
 | 23 | Thêm `sleep_cooldown` và `logs/cooldowns.jsonl`; `throttle_report` ghi thêm `cooldown_seconds`; `merge_benchmarks.py` tính `wall_seconds_excl_cooldown` | Cooldown nằm trong wall time nhưng là thời gian chờ mạng, không phải thời gian làm việc; không cần canh máy để ngắt khi crawler đang nghỉ |
+| 24 | Vá `_fetch_bytes`: giới hạn thời gian một file theo dung lượng (`_limit`), kiểm tra cả trong vòng đọc dữ liệu, in tiến độ mỗi 60 giây và các dòng `[retry]`, `[net error]`, `[HTTP ...]`; "có tiến triển" tính theo mức byte cao nhất từng đạt; lỗi quá giờ bắt đầu bằng `Timeout:` | Crawler đứng im hơn 30 phút ở bài 2410.08074 mà không có thông báo. Nguyên nhân thật là tải chậm (khoảng 35 KB/s, mỗi version 40 MB mất khoảng 19 phút). **Hai đề xuất trước đó đã được sửa theo số đo thật**: giới hạn cố định 300 giây sẽ làm bài này lỗi vĩnh viễn, và chỉ in khi `attempt > 0` không giúp vì tải một mạch không đứt thì `attempt` luôn bằng 0 |
+| 25 | Giới hạn `Retry-After` tối đa 120 giây | Hàm cũ chỉ có cận dưới; server gửi giá trị lớn sẽ làm crawler ngủ im lặng rất lâu. Đây là phòng ngừa, không phải nguyên nhân của lần đứng im ở dòng 24 |
+| 26 | Thêm `estimate_time.py` và mục 10.10 | Cần ước tính thời gian crawl từ số liệu thật thay cho ước lượng giả định; số đo đầu tiên cho thấy trên mạng chậm thì băng thông, không phải khoảng chờ 3 giây, quyết định thời gian |
+| 27 | Cập nhật mục 10.10 bằng số liệu thật từ `estimate_time.py`: 8.393 version, trung bình 4,71 MB và trung vị 1,08 MB mỗi version, tốc độ tải khoảng 99 KB/s, còn lại khoảng 4,6 ngày ở tốc độ đó | Thay các giả định ban đầu (10.000 version, 35 KB/s) bằng số đo; cho thấy băng thông là yếu tố quyết định và dung lượng phân bố lệch (vài file rất nặng) |

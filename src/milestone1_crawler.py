@@ -150,13 +150,25 @@ def _drop_session(throttle):
 
 
 def _retry_after(value, default):
+    """Số giây server bảo chờ (Retry-After). Giới hạn tối đa 120 giây để không ngủ im lặng hàng giờ."""
     try:
-        return max(float(value), 1.0)
+        return min(max(float(value), 1.0), 120.0)
     except (TypeError, ValueError):
         return default
 
 
-MAX_ATTEMPTS = 60     # chặn vòng lặp vô tận: tối đa số lần gọi cho MỘT file, kể cả khi mỗi lần đều tiến thêm
+MAX_ATTEMPTS = 60          # chặn vòng lặp vô tận: tối đa số lần gọi cho MỘT file
+MAX_FILE_SECONDS = 600     # file nhỏ: tối đa 10 phút cho một file
+MIN_SPEED = 10_000         # byte/giây (10 KB/s): chậm hơn mức này thì coi như vô vọng
+UNKNOWN_SIZE_SECONDS = 3600  # server không báo dung lượng: cho tối đa 1 tiếng
+PROGRESS_EVERY = 60        # giây giữa 2 dòng báo tiến độ khi đang tải file lớn
+
+
+def _limit(total):
+    """Thời gian tối đa cho một file: file lớn được thêm giờ theo dung lượng (tốc độ sàn MIN_SPEED)."""
+    if total is None:
+        return UNKNOWN_SIZE_SECONDS
+    return max(MAX_FILE_SECONDS, total / MIN_SPEED)
 
 
 def _parse_content_range(value):
@@ -173,14 +185,21 @@ def _fetch_bytes(url, throttle, headers, retries, raw):
       - dữ liệu nhận được được giữ lại trong buf, lần thử sau xin tiếp bằng 'Range: bytes=<đã có>-'
         (kèm 'If-Range' = ETag để chắc file không đổi giữa các lần);
       - nếu máy chủ không hỗ trợ Range (trả 200) thì tải lại từ đầu như bình thường;
-      - lần thử mà nhận thêm được byte (và máy chủ cho tải tiếp) không bị tính là thất bại,
-        nên file lớn bị cắt nhiều lần vẫn tải xong được;
-      - kiểm tra Content-Range khớp vị trí; hết lượt thì báo lỗi.
+      - lần thử mà đi XA HƠN mọi lần trước (buf dài hơn mức cao nhất từng đạt) không bị tính là thất bại,
+        nên file lớn bị cắt nhiều lần vẫn tải xong được; tải đi tải lại mà không xa hơn thì bị tính lỗi;
+      - kiểm tra Content-Range khớp vị trí; hết lượt hoặc quá giờ thì báo lỗi.
+    Giới hạn thời gian (xem _limit) được kiểm tra ở đầu mỗi lần thử VÀ trong lúc đọc dữ liệu, nên một
+    kết nối nhỏ giọt chậm cũng không treo vô hạn. Mọi lần chờ/thử lại đều in một dòng ra màn hình.
     """
     buf = bytearray()
     total, can_range, validator = None, False, None
-    fails = 0                                   # số lần lỗi liên tiếp mà không tiến thêm được byte nào
+    fails = 0                                   # số lần lỗi liên tiếp mà không đi xa thêm được
+    best = 0                                    # số byte nhiều nhất từng có trong buf
+    t_start = time.monotonic()
     for attempt in range(MAX_ATTEMPTS):
+        now = time.monotonic()
+        if now - t_start > _limit(total):
+            raise RuntimeError(f"Timeout: gave up after {now - t_start:.0f}s: {url}")
         session = _session_for(throttle)        # sau lỗi mạng sẽ là session (kết nối) mới
         req_headers = dict(headers or {})
         resuming = raw and can_range and len(buf) > 0
@@ -188,7 +207,10 @@ def _fetch_bytes(url, throttle, headers, retries, raw):
             req_headers["Range"] = f"bytes={len(buf)}-"
             if validator:
                 req_headers["If-Range"] = validator
-        before = len(buf)
+        best_before = best
+        if attempt > 0:
+            size = f"{len(buf) / 1e6:.1f}/{total / 1e6:.1f} MB" if total else f"{len(buf)} bytes"
+            print(f"  [retry {attempt}] {url} (have {size}, fails={fails})", flush=True)
         throttle.wait()
         try:
             resp = session.get(url, headers=req_headers, timeout=60, stream=True)
@@ -210,21 +232,36 @@ def _fetch_bytes(url, throttle, headers, retries, raw):
                         total = int(length) if length.isdigit() else None
                         can_range = resp.headers.get("Accept-Ranges", "").lower() == "bytes"
                         validator = resp.headers.get("ETag") or resp.headers.get("Last-Modified")
+                    last_print, last_len = time.monotonic(), len(buf)
                     for chunk in resp.raw.stream(1 << 16, decode_content=False):
                         buf.extend(chunk)                       # giữ lại từng khối: nếu đứt giữa chừng vẫn còn phần đã nhận
+                        now = time.monotonic()
+                        if now - t_start > _limit(total):
+                            resp.close()                        # đóng ngay kết nối đang đọc dở
+                            _drop_session(throttle)
+                            raise RuntimeError(
+                                f"Timeout: gave up after {now - t_start:.0f}s (still downloading): {url}")
+                        if now - last_print >= PROGRESS_EVERY:
+                            speed = (len(buf) - last_len) / (now - last_print) / 1024
+                            size = f"{len(buf) / 1e6:.1f}/{total / 1e6:.1f} MB" if total else f"{len(buf) / 1e6:.1f} MB"
+                            print(f"  downloading {url}: {size} ({speed:.0f} KB/s)", flush=True)
+                            last_print, last_len = now, len(buf)
                     if total is not None and len(buf) != total:
                         raise requests.exceptions.ChunkedEncodingError(
                             f"incomplete body: got {len(buf)} of {total} bytes")
                     data = bytes(buf)
-        except NETWORK_ERRORS:                                  # kể cả đứt kết nối giữa lúc tải: thử lại
+        except NETWORK_ERRORS as exc:                           # kể cả đứt kết nối giữa lúc tải: thử lại
             _drop_session(throttle)
-            if raw and can_range and len(buf) > before:
-                fails = 0                                       # đã nhận thêm byte: không tính là thất bại
+            best = max(best, len(buf))
+            if raw and len(buf) > best_before:
+                fails = 0                                       # đã đi xa hơn mọi lần trước: không tính là thất bại
             else:
                 fails += 1
             if fails > retries or attempt == MAX_ATTEMPTS - 1:
                 raise
-            time.sleep(5 * 2 ** max(fails - 1, 0))
+            wait_s = 5 * 2 ** max(fails - 1, 0)
+            print(f"  [net error] {type(exc).__name__} on {url} -> wait {wait_s}s", flush=True)
+            time.sleep(wait_s)
             continue
         finally:
             throttle.mark()
@@ -245,11 +282,13 @@ def _fetch_bytes(url, throttle, headers, retries, raw):
             fails += 1
             if fails > retries:
                 resp.raise_for_status()
-            time.sleep(_retry_after(resp.headers.get("Retry-After"), 5 * 2 ** (fails - 1)))
+            wait_s = max(_retry_after(resp.headers.get("Retry-After"), 0), 5 * 2 ** (fails - 1))
+            print(f"  [HTTP {code}] {url} -> sleeping {wait_s:.0f}s before retry", flush=True)
+            time.sleep(wait_s)
             continue
         resp.raise_for_status()                                 # lỗi khác (400, 401...): báo ngay, không thử lại
         return b""
-    raise RuntimeError(f"gave up after {MAX_ATTEMPTS} attempts: {url}")
+    raise RuntimeError(f"Timeout: gave up after {MAX_ATTEMPTS} attempts: {url}")
 
 
 def fetch_bytes(url, throttle, headers=None, retries=4, raw=True):
