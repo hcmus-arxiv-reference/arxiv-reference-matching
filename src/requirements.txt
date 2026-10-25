@@ -1,5 +1,8 @@
 # Shared runtime (the integrated crawler uses the shared bounded HTTP client).
 -r ../requirements.txt
+# Optional standalone crawler from b27440f; incompatible with integrated cache.
+arxiv>=2.1
+requests>=2.31
 # Optional notebooks/plots from Lieu's reporting workflow.
 pandas>=2
 plotly>=5

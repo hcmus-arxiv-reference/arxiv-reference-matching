@@ -1,5 +1,6 @@
 """Range orchestration: real local checkpoints/Parquet and fake remote services."""
 from unittest.mock import Mock
+import json
 
 from src.common.schema import read_table
 from src.crawl.discovery import Publication
@@ -62,3 +63,19 @@ def test_stop_request_preserves_cached_publications(tmp_path):
     result = run_range(pipeline, ["2508.02872", "2508.02873"], min_free_bytes=0)
     assert result["status"] == "stopped" and result["exported_publications"] == 1
     assert pipeline.discovery.discover.call_count == 1
+
+
+def test_progress_log_explains_unfinished_tasks_without_error_payloads(tmp_path, capsys):
+    pipeline = make_pipeline(tmp_path, lambda *_: HttpResponse(404, {}, b"ignored"))
+    pipeline.references.references.side_effect = TimeoutError("private response details")
+    result = run_range(pipeline, ["2508.02872"], max_passes=1, min_free_bytes=0)
+    output = capsys.readouterr().out
+    event = json.loads(output.strip())
+    assert result["status"] == "incomplete"
+    assert event["issues"] == [
+        {"kind": "source", "version": 1, "status": "unavailable",
+         "http_status": 404, "error_reason": None},
+        {"kind": "references", "version": None, "status": "error",
+         "http_status": None, "error_reason": "TimeoutError"},
+    ]
+    assert "private response details" not in output

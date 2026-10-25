@@ -1,8 +1,10 @@
 # Crawl toàn Range của Bảo
 
-Cập nhật 24/10/2026: dùng entry point tích hợp từ nhánh Liễu theo
+Cập nhật 25/10/2026: dùng entry point tích hợp từ nhánh Liễu theo
 [lieu-integration.md](lieu-integration.md). Checkpoint, dữ liệu và cơ chế
 retry/thông báo dưới đây được giữ nguyên.
+CLI `src.milestone1_crawler` hiện chuyển tiếp tới `src.crawl.lieu_pipeline`;
+bản standalone mới của upstream được giữ riêng, không dùng để resume cache này.
 
 Range: `2508.02872`–`2508.07871`, bao gồm hai đầu, **5.000 ID được giao**.
 Số ID được giao không đồng nghĩa số Publication đã tải đủ.
@@ -22,6 +24,8 @@ Tên thư mục được giữ nguyên dù phạm vi chạy nay là toàn Range.
 - `manifests/crawl.jsonl`: checkpoint từng tác vụ discovery/source/references.
 - `manifests/range-run.json`: tiến độ gần nhất, PID, lượt chạy và ID còn thiếu.
 - `manifests/range-process.log`: log của tiến trình chạy nền.
+  Mỗi Publication xử lý có `issues` nêu tác vụ/Version còn thiếu, HTTP status
+  và loại exception; đọc cùng checkpoint để phân biệt lỗi code với lỗi nguồn.
 - `tables/papers.parquet`, `tables/references.parquet`: tổng hợp các Publication
   đủ dữ liệu, được xây lại **cuối mỗi lượt hoặc khi dừng có kiểm soát**.
   Trong khi lượt đầu chưa xong, các bảng có thể vẫn là đầu ra cũ.

@@ -1,5 +1,45 @@
 # Tích hợp nhánh Liễu vào main
 
+## Sửa lỗi entry point sau cập nhật main ngày 25/10/2026
+
+Commit `b27440f` thay `src/milestone1_crawler.py` tích hợp bằng bản standalone.
+Tái hiện: test không import được vì thiếu `arxiv`; kiểm tra AST xác nhận
+`BatchedDiscovery`/`LieuPipeline` và các cờ `--data-dir`, `--max-passes`,
+`--retry-delay` cũng không còn. Chỉ cài dependency không sửa được hợp đồng
+resume. Bản standalone dùng `meta.json`, `status.json`, `done.json` và
+`logs/run_log.jsonl`, không dùng cache/receipt hiện có của Range Bảo.
+
+Đã tách rõ hai implementation:
+
+- `src/milestone1_crawler.py` là CLI ổn định, chuyển tiếp tới
+  `src/crawl/lieu_pipeline.py`; giữ API công khai và cache đã kiểm chứng.
+- `src/lieu_standalone_crawler.py` giữ nguyên từng byte của crawler trong
+  `b27440f`. Không chạy bản này để resume `data/crawl-smoke/`. Dependencies
+  riêng `arxiv`/`requests` được khai báo trong `src/requirements.txt`;
+  runtime tích hợp vẫn chỉ cần `requirements.txt` ở root.
+- `src/analyze_errors.py`, `src/diagnose_download.py` mới vẫn được giữ.
+  Các script này dùng layout/log standalone; không dùng chúng để kết luận
+  tiến độ cache tích hợp. Không chạy script tải chẩn đoán song song worker.
+- Log tiến độ Range nay có `issues`: loại tác vụ, Version, trạng thái,
+  HTTP status và loại exception. Không ghi response body, header hoặc token.
+
+**150 test và 15 subtest đạt**, bao gồm regression chạy CLI thực, import API,
+resume cache không mạng, 404 không thành `non_tex`, S2 lỗi vẫn pending,
+pagination và log lỗi không chứa nội dung exception riêng tư. Chưa kiểm thử
+runtime standalone; kết quả test này thuộc pipeline tích hợp.
+
+Trước restart đã xác minh 7.763 receipt (7.279 có TeX, 484 `non_tex`) và
+sao lưu manifest tại `data/crawl-smoke/manifests/restart-20261025-170531/`.
+Lượt trước kết thúc với 4.941/5.000 Publication đủ dữ liệu: 48 source Version
+HTTP 404 và 15 Publication S2 HTTP 404, hợp thành 59 Publication còn thiếu.
+Probe mạng ngày 25/10: source `2508.02961v1` trả 404 với cả mặc định và
+`Accept-Encoding: identity`; S2 `2508.03220` trả 429. Đây là mẫu chẩn đoán,
+không chứng minh mọi 404 là vĩnh viễn hoặc mọi lỗi đều cùng nguyên nhân.
+Không đổi các lỗi tải thành bản ghi rỗng hoặc đánh dấu hoàn tất.
+
+Các phần ngày 24/10 dưới đây là lịch sử lần tích hợp ban đầu; lệnh resume
+vẫn dùng CLI ổn định phía trên.
+
 Yêu cầu ngày 24/10/2026: merge `feat/Lieu-crawler` và tiếp tục Range của Bảo
 bằng crawler từ nhánh này. Nhánh nguồn: `0d19257`. Merge giữ lịch sử commit
 của Liễu và giữ lại hạ tầng, schema, test, tài liệu đang có trên `main`.
