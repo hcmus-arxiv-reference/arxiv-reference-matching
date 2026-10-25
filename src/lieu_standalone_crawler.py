@@ -156,40 +156,100 @@ def _retry_after(value, default):
         return default
 
 
+MAX_ATTEMPTS = 60     # chặn vòng lặp vô tận: tối đa số lần gọi cho MỘT file, kể cả khi mỗi lần đều tiến thêm
+
+
+def _parse_content_range(value):
+    """'bytes 1048576-5000000/5000001' -> (start, end, total); không đọc được thì None."""
+    m = re.match(r"bytes (\d+)-(\d+)/(\d+|\*)", value or "")
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2)), int(m.group(3)) if m.group(3).isdigit() else None
+
+
 def _fetch_bytes(url, throttle, headers, retries, raw):
-    for attempt in range(retries + 1):
-        session = _session_for(throttle)           # sau lỗi mạng sẽ là session (kết nối) mới
+    """
+    Vòng tải có thử lại. Với file nguồn (raw=True) còn biết TẢI TIẾP phần còn thiếu khi kết nối đứt:
+      - dữ liệu nhận được được giữ lại trong buf, lần thử sau xin tiếp bằng 'Range: bytes=<đã có>-'
+        (kèm 'If-Range' = ETag để chắc file không đổi giữa các lần);
+      - nếu máy chủ không hỗ trợ Range (trả 200) thì tải lại từ đầu như bình thường;
+      - lần thử mà nhận thêm được byte (và máy chủ cho tải tiếp) không bị tính là thất bại,
+        nên file lớn bị cắt nhiều lần vẫn tải xong được;
+      - kiểm tra Content-Range khớp vị trí; hết lượt thì báo lỗi.
+    """
+    buf = bytearray()
+    total, can_range, validator = None, False, None
+    fails = 0                                   # số lần lỗi liên tiếp mà không tiến thêm được byte nào
+    for attempt in range(MAX_ATTEMPTS):
+        session = _session_for(throttle)        # sau lỗi mạng sẽ là session (kết nối) mới
+        req_headers = dict(headers or {})
+        resuming = raw and can_range and len(buf) > 0
+        if resuming:
+            req_headers["Range"] = f"bytes={len(buf)}-"
+            if validator:
+                req_headers["If-Range"] = validator
+        before = len(buf)
         throttle.wait()
         try:
-            resp = session.get(url, headers=headers or {}, timeout=60, stream=True)
-            if raw:
-                data = resp.raw.read(decode_content=False)     # byte thô đúng như server gửi
-            else:
-                data = resp.content                            # đã giải nén nếu server nén (dùng cho JSON)
-            expected = resp.headers.get("Content-Length", "")
-            if raw and expected.isdigit() and len(data) != int(expected):
-                raise requests.exceptions.ChunkedEncodingError(
-                    f"incomplete body: got {len(data)} of {expected} bytes")
-        except NETWORK_ERRORS:                             # kể cả đứt kết nối giữa lúc tải: thử lại
+            resp = session.get(url, headers=req_headers, timeout=60, stream=True)
+            code = resp.status_code
+            data = None
+            if code in (200, 206):
+                if not raw:
+                    data = resp.content                         # đã giải nén nếu server nén (dùng cho JSON)
+                else:
+                    if code == 206 and resuming:
+                        cr = _parse_content_range(resp.headers.get("Content-Range"))
+                        if cr is None or cr[0] != len(buf) or (total is not None and cr[2] not in (None, total)):
+                            buf.clear()                         # trả lời không khớp: bỏ phần đã có, tải lại từ đầu
+                            total, can_range = None, False
+                            raise requests.exceptions.ChunkedEncodingError("inconsistent Content-Range on resume")
+                    else:                                       # 200: thân phản hồi là file từ byte 0
+                        buf.clear()
+                        length = resp.headers.get("Content-Length", "")
+                        total = int(length) if length.isdigit() else None
+                        can_range = resp.headers.get("Accept-Ranges", "").lower() == "bytes"
+                        validator = resp.headers.get("ETag") or resp.headers.get("Last-Modified")
+                    for chunk in resp.raw.stream(1 << 16, decode_content=False):
+                        buf.extend(chunk)                       # giữ lại từng khối: nếu đứt giữa chừng vẫn còn phần đã nhận
+                    if total is not None and len(buf) != total:
+                        raise requests.exceptions.ChunkedEncodingError(
+                            f"incomplete body: got {len(buf)} of {total} bytes")
+                    data = bytes(buf)
+        except NETWORK_ERRORS:                                  # kể cả đứt kết nối giữa lúc tải: thử lại
             _drop_session(throttle)
-            if attempt < retries:
-                time.sleep(5 * 2 ** attempt)
-                continue
-            raise
+            if raw and can_range and len(buf) > before:
+                fails = 0                                       # đã nhận thêm byte: không tính là thất bại
+            else:
+                fails += 1
+            if fails > retries or attempt == MAX_ATTEMPTS - 1:
+                raise
+            time.sleep(5 * 2 ** max(fails - 1, 0))
+            continue
         finally:
             throttle.mark()
-        code = resp.status_code
+
+        if code in (200, 206):
+            return data
         if code == 404:
             return None
         if code == 403:
             raise RuntimeError(
                 f"403 for {url}: check host (export.arxiv.org) and User-Agent"
             )
-        if code in (429, 500, 502, 503, 504) and attempt < retries:
-            time.sleep(_retry_after(resp.headers.get("Retry-After"), 5 * 2 ** attempt))
+        if code == 416 and resuming:                            # vị trí xin tiếp không hợp lệ: tải lại từ đầu
+            buf.clear()
+            total, can_range = None, False
             continue
-        resp.raise_for_status()
-        return data
+        if code in (429, 500, 502, 503, 504):
+            fails += 1
+            if fails > retries:
+                resp.raise_for_status()
+            time.sleep(_retry_after(resp.headers.get("Retry-After"), 5 * 2 ** (fails - 1)))
+            continue
+        resp.raise_for_status()                                 # lỗi khác (400, 401...): báo ngay, không thử lại
+        return b""
+    raise RuntimeError(f"gave up after {MAX_ATTEMPTS} attempts: {url}")
 
 
 def fetch_bytes(url, throttle, headers=None, retries=4, raw=True):
@@ -345,6 +405,27 @@ def append_log(rec):
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     with LOG_FILE.open("a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+
+COOLDOWN_LOG = LOG_FILE.parent / "cooldowns.jsonl"
+COOLDOWN_TOTAL = 0.0      # tổng số giây đã ngủ vì cooldown trong lần chạy này
+
+
+def sleep_cooldown(seconds):
+    """
+    Ngủ để hạ nhiệt và ghi lại thời gian ngủ THỰC TẾ vào logs/cooldowns.jsonl
+    (kể cả khi bị Ctrl+C giữa chừng), để báo cáo có thể trừ thời gian này ra khỏi wall time.
+    """
+    global COOLDOWN_TOTAL
+    start_epoch, t0 = time.time(), time.monotonic()
+    try:
+        time.sleep(seconds)
+    finally:
+        slept = time.monotonic() - t0
+        COOLDOWN_TOTAL += slept
+        COOLDOWN_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with COOLDOWN_LOG.open("a", encoding="utf-8") as f:
+            f.write(json.dumps({"start_epoch": round(start_epoch, 1), "seconds": round(slept, 1)}) + "\n")
 
 
 def error_location(exc):
@@ -564,6 +645,7 @@ def throttle_report(wall_seconds):
     rep = {
         "time": time.strftime("%Y-%m-%d %H:%M:%S"),
         "wall_seconds": wall_seconds,
+        "cooldown_seconds": round(COOLDOWN_TOTAL, 1),
         "gap_from_start": ARXIV_THROTTLE.from_start,
         "arxiv": ARXIV_THROTTLE.summary(),
         "semantic_scholar": S2_THROTTLE.summary(),
@@ -650,7 +732,7 @@ def main():
             if blocking and streak % STREAK_BEFORE_COOLDOWN == 0:
                 print(f"{streak} blocking/network errors in a row: cooling down {cooldown:.0f}s "
                       "(not sending more requests)")
-                time.sleep(cooldown)
+                sleep_cooldown(cooldown)
                 cooldown = min(cooldown * 2, COOLDOWN_MAX)
 
     total = round(time.perf_counter() - t_start, 1)

@@ -1,5 +1,29 @@
 # Tích hợp nhánh Liễu vào main
 
+## Nhận bản remote e5be40e ngày 25/10/2026
+
+Commit mới của `langtucod0n` bổ sung HTTP Range/If-Range cho standalone,
+ghi thời gian cooldown, benchmark nhiều đoạn, `src.merge_benchmarks` và
+chẩn đoán TLS. Khi merge có xung đột ở entry point: đã đưa toàn bộ source
+remote mới vào `src/lieu_standalone_crawler.py`, giữ CLI tích hợp tại
+`src/milestone1_crawler.py`. Không loại bỏ thay đổi crawler của upstream.
+
+**Phạm vi sử dụng:** HTTP Range mới chưa được port/kiểm chứng trong
+`src/crawl/http_client.py`; pipeline cache Bảo tiếp tục dùng client này.
+`benchmark.count_done` đếm `done.json`, còn `merge_benchmarks` đọc cooldown
+log của standalone. Không dùng hai chỉ tiêu đó để công bố tiến độ/cooldown
+của pipeline tích hợp. Đo wall time/RAM/đĩa là phép đo tiến trình chung.
+Không coi merge code là đã kiểm thử mạng thật cho Range download hoặc TLS.
+Sau merge: **152 test và 15 subtest đạt**, gồm CLI/cache tích hợp, benchmark
+giữ exit code tiến trình con, phục hồi CSV bị cắt và gộp hai đoạn benchmark
+với cooldown nằm trong từng đoạn. Chưa nghiệm thu mọi trường hợp benchmark
+bị ngắt hoặc cooldown chồng lấn; không dùng test này làm benchmark thật.
+
+Lượt retry `0068a74` đã kết thúc 18:19 ngày 25/10, vẫn 4.941 Publication
+hoàn chỉnh và 59 thiếu; worker/watcher đã kết thúc trước khi merge. Không
+tự chạy lại một lượt mới chỉ vì nhận thay đổi standalone. Các số liệu này
+là snapshot cuối lượt, không phải kết quả của crawler standalone mới.
+
 ## Sửa lỗi entry point sau cập nhật main ngày 25/10/2026
 
 Commit `b27440f` thay `src/milestone1_crawler.py` tích hợp bằng bản standalone.

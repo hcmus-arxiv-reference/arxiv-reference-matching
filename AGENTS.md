@@ -129,6 +129,21 @@ Tài liệu này dành cho agent lập trình (Codex) làm việc **thay mặt N
   launch và `range-run.json`; không dùng PID cũ trong hội thoại để restart.
 - Chi tiết sửa và giới hạn: `docs/lieu-integration.md`.
 
+### Nhận thêm commit remote e5be40e ngày 2026-10-25
+
+- Đã nhận commit `e5be40e` của `langtucod0n`: Range download và cooldown
+  trong standalone, benchmark nhiều đoạn, công cụ gộp benchmark và TLS
+  diagnosis. Xung đột entry point được giải quyết bằng cách đưa source
+  remote đầy đủ vào `src/lieu_standalone_crawler.py`, giữ CLI/cache tích hợp.
+- HTTP Range mới chưa áp dụng cho client của pipeline tích hợp. Counter
+  `done.json` và cooldown log của công cụ benchmark mới thuộc standalone;
+  không dùng chúng thay tiến độ/receipt của Range Bảo.
+- Lượt retry trước kết thúc lúc 18:19 ngày 25/10 với 4.941/5.000 Publication
+  hoàn chỉnh, vẫn còn 59; không còn worker/watcher lúc merge. Không khởi
+  động thêm crawler trong lần đồng bộ code này.
+- Sau merge **152 test và 15 subtest đạt**. Range download/TLS mới của
+  standalone chưa kiểm chứng mạng thật; xem `docs/lieu-integration.md`.
+
 ## 2. Thuật ngữ (bắt buộc dùng đúng)
 
 | Thuật ngữ | Nghĩa |

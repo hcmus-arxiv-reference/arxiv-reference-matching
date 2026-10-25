@@ -6,7 +6,7 @@ keeps its batch-discovery and one-S2-worker design while using the shared
 schema, bounded HTTP, full S2 pagination and checksum-verified checkpoints.
 It resumes the existing main cache without renaming or copying raw files.
 Kept in this module so standalone crawler updates cannot replace the public
-CLI/cache contract. The standalone b27440f implementation remains separately
+CLI/cache contract. The standalone implementation through e5be40e remains separately
 in src.lieu_standalone_crawler and is not used by this pipeline.
 """
 from __future__ import annotations

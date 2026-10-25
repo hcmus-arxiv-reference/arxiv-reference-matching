@@ -1,6 +1,6 @@
 """Stable CLI for the checksum-verified Range crawler.
 
-The standalone implementation from b27440f is preserved separately in
+The standalone implementation (updated through e5be40e) is preserved separately in
 src.lieu_standalone_crawler; it does not implement this cache contract.
 Run the integrated crawler with: python -m src.milestone1_crawler --data-dir data/crawl-smoke
 """

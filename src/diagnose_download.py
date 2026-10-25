@@ -15,7 +15,11 @@ Neu khong chi dinh --version, script tu chon version dau tien chua tai xong
 import argparse
 import json
 import os
+import re
+import socket
+import ssl
 import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -44,6 +48,25 @@ def record_headers(out, headers):
     out["headers"] = {k.lower(): v for k, v in headers.items() if k.lower() in SHOW_HEADERS}
     length = headers.get("Content-Length", "")
     out["expected"] = int(length) if length.isdigit() else None
+
+
+SECURITY_WORDS = re.compile(
+    r"kaspersky|eset|avast|avg|bitdefender|norton|mcafee|fortinet|fortigate|zscaler|sophos|trend micro|"
+    r"symantec|cisco|palo alto|bluecoat|netskope|check point|webroot|antivirus|web shield|firewall|"
+    r"gateway|proxy|bkav|cmc|vnpt", re.I)
+
+
+def tls_issuer(url):
+    """Ai cap chung chi TLS cho ket noi nay? (Phan mem diet virus quet HTTPS thuong chen chung chi cua chinh no)."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https":
+        return None
+    ctx = ssl.create_default_context()
+    with socket.create_connection((parsed.hostname, parsed.port or 443), timeout=15) as sock:
+        with ctx.wrap_socket(sock, server_hostname=parsed.hostname) as tls:
+            cert = tls.getpeercert()
+    issuer = dict(item[0] for item in cert.get("issuer", ()))
+    return issuer.get("organizationName", ""), issuer.get("commonName", "")
 
 
 def attempt(name, fn):
@@ -144,6 +167,25 @@ def main():
         print(f"[{verdict:4s}] {name}")
         print(f"        status={r['status']}  bytes={got}  time={r['seconds']:.1f}s"
               + (f"  error={r['error']}" if r["error"] else ""))
+
+    # So byte nhan duoc truoc khi dut: neu LUON la boi so cua 1 MiB thi day la dau hieu ben gui cat theo khoi
+    counts = [int(n) for r in results if r["error"] for n in re.findall(r"IncompleteRead\((\d+) bytes read", r["error"])]
+    if counts:
+        mib = [c % 1048576 == 0 for c in counts]
+        print(f"\nSo byte nhan duoc truoc khi dut: {', '.join(f'{c:,}' for c in counts)}")
+        if all(mib):
+            print("=> TAT CA deu la boi so cua 1 MiB. (Da kiem tra: khi may chu cat o vi tri bat ky, so nay KHONG tron khoi 1 MiB.)")
+            print("   Day la dau hieu ben GUI (may chu, CDN hoac proxy/phan mem tren duong di) cat theo tung khoi 1 MiB.")
+
+    try:
+        issuer = tls_issuer(url)
+    except Exception as exc:
+        issuer = None
+        print(f"\nKhong doc duoc chung chi TLS: {type(exc).__name__}")
+    if issuer:
+        org, cn = issuer
+        flag = "  <-- GIONG phan mem bao mat/proxy: co the dang quet HTTPS" if SECURITY_WORDS.search(f"{org} {cn}") else ""
+        print(f"\nChung chi TLS do: O={org!r} CN={cn!r}{flag}")
 
     shown = next((r for r in results if r["headers"]), None)
     if shown:
