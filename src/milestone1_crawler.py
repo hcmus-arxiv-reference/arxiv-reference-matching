@@ -19,6 +19,7 @@ import io
 import json
 import os
 import posixpath
+import random
 import re
 import tarfile
 import time
@@ -150,9 +151,9 @@ def _drop_session(throttle):
 
 
 def _retry_after(value, default):
-    """Số giây server bảo chờ (Retry-After). Giới hạn tối đa 120 giây để không ngủ im lặng hàng giờ."""
+    """Số giây server bảo chờ (Retry-After), không cắt ngắn; không đọc được thì trả default."""
     try:
-        return min(max(float(value), 1.0), 120.0)
+        return max(float(value), 1.0)
     except (TypeError, ValueError):
         return default
 
@@ -162,6 +163,9 @@ MAX_FILE_SECONDS = 600     # file nhỏ: tối đa 10 phút cho một file
 MIN_SPEED = 10_000         # byte/giây (10 KB/s): chậm hơn mức này thì coi như vô vọng
 UNKNOWN_SIZE_SECONDS = 3600  # server không báo dung lượng: cho tối đa 1 tiếng
 PROGRESS_EVERY = 60        # giây giữa 2 dòng báo tiến độ khi đang tải file lớn
+HTTP_WAITS = (15, 30, 60, 120, 240)   # giây chờ sau lần 429/5xx thứ 1, 2, 3, 4, 5 liên tiếp (lệch ngẫu nhiên ±20%)
+BIG_PARTIAL = 20_000_000              # đang giữ từ 20 MB: được thêm một lần thử (bậc chờ 240 giây), vì bỏ cuộc thì mất công tải lại
+RETRY_AFTER_MAX = 900                 # server bảo chờ lâu hơn 15 phút: bỏ bài này, để cơ chế cooldown xử lý
 
 
 def _limit(total):
@@ -183,7 +187,8 @@ def _fetch_bytes(url, throttle, headers, retries, raw):
     """
     Vòng tải có thử lại. Với file nguồn (raw=True) còn biết TẢI TIẾP phần còn thiếu khi kết nối đứt:
       - dữ liệu nhận được được giữ lại trong buf, lần thử sau xin tiếp bằng 'Range: bytes=<đã có>-'
-        (kèm 'If-Range' = ETag để chắc file không đổi giữa các lần);
+        (kèm 'If-Range' = ETag MẠNH để chắc file không đổi giữa các lần; ETag yếu 'W/...' thì không gửi
+        vì theo RFC 7233 server phải bỏ qua Range và gửi lại từ đầu);
       - nếu máy chủ không hỗ trợ Range (trả 200) thì tải lại từ đầu như bình thường;
       - lần thử mà đi XA HƠN mọi lần trước (buf dài hơn mức cao nhất từng đạt) không bị tính là thất bại,
         nên file lớn bị cắt nhiều lần vẫn tải xong được; tải đi tải lại mà không xa hơn thì bị tính lỗi;
@@ -205,7 +210,7 @@ def _fetch_bytes(url, throttle, headers, retries, raw):
         resuming = raw and can_range and len(buf) > 0
         if resuming:
             req_headers["Range"] = f"bytes={len(buf)}-"
-            if validator:
+            if validator and not validator.startswith("W/"):    # ETag yếu: server bỏ qua Range, nên không gửi
                 req_headers["If-Range"] = validator
         best_before = best
         if attempt > 0:
@@ -226,7 +231,10 @@ def _fetch_bytes(url, throttle, headers, retries, raw):
                             buf.clear()                         # trả lời không khớp: bỏ phần đã có, tải lại từ đầu
                             total, can_range = None, False
                             raise requests.exceptions.ChunkedEncodingError("inconsistent Content-Range on resume")
+                        print(f"  [206] resumed at {len(buf) / 1e6:.1f} MB: {url}", flush=True)
                     else:                                       # 200: thân phản hồi là file từ byte 0
+                        if resuming:
+                            print(f"  [200] server ignored Range, restarting from 0: {url}", flush=True)
                         buf.clear()
                         length = resp.headers.get("Content-Length", "")
                         total = int(length) if length.isdigit() else None
@@ -268,6 +276,7 @@ def _fetch_bytes(url, throttle, headers, retries, raw):
 
         if code in (200, 206):
             return data
+        resp.close()                                            # mã khác: không cần thân phản hồi, không giữ kết nối mở
         if code == 404:
             return None
         if code == 403:
@@ -280,9 +289,17 @@ def _fetch_bytes(url, throttle, headers, retries, raw):
             continue
         if code in (429, 500, 502, 503, 504):
             fails += 1
-            if fails > retries:
+            holding_big = raw and len(buf) >= BIG_PARTIAL       # đang giữ phần lớn: kiên nhẫn thêm một lần
+            if fails > retries + (1 if holding_big else 0):
                 resp.raise_for_status()
-            wait_s = max(_retry_after(resp.headers.get("Retry-After"), 0), 5 * 2 ** (fails - 1))
+            ra = _retry_after(resp.headers.get("Retry-After"), None)
+            if ra is not None and ra > RETRY_AFTER_MAX:
+                print(f"  [HTTP {code}] server asks to wait {ra:.0f}s: giving up on {url}", flush=True)
+                resp.raise_for_status()                         # bỏ bài này; lỗi tính vào bộ đếm để cooldown xử lý
+            if ra is not None:
+                wait_s = ra                                     # server nói chờ bao lâu thì chờ đúng vậy
+            else:
+                wait_s = HTTP_WAITS[min(fails - 1, len(HTTP_WAITS) - 1)] * random.uniform(0.8, 1.2)
             print(f"  [HTTP {code}] {url} -> sleeping {wait_s:.0f}s before retry", flush=True)
             time.sleep(wait_s)
             continue
@@ -488,7 +505,7 @@ def is_blocking_error(exc):
     """Lỗi kiểu bị chặn / mạng / quá tải (nên nghỉ rồi thử lại), khác với lỗi riêng của từng bài."""
     if isinstance(exc, NETWORK_ERRORS):
         return True
-    return isinstance(exc, RuntimeError) and "403" in str(exc)
+    return isinstance(exc, RuntimeError) and ("403" in str(exc) or str(exc).startswith("Timeout:"))
 
 
 def rss_mb():
