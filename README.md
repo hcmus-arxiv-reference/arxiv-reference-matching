@@ -2,6 +2,12 @@
 
 Đồ án Nhập môn Khoa học Dữ liệu: thu thập bài báo arXiv, phân tích nguồn LaTeX thành cấu trúc phân cấp, rồi ghép các trích dẫn BibTeX với metadata tham khảo bằng một pipeline học máy.
 
+> **M1 — quyết định nhóm 25/10/2026:** CLI `python -m src.milestone1_crawler`
+> mặc định dùng cấu trúc standalone của `langtucod0n`, với checkpoint đã sửa.
+> Thử lại 59 Publication bằng bản gốc `e5be40e` chưa phục hồi thêm dữ liệu:
+> 47 source Version 404, 1 Version 429, 15 Publication S2 404.
+> Range vẫn đủ 4.941/5.000 Publication. Xem [kết quả và cách chạy M1 mới](docs/m1-standalone-trial.md).
+
 > **Cập nhật M2 (2026-10-24):** đã triển khai lớp tìm root/gom source,
 > CLI `python -m scripts.assemble_source` và ba sửa đổi schema được Bảo duyệt.
 > Mẫu thật: 5 Version sẵn sàng ở lớp gom, 1 cần review, 2 không có TeX;
@@ -65,10 +71,17 @@ Lượt tải local toàn Range 5.000 ID dùng `scripts.crawl_range`, có checkp
 tiến độ và retry phần thiếu. Xem [vận hành toàn Range](docs/full-range-crawl.md)
 để theo dõi, dừng an toàn và tiếp tục; không chạy thêm khi worker cũ còn hoạt động.
 
-Sau khi tích hợp nhánh Liễu, entry point tiếp tục Range là
-`python -m src.milestone1_crawler --data-dir data/crawl-smoke`:
-discovery theo lô, S2 chạy đồng thời với source, dùng lại cache/checksum hiện có.
-Xem [phạm vi merge và cách chạy bản Liễu](docs/lieu-integration.md).
+CLI M1 mặc định dùng layout `data/standalone/<publication-key>/meta.json`,
+`vN/status.json`, `references*.json`, `done.json` của Liễu:
+
+```sh
+python -m src.milestone1_crawler --ids-file ids.txt --data-dir data/standalone
+```
+
+Cache cũ `data/crawl-smoke/` vẫn giữ nguyên; để vận hành nó cần chọn rõ
+`python -m src.milestone1_crawler --engine integrated --data-dir data/crawl-smoke`.
+Chưa chuyển toàn bộ 5.000 Publication sang layout mới. Xem
+[kết quả thử và giới hạn](docs/m1-standalone-trial.md).
 
 Nhóm trưởng: [NTBao-coder](https://github.com/NTBao-coder). Thành viên: [ngochai06](https://github.com/ngochai06), [nhminh107](https://github.com/nhminh107), [langtucod0n](https://github.com/langtucod0n).
 

@@ -1,18 +1,17 @@
 # Hướng dẫn: crawl 5000 ID bị gián đoạn nhưng vẫn đo benchmark đúng
 
-> **Lưu ý tích hợp main (25/10/2026):** hướng dẫn dưới đây dùng layout
-> standalone (`done.json`, `status.json`, `logs/cooldowns.jsonl`). Bản đó
-> hiện nằm ở `src/lieu_standalone_crawler.py`; tên module crawler trong
-> các ví dụ nguồn bên dưới cần đổi tương ứng khi dùng standalone. Cache
-> `data/crawl-smoke/` dùng pipeline tích hợp, xem [cách resume và giới hạn
-> benchmark](lieu-integration.md). Không chạy hai crawler cùng lúc và không
-> dùng counter `done.json` để báo độ đầy đủ của cache tích hợp.
+> **Cập nhật tối 25/10/2026:** CLI `src.milestone1_crawler` mặc định dùng
+> standalone, có kiểm tra checksum thay vì chỉ kiểm tra file tồn tại.
+> Đặt `--data-dir data/standalone` cho **cả benchmark lẫn crawler** và
+> `--cooldown-log data/standalone/logs/cooldowns.jsonl` cho công cụ gộp.
+> Cache cũ `data/crawl-smoke/` chưa chuyển layout; không dùng counter
+> `done.json` của benchmark để đo cache đó. Xem [kết quả và giới hạn](m1-standalone-trial.md).
 
 ## 1. Vấn đề
 
 Crawl 5000 ID mất nhiều giờ, có thể bị ngắt giữa chừng (mất mạng, máy ngủ, Ctrl+C, crawler tự dừng sau 15 lỗi liên tiếp).
 
-- **Crawler** vốn đã chạy tiếp được: bài có `done.json` và version có `status.json` được bỏ qua.
+- **Crawler** chạy tiếp được: chỉ bỏ qua Publication/Version sau kiểm tra receipt và checksum.
 - **`benchmark.py` bản cũ** thì không: kết quả ghi đè mỗi lần chạy, và nếu bị Ctrl+C hay tắt máy khi đang đo thì không ghi gì cả.
 
 Cách giải quyết: chia lần crawl thành nhiều **đoạn**, mỗi đoạn đo vào một thư mục riêng, cuối cùng **gộp** lại.

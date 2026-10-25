@@ -144,6 +144,31 @@ Tài liệu này dành cho agent lập trình (Codex) làm việc **thay mặt N
 - Sau merge **152 test và 15 subtest đạt**. Range download/TLS mới của
   standalone chưa kiểm chứng mạng thật; xem `docs/lieu-integration.md`.
 
+### Chuyển hướng M1 theo quyết định nhóm tối 2026-10-25
+
+- Người dùng chốt nhóm dùng cấu trúc crawler `langtucod0n` và yêu cầu thử
+  tải 59 Publication còn thiếu. CLI `src.milestone1_crawler` nay mặc định
+  standalone; cache cũ chỉ vận hành với `--engine integrated` rõ ràng.
+  Không tự quay lại kiến trúc tích hợp làm mặc định khi nhận commit remote.
+- Đã chạy snapshot nguyên vẹn `e5be40e` cho các tác vụ thiếu của đủ 59 ID,
+  21:31–21:43 giờ Việt Nam, 723,7 giây: 47 source Version HTTP 404,
+  `2508.07292v2` HTTP 429 sau retry; 15 Publication S2 HTTP 404.
+  Không phục hồi thêm dữ liệu. 44 Publication thiếu source và 15 thiếu S2
+  không chồng nhau trong danh sách này. Cache toàn Range kiểm tra lại vẫn
+  4.941/5.000 hoàn chỉnh, 7.763/7.811 Version hợp lệ.
+- Đã sửa trực tiếp bản standalone: checksum/status format 2, 404 không phải
+  `empty`, archive hỏng không phải thành công, done phải đủ mọi tác vụ,
+  phân trang S2, lỗi theo Version, CLI data-dir/lock, User-Agent, response
+  close và kiểm tra Range. Snapshot thử bản gốc nằm trong data, không sửa nó.
+- Mẫu mạng thật của bản sửa: 02872 đủ TeX v1/v2, 02874 PDF hợp lệ và S2;
+  02961 source v1/v2 vẫn 404 được ghi incomplete. Resume hai bài đủ không
+  gọi mạng. Không cộng mẫu này vào số Publication phục hồi.
+- Chưa migrate toàn corpus, chưa hoàn thiện revised_dates/export Parquet
+  cho standalone, chưa benchmark Colab hoặc nối watcher mới. Không thay
+  schema hay làm tiếp M2 trong lượt này. Chi tiết: `docs/m1-standalone-trial.md`.
+- Kiểm thử cuối lượt: **169 test và 15 subtest đạt**, không xfail; runtime
+  thêm arxiv 4.0.1 và requests 2.34.2 trong `/private/tmp/arxiv-lieu-venv`.
+
 ## 2. Thuật ngữ (bắt buộc dùng đúng)
 
 | Thuật ngữ | Nghĩa |

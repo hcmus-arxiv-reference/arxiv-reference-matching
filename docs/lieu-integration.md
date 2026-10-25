@@ -1,5 +1,11 @@
 # Tích hợp nhánh Liễu vào main
 
+> **Quyết định mới tối 25/10/2026:** nhóm chọn cấu trúc standalone của
+> `langtucod0n`. CLI mặc định đã đổi sang bản đó, có sửa checkpoint và
+> phân trang S2. Các mục bên dưới là lịch sử tích hợp; lệnh dùng cache cũ
+> phải thêm `--engine integrated`. Xem [kết quả thử 59 Publication và
+> cách chạy hiện tại](m1-standalone-trial.md).
+
 ## Nhận bản remote e5be40e ngày 25/10/2026
 
 Commit mới của `langtucod0n` bổ sung HTTP Range/If-Range cho standalone,

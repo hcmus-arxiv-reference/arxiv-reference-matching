@@ -1,10 +1,12 @@
 # Milestone 1 - Tài liệu kỹ thuật pipeline crawl dữ liệu arXiv
 
-> **Phạm vi sau merge 25/10/2026:** nội dung và cấu trúc dữ liệu mô tả
-> bản standalone, được giữ tại `src/lieu_standalone_crawler.py`. Các ví dụ
-> tên module crawler trong tài liệu nguồn bên dưới thuộc bản standalone.
-> Entry point `src.milestone1_crawler` trên main dùng pipeline/cache tích
-> hợp; xem [hợp đồng, CLI và kiểm chứng hiện hành](lieu-integration.md).
+> **Cập nhật tối 25/10/2026:** nhóm chọn cấu trúc standalone; CLI
+> `python -m src.milestone1_crawler` nay mặc định dùng bản đó. Dùng lệnh
+> dạng `python -m src.milestone1_crawler` thay cho `python src/milestone1_crawler.py`
+> trong các ví dụ lịch sử dưới đây. Cache mặc định là `data/standalone`;
+> phải truyền cùng đường dẫn cho benchmark/analyze/make_stats.
+> Receipt v2 kiểm tra checksum; 404/archive hỏng không còn thành `empty`/`done`;
+> S2 đã dùng phân trang. Xem [kiểm chứng và các việc còn thiếu](m1-standalone-trial.md).
 
 Môn: Introduction to Data Science - arXiv Project - Milestone 1 (Data Crawling).
 Đề gốc: https://hcmus-cs-ta.github.io/lab-book/intro-ds/statement/crawling (trang tổng quan: https://hcmus-cs-ta.github.io/lab-book/intro-ds/statement/).

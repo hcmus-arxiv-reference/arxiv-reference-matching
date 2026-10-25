@@ -1,10 +1,9 @@
 # Crawl toàn Range của Bảo
 
-Cập nhật 25/10/2026: dùng entry point tích hợp từ nhánh Liễu theo
-[lieu-integration.md](lieu-integration.md). Checkpoint, dữ liệu và cơ chế
-retry/thông báo dưới đây được giữ nguyên.
-CLI `src.milestone1_crawler` hiện chuyển tiếp tới `src.crawl.lieu_pipeline`;
-bản standalone mới của upstream được giữ riêng, không dùng để resume cache này.
+Cập nhật tối 25/10/2026: tài liệu này dành cho **cache tích hợp hiện có**.
+CLI M1 mặc định đã đổi sang standalone theo quyết định nhóm; phải thêm
+`--engine integrated` để dùng các lệnh resume dưới đây. Checkpoint và dữ liệu
+cũ giữ nguyên. Xem [thử nghiệm và cấu trúc M1 mới](m1-standalone-trial.md).
 
 Range: `2508.02872`–`2508.07871`, bao gồm hai đầu, **5.000 ID được giao**.
 Số ID được giao không đồng nghĩa số Publication đã tải đủ.
@@ -50,7 +49,7 @@ cùng tải arXiv. Kiểm tra PID trong `range-run.json` bằng `ps` khi cần.
 ```sh
 ARXIV_RANGE_PREFIX=2508 ARXIV_RANGE_START=2872 ARXIV_RANGE_END=7871 \
   /private/tmp/arxiv-lieu-venv/bin/python -u -m src.milestone1_crawler \
-  --data-dir data/crawl-smoke --discover-batch 50 --max-passes 3 --retry-delay 1800
+  --engine integrated --data-dir data/crawl-smoke --discover-batch 50 --max-passes 3 --retry-delay 1800
 ```
 
 Đường dẫn Python trên là môi trường đã kiểm thử của máy này; nếu môi trường
