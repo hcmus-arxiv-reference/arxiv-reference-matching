@@ -1,12 +1,25 @@
-"""Stable CLI for the checksum-verified Range crawler.
+"""M1 uses langtucod0n's standalone structure by the team's 2026-10-25 decision.
 
-The standalone implementation (updated through e5be40e) is preserved separately in
-src.lieu_standalone_crawler; it does not implement this cache contract.
-Run the integrated crawler with: python -m src.milestone1_crawler --data-dir data/crawl-smoke
+Use --engine integrated explicitly to operate the existing verified Range cache.
+Python imports of the earlier adapter remain available for existing callers.
 """
-from src.crawl.lieu_pipeline import BatchedDiscovery, LieuPipeline, main
+import argparse
+
+from src.crawl.lieu_pipeline import BatchedDiscovery, LieuPipeline
 
 __all__ = ["BatchedDiscovery", "LieuPipeline", "main"]
+
+
+def main(argv=None):
+    """Choose a cache contract explicitly; standalone is the new default."""
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--engine", choices=("standalone", "integrated"), default="standalone")
+    args, remaining = parser.parse_known_args(argv)
+    if args.engine == "integrated":
+        from src.crawl.lieu_pipeline import main as run
+    else:
+        from src.lieu_standalone_crawler import main as run
+    return run(remaining)
 
 if __name__ == "__main__":
     raise SystemExit(main())

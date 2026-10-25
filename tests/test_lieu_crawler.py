@@ -89,7 +89,7 @@ def test_public_cli_resumes_existing_cache_without_network(tmp_path, monkeypatch
     monkeypatch.setattr(lieu_pipeline, 'get_settings', lambda: settings)
     monkeypatch.setattr(lieu_pipeline, 'HttpClient', lambda *args, **kwargs: client)
     monkeypatch.setattr(lieu_pipeline.signal, 'signal', lambda *args: None)
-    assert main(['--max-passes', '1']) == 0
+    assert main(['--engine', 'integrated', '--max-passes', '1']) == 0
     assert (tmp_path/'raw/2508-02872/v1/source.json').read_bytes() == before
     report = json.loads((tmp_path/'manifests/range-run.json').read_text())
     assert report['visited_this_pass'] == 0 and report['counts']['complete'] == 1

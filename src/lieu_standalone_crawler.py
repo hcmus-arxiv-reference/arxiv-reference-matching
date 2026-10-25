@@ -15,21 +15,30 @@ Cài thư viện:
 """
 import argparse
 import gzip
+import hashlib
 import io
 import json
 import os
 import posixpath
 import re
+import shutil
 import tarfile
 import time
+import tempfile
 import traceback
 import zlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from urllib.parse import quote, urlencode, urlsplit
 
 import arxiv
 import requests
 import urllib3
+from filelock import FileLock
+
+from src.common.config import get_settings, load_env
+from src.crawl.source import extract_source
+from src.crawl.storage import require_id
 
 try:
     import psutil  # tùy chọn, dùng để đo RAM
@@ -39,9 +48,20 @@ except ImportError:
 # ----------------------------------------------------------------------
 # 1. Cấu hình
 # ----------------------------------------------------------------------
+load_env()
 CONTACT = os.environ.get("CONTACT_EMAIL", "your-email@example.com")
 USER_AGENT = f"IntroDS-student-crawler/0.1 (mailto:{CONTACT})"
 S2_API_KEY = os.environ.get("S2_API_KEY")
+
+
+class ArxivSession(requests.Session):
+    """Keep the contact header even when arxiv.py supplies its own User-Agent."""
+    def get(self, url, **kwargs):
+        if urlsplit(url).hostname != "export.arxiv.org":
+            raise ValueError("arXiv requests must use export.arxiv.org")
+        headers = requests.structures.CaseInsensitiveDict(kwargs.pop("headers", {}))
+        headers["User-Agent"] = USER_AGENT
+        return super().get(url, headers=headers, allow_redirects=False, **kwargs)
 
 DATA_DIR = Path("data")
 LOG_FILE = Path("logs") / "run_log.jsonl"
@@ -109,6 +129,9 @@ class Throttle:
 ARXIV_THROTTLE = Throttle(3.0)                          # arXiv: >= 3 giây
 S2_THROTTLE = Throttle(1.1 if S2_API_KEY else 3.2)      # S2: 1/giây (có key)
 ARXIV_CLIENT = arxiv.Client(page_size=100, delay_seconds=3.0, num_retries=3)
+ARXIV_CLIENT.query_url_format = "https://export.arxiv.org/api/query?{}"
+ARXIV_CLIENT._session.close()
+ARXIV_CLIENT._session = ArxivSession()
 
 
 # ----------------------------------------------------------------------
@@ -134,7 +157,7 @@ def _session_for(throttle):
     """
     session = _SESSIONS.get(id(throttle))
     if session is None:
-        session = requests.Session()
+        session = ArxivSession() if throttle is ARXIV_THROTTLE else requests.Session()
         session.headers.update({"User-Agent": USER_AGENT})
         if ACCEPT_IDENTITY:
             session.headers["Accept-Encoding"] = "identity"
@@ -157,6 +180,7 @@ def _retry_after(value, default):
 
 
 MAX_ATTEMPTS = 60     # chặn vòng lặp vô tận: tối đa số lần gọi cho MỘT file, kể cả khi mỗi lần đều tiến thêm
+MAX_DOWNLOAD_BYTES = 128 * 1024 * 1024
 
 
 def _parse_content_range(value):
@@ -165,6 +189,12 @@ def _parse_content_range(value):
     if not m:
         return None
     return int(m.group(1)), int(m.group(2)), int(m.group(3)) if m.group(3).isdigit() else None
+
+
+def _range_validator(headers):
+    """If-Range requires a strong ETag or a Last-Modified timestamp."""
+    etag = headers.get("ETag")
+    return etag if etag and not etag.startswith("W/") else headers.get("Last-Modified")
 
 
 def _fetch_bytes(url, throttle, headers, retries, raw):
@@ -190,17 +220,31 @@ def _fetch_bytes(url, throttle, headers, retries, raw):
                 req_headers["If-Range"] = validator
         before = len(buf)
         throttle.wait()
+        resp, retry_sleep = None, 0
         try:
             resp = session.get(url, headers=req_headers, timeout=60, stream=True)
             code = resp.status_code
             data = None
             if code in (200, 206):
                 if not raw:
-                    data = resp.content                         # đã giải nén nếu server nén (dùng cho JSON)
+                    chunks, size = [], 0
+                    for chunk in resp.iter_content(1 << 16):
+                        size += len(chunk)
+                        if size > MAX_DOWNLOAD_BYTES:
+                            raise ValueError("Response exceeds download limit")
+                        chunks.append(chunk)
+                    data = b"".join(chunks)  # requests decodes JSON transport compression.
                 else:
+                    cr = None
+                    if code == 206 and not resuming:
+                        raise requests.exceptions.ChunkedEncodingError("unsolicited partial response")
                     if code == 206 and resuming:
                         cr = _parse_content_range(resp.headers.get("Content-Range"))
-                        if cr is None or cr[0] != len(buf) or (total is not None and cr[2] not in (None, total)):
+                        received_validator = _range_validator(resp.headers)
+                        if (cr is None or cr[0] != len(buf) or cr[1] < cr[0]
+                                or (cr[2] is not None and cr[1] >= cr[2])
+                                or (total is not None and cr[2] not in (None, total))
+                                or (received_validator and received_validator != validator)):
                             buf.clear()                         # trả lời không khớp: bỏ phần đã có, tải lại từ đầu
                             total, can_range = None, False
                             raise requests.exceptions.ChunkedEncodingError("inconsistent Content-Range on resume")
@@ -209,9 +253,16 @@ def _fetch_bytes(url, throttle, headers, retries, raw):
                         length = resp.headers.get("Content-Length", "")
                         total = int(length) if length.isdigit() else None
                         can_range = resp.headers.get("Accept-Ranges", "").lower() == "bytes"
-                        validator = resp.headers.get("ETag") or resp.headers.get("Last-Modified")
+                        validator = _range_validator(resp.headers)
+                        can_range = can_range and bool(validator)
+                    if total is not None and total > MAX_DOWNLOAD_BYTES:
+                        raise ValueError("Response exceeds download limit")
                     for chunk in resp.raw.stream(1 << 16, decode_content=False):
                         buf.extend(chunk)                       # giữ lại từng khối: nếu đứt giữa chừng vẫn còn phần đã nhận
+                        if len(buf) > MAX_DOWNLOAD_BYTES:
+                            raise ValueError("Response exceeds download limit")
+                    if cr and len(buf) != cr[1] + 1:
+                        raise requests.exceptions.ChunkedEncodingError("Content-Range length mismatch")
                     if total is not None and len(buf) != total:
                         raise requests.exceptions.ChunkedEncodingError(
                             f"incomplete body: got {len(buf)} of {total} bytes")
@@ -224,10 +275,14 @@ def _fetch_bytes(url, throttle, headers, retries, raw):
                 fails += 1
             if fails > retries or attempt == MAX_ATTEMPTS - 1:
                 raise
-            time.sleep(5 * 2 ** max(fails - 1, 0))
+            retry_sleep = 5 * 2 ** max(fails - 1, 0)
             continue
         finally:
+            if resp is not None:
+                resp.close()  # Release even 404/429 bodies before opening another connection.
             throttle.mark()
+            if retry_sleep:
+                time.sleep(retry_sleep)
 
         if code in (200, 206):
             return data
@@ -237,6 +292,8 @@ def _fetch_bytes(url, throttle, headers, retries, raw):
             raise RuntimeError(
                 f"403 for {url}: check host (export.arxiv.org) and User-Agent"
             )
+        if 300 <= code < 400:
+            raise ValueError("Unexpected redirect from source endpoint")
         if code == 416 and resuming:                            # vị trí xin tiếp không hợp lệ: tải lại từ đầu
             buf.clear()
             total, can_range = None, False
@@ -499,7 +556,7 @@ def discover_many(ids, batch_size=50):
     found, todo = {}, []
     for pid in ids:
         paper_dir = DATA_DIR / safe_dirname(pid)
-        if (paper_dir / "done.json").exists():
+        if publication_complete(paper_dir):
             continue                                  # đã xong, khỏi hỏi
         if (paper_dir / "meta.json").exists():
             found[pid] = read_json(paper_dir / "meta.json")   # đã hỏi từ lần chạy trước
@@ -513,7 +570,7 @@ def discover_many(ids, batch_size=50):
         try:
             results = list(ARXIV_CLIENT.results(arxiv.Search(id_list=chunk)))
         except Exception as exc:
-            print(f"discover batch {i // batch_size} failed ({exc!r}); will ask one by one")
+            print(f"discover batch {i // batch_size} failed ({type(exc).__name__}); will ask one by one")
             continue
         finally:
             ARXIV_THROTTLE.mark()
@@ -530,62 +587,158 @@ def discover_many(ids, batch_size=50):
     return found
 
 
+def _sha256(path):
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def verified_status(vdir):
+    """Accept only v2 receipts with an exact, checksum-verified file inventory."""
+    try:
+        if any(p.is_symlink() for p in (vdir, *vdir.parents)):
+            return None
+        rec = read_json(vdir / "status.json")
+        if (rec.get("format") != 2 or rec["status"] not in {"ok", "empty"}
+                or f"v{rec['version']}" != vdir.name
+                or safe_dirname(rec["arxiv_id"]) != vdir.parent.name):
+            return None
+        found = {p.relative_to(vdir).as_posix() for p in vdir.rglob("*")
+                 if p.is_file() and p.suffix.lower() in {".tex", ".bib"}}
+        if found != set(rec["checksums"]) or found != set(rec["files"]):
+            return None
+        for name, digest in rec["checksums"].items():
+            path = vdir / name
+            if (_safe_rel(name) != name or any(p.is_symlink() for p in (path, *path.parents))
+                    or _sha256(path) != digest):
+                return None
+        if (rec["status"] == "ok") != any(n.lower().endswith(".tex") for n in found):
+            return None
+        return rec
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def download_version(paper_id, version, paper_dir):
-    """Tải 1 version. Đã làm rồi (có status.json) thì bỏ qua = checkpoint."""
+    """Keep the standalone layout; retry 404/errors and verify successful cache."""
+    require_id(paper_id)
+    if type(version) is not int or version < 1:
+        raise ValueError("Version must be a positive integer")
     vdir = paper_dir / f"v{version}"
-    status_file = vdir / "status.json"
-    if status_file.exists():
-        return read_json(status_file)
-
+    if any(p.is_symlink() for p in (vdir, *vdir.parents)):
+        raise ValueError("Symlink in source destination")
+    cached = verified_status(vdir)
+    if cached:
+        return cached
     t0 = time.perf_counter()
-    url = f"https://export.arxiv.org/src/{paper_id}v{version}"
-    data = fetch_bytes(url, ARXIV_THROTTLE)
-    vdir.mkdir(parents=True, exist_ok=True)
-
+    data = fetch_bytes(f"https://export.arxiv.org/src/{paper_id}v{version}", ARXIV_THROTTLE)
     if data is None:
-        rec = {"version": version, "kind": "not_found", "status": "empty", "files": [],
-               "bytes_downloaded": 0, "bytes_before": 0, "bytes_after": 0}
-    else:
-        kind, files, after, everything = extract_tex_bib(data, vdir)
-        rec = {"version": version, "kind": kind,
-               "status": "ok" if files else "empty",   # empty = bản ghi rỗng
-               "files": files,
-               "bytes_downloaded": len(data),   # file nén tải về
-               "bytes_before": everything,      # giải nén đầy đủ (có ảnh)
-               "bytes_after": after}            # chỉ .tex và .bib
-    rec["seconds"] = round(time.perf_counter() - t0, 3)
-    write_json(status_file, rec)
+        rec = {"format": 2, "arxiv_id": paper_id, "version": version,
+               "kind": "not_found", "status": "unavailable", "http_status": 404,
+               "files": [], "bytes_downloaded": 0, "bytes_before": 0, "bytes_after": 0,
+               "seconds": round(time.perf_counter() - t0, 3)}
+        write_json(vdir / "status.json", rec)
+        return rec
+    paper_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".source-", dir=paper_dir) as temporary:
+        staging = Path(temporary) / f"v{version}"
+        tex, bib = extract_source(data, staging)
+        files = tex + bib
+        # Preserve upstream size semantics; bounded extraction has validated the payload.
+        with tempfile.TemporaryDirectory(dir=temporary) as metrics_dir:
+            kind, _, _, everything = extract_tex_bib(data, Path(metrics_dir))
+        if tex and kind == "other":
+            kind = "tex"
+        rec = {"format": 2, "arxiv_id": paper_id, "version": version,
+               "kind": kind, "status": "ok" if tex else "empty", "http_status": 200,
+               "files": files, "bytes_downloaded": len(data), "bytes_before": everything,
+               "bytes_after": sum((staging / n).stat().st_size for n in files),
+               "checksums": {n: _sha256(staging / n) for n in files},
+               "source_sha256": hashlib.sha256(data).hexdigest(),
+               "seconds": round(time.perf_counter() - t0, 3)}
+        write_json(staging / "status.json", rec)
+        # Keep a recoverable predecessor until the new Version is installed.
+        previous = paper_dir / f".v{version}.previous"
+        if previous.exists():
+            if not vdir.exists():
+                previous.rename(vdir)
+            else:
+                shutil.rmtree(previous)
+        if vdir.exists():
+            vdir.rename(previous)
+        try:
+            staging.rename(vdir)
+        except BaseException:
+            if previous.exists() and not vdir.exists():
+                previous.rename(vdir)
+            raise
+        if previous.exists():
+            shutil.rmtree(previous)
     return rec
 
 
 def fetch_and_save_refs(paper_id, paper_dir):
-    """Hỏi Semantic Scholar. Trả về (số tham khảo, số tham khảo có arXiv ID)."""
+    """Fetch every S2 page using the standalone HTTP stack, then seal both files."""
     refs_file = paper_dir / "references.json"
     all_file = paper_dir / "references_all.json"
-    if refs_file.exists() and all_file.exists():
+    if verified_references(paper_dir):
         return len(read_json(all_file)), len(read_json(refs_file))
-
-    url = (f"https://api.semanticscholar.org/graph/v1/paper/arXiv:{paper_id}"
-           f"?fields={S2_FIELDS}")
     headers = {"x-api-key": S2_API_KEY} if S2_API_KEY else {}
-    raw = fetch_bytes(url, S2_THROTTLE, headers, raw=False)
-    if raw is None:
-        return None, None
-
-    slim = []
-    for r in json.loads(raw).get("references") or []:
-        ext = r.get("externalIds") or {}
-        slim.append({
-            "s2_id": r.get("paperId"),
-            "arxiv_id": ext.get("ArXiv"),
-            "title": r.get("title"),
-            "authors": [a.get("name") for a in (r.get("authors") or [])],
-            "date": r.get("publicationDate"),
-        })
+    slim, offset = [], 0
+    while True:
+        query = urlencode({"fields": "paperId,externalIds,title,authors,publicationDate",
+                           "limit": 100, "offset": offset})
+        url = (f"https://api.semanticscholar.org/graph/v1/paper/ARXIV:{quote(paper_id, safe='')}/references?{query}")
+        raw = fetch_bytes(url, S2_THROTTLE, headers, raw=False)
+        if raw is None:
+            write_json(paper_dir / "references_status.json", {"format": 2, "status": "unavailable", "http_status": 404})
+            return None, None
+        payload = json.loads(raw)
+        if not isinstance(payload.get("data"), list):
+            raise ValueError("Invalid Semantic Scholar page")
+        for row in payload["data"]:
+            r = row.get("citedPaper") or {}
+            ext = r.get("externalIds") or {}
+            slim.append({"s2_id": r.get("paperId"), "arxiv_id": ext.get("ArXiv"),
+                         "title": r.get("title"),
+                         "authors": [a["name"] for a in (r.get("authors") or []) if a.get("name")],
+                         "date": r.get("publicationDate")})
+        following = payload.get("next")
+        if following is None:
+            break
+        if type(following) is not int or following <= offset:
+            raise ValueError("Non-advancing Semantic Scholar pagination")
+        offset = following
     with_arxiv = [x for x in slim if x["arxiv_id"]]
     write_json(all_file, slim)          # giữ hết trong máy
     write_json(refs_file, with_arxiv)   # bảng cuối chỉ cần có arXiv ID
+    write_json(paper_dir / "references_status.json", {"format": 2, "status": "ok",
+        "arxiv_id": paper_id, "pagination_complete": True,
+        "checksums": {p.name: _sha256(p) for p in (all_file, refs_file)}})
     return len(slim), len(with_arxiv)
+
+
+def verified_references(paper_dir):
+    """A partial page or stale references file is never a successful checkpoint."""
+    try:
+        rec = read_json(paper_dir / "references_status.json")
+        return (rec["format"] == 2 and rec["status"] == "ok" and rec["pagination_complete"] is True
+                and safe_dirname(rec["arxiv_id"]) == paper_dir.name
+                and set(rec["checksums"]) == {"references.json", "references_all.json"}
+                and all(_sha256(paper_dir / n) == h for n, h in rec["checksums"].items()))
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
+def publication_complete(paper_dir):
+    """Validate done.json against the actual Version and references receipts."""
+    try:
+        meta = read_json(paper_dir / "meta.json")
+        return ((paper_dir / "done.json").exists() and type(meta["n_versions"]) is int
+                and meta["n_versions"] > 0 and safe_dirname(meta["arxiv_id"]) == paper_dir.name
+                and verified_references(paper_dir)
+                and all(verified_status(paper_dir / f"v{v}") for v in range(1, meta["n_versions"] + 1)))
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
 
 
 # ----------------------------------------------------------------------
@@ -594,8 +747,10 @@ def fetch_and_save_refs(paper_id, paper_dir):
 def process_paper(paper_id, pool, metas=None):
     paper_dir = DATA_DIR / safe_dirname(paper_id)
     done_file = paper_dir / "done.json"
-    if done_file.exists():
+    if publication_complete(paper_dir):
         return "skipped"
+    if done_file.exists():
+        done_file.replace(paper_dir / "done.invalid.json")
     paper_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()
 
@@ -617,13 +772,32 @@ def process_paper(paper_id, pool, metas=None):
     # Luồng phụ hỏi Semantic Scholar trong lúc luồng chính tải source arXiv
     refs_future = pool.submit(fetch_and_save_refs, paper_id, paper_dir)
 
-    versions = [download_version(paper_id, v, paper_dir)
-                for v in range(1, meta["n_versions"] + 1)]
-    n_refs, n_refs_arxiv = refs_future.result()   # lỗi ở luồng phụ sẽ nổ ra ở đây
+    versions, issues = [], []
+    for version in range(1, meta["n_versions"] + 1):
+        try:
+            rec = download_version(paper_id, version, paper_dir)
+            versions.append(rec)
+            if rec["status"] not in {"ok", "empty"}:
+                issues.append({"kind": "source", "version": version, "status": rec["status"],
+                               "http_status": rec.get("http_status")})
+        except Exception as exc:
+            issues.append({"kind": "source", "version": version, "error_type": type(exc).__name__,
+                           "blocking": is_blocking_error(exc),
+                           "http_status": getattr(getattr(exc, "response", None), "status_code", None)})
+    try:
+        n_refs, n_refs_arxiv = refs_future.result()
+        if n_refs is None:
+            issues.append({"kind": "references", "status": "unavailable"})
+    except Exception as exc:
+        n_refs = n_refs_arxiv = None
+        issues.append({"kind": "references", "error_type": type(exc).__name__,
+                       "blocking": is_blocking_error(exc),
+                       "http_status": getattr(getattr(exc, "response", None), "status_code", None)})
 
     summary = {
         "id": paper_id,
-        "status": "done",
+        "status": "incomplete" if issues else "done",
+        "issues": issues,
         "n_versions": meta["n_versions"],
         "versions_with_tex": sum(1 for v in versions if v["status"] == "ok"),
         "bytes_downloaded": sum(v["bytes_downloaded"] for v in versions),
@@ -635,9 +809,11 @@ def process_paper(paper_id, pool, metas=None):
         "seconds": round(time.perf_counter() - t0, 3),
         "rss_mb": rss_mb(),
     }
-    write_json(done_file, summary)   # đánh dấu xong: chạy lại sẽ bỏ qua bài này
+    write_json(paper_dir / ("incomplete.json" if issues else "done.json"), summary)
+    if not issues:
+        (paper_dir / "incomplete.json").unlink(missing_ok=True)
     append_log(summary)
-    return "done"
+    return summary["status"]
 
 
 def throttle_report(wall_seconds):
@@ -662,11 +838,15 @@ def throttle_report(wall_seconds):
 # ----------------------------------------------------------------------
 # 8. Chương trình chính
 # ----------------------------------------------------------------------
-def main():
-    ap = argparse.ArgumentParser(description="Milestone 1 crawler (arXiv + Semantic Scholar)")
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="Milestone 1 crawler (arXiv + Semantic Scholar)",
+        epilog="Default engine: standalone. For the existing Range cache use --engine integrated.")
     ap.add_argument("--id", action="append", help="một arXiv ID (có thể lặp lại)")
     ap.add_argument("--ids-file", help="file text, mỗi dòng một arXiv ID")
     ap.add_argument("--limit", type=int, help="chỉ chạy N bài đầu (để thử)")
+    ap.add_argument("--data-dir", type=Path, default=Path("data/standalone"),
+                    help="cache theo cấu trúc standalone; không dùng data/crawl-smoke")
+    ap.add_argument("--log-dir", type=Path, help="mặc định <data-dir>/logs")
     ap.add_argument("--discover-batch", type=int, default=50,
                     help="số ID hỏi arXiv mỗi lần (tối đa 100); 0 = hỏi lẻ từng bài")
     ap.add_argument("--gap-from-start", action="store_true",
@@ -677,7 +857,16 @@ def main():
                          "Chỉ dùng để thử khi nghi cách tải làm máy chủ cắt kết nối")
     ap.add_argument("--discover-only", action="store_true",
                     help="chỉ hỏi thông tin các bài (meta.json) rồi dừng; để biết tổng số version")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
+    if not 0 <= args.discover_batch <= 100 or (args.limit is not None and args.limit < 1):
+        ap.error("discover-batch must be 0..100 and limit must be positive")
+    global DATA_DIR, LOG_FILE, COOLDOWN_LOG
+    DATA_DIR = args.data_dir
+    if (DATA_DIR / "manifests/crawl.jsonl").exists():
+        ap.error("Integrated cache detected. Use --engine integrated, or a separate standalone directory.")
+    LOG_FILE = (args.log_dir or DATA_DIR / "logs") / "run_log.jsonl"
+    COOLDOWN_LOG = LOG_FILE.parent / "cooldowns.jsonl"
+    get_settings().user_agent()  # Validate contact without printing secrets.
     ARXIV_THROTTLE.from_start = args.gap_from_start
     global ACCEPT_IDENTITY
     ACCEPT_IDENTITY = not args.default_encoding
@@ -692,6 +881,15 @@ def main():
         ids = ids[: args.limit]
     if not ids:
         ap.error("no ids given (use --id or --ids-file)")
+    ids = list(dict.fromkeys(require_id(identifier) for identifier in ids))
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with FileLock(str(DATA_DIR / ".pipeline.lock"), timeout=0):
+        return _run_ids(ids, args)
+
+
+def _run_ids(ids, args):
+    """Run the original batched-discovery/one-S2-worker orchestration under a lock."""
 
     counts = {}
     t_start = time.perf_counter()
@@ -706,18 +904,21 @@ def main():
         print(f"Discovery finished: {n_found}/{len(ids)} papers have meta.json "
               f"(the rest: not found or failed), {n_versions} versions in total")
         throttle_report(round(time.perf_counter() - t_start, 1))
-        return
+        return 0
     streak, cooldown = 0, COOLDOWN_START     # streak = số lỗi kiểu "bị chặn / mạng" liên tiếp
     with ThreadPoolExecutor(max_workers=1) as pool:
         for i, pid in enumerate(ids, 1):
             blocking = False
             try:
                 result = process_paper(pid, pool, metas)
+                if result == "incomplete":
+                    issues = read_json(DATA_DIR / safe_dirname(pid) / "incomplete.json")["issues"]
+                    blocking = any(issue.get("blocking", False) for issue in issues)
             except Exception as exc:   # một bài lỗi không làm hỏng cả lần chạy
                 result = "error"
                 blocking = is_blocking_error(exc)
-                append_log({"id": pid, "status": "error", "error": repr(exc),
-                            "where": error_location(exc), "url": getattr(exc, "crawler_url", None)})
+                append_log({"id": pid, "status": "error", "error_type": type(exc).__name__,
+                            "where": error_location(exc)})
             if blocking:
                 streak += 1
             elif result == "done":
@@ -738,7 +939,8 @@ def main():
     total = round(time.perf_counter() - t_start, 1)
     print(f"Finished in {total}s. Summary: {counts}")
     throttle_report(total)
+    return 0 if sum(counts.get(s, 0) for s in ("done", "skipped")) == len(ids) else 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

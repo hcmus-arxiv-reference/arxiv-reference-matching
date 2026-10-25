@@ -1,13 +1,13 @@
 """Lieu's batched discovery + overlapped S2/source crawler, integrated with main.
 
-Run: python -m src.milestone1_crawler --data-dir data/crawl-smoke
+Run: python -m src.milestone1_crawler --engine integrated --data-dir data/crawl-smoke
 The original implementation is preserved in merge parent 0d19257. This adapter
 keeps its batch-discovery and one-S2-worker design while using the shared
 schema, bounded HTTP, full S2 pagination and checksum-verified checkpoints.
 It resumes the existing main cache without renaming or copying raw files.
-Kept in this module so standalone crawler updates cannot replace the public
-CLI/cache contract. The standalone implementation through e5be40e remains separately
-in src.lieu_standalone_crawler and is not used by this pipeline.
+Kept as an explicit compatibility engine for the existing cache. The standalone
+implementation in src.lieu_standalone_crawler is now the default M1 command,
+by the team's 2026-10-25 decision, and is not used by this adapter.
 """
 from __future__ import annotations
 
