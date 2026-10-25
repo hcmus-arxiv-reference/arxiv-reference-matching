@@ -13,7 +13,7 @@ Tài liệu này viết cho các thành viên trong nhóm. Đọc xong bạn nê
 
 | Mục | Tình trạng |
 |---|---|
-| Code | 4 script Python: `milestone1_crawler.py`, `make_ids.py`, `make_stats.py`, `benchmark.py` (+ `requirements.txt`) |
+| Code | 7 script Python: `milestone1_crawler.py`, `make_ids.py`, `make_stats.py`, `benchmark.py`, `merge_benchmarks.py`, `analyze_errors.py`, `diagnose_download.py` (+ `requirements.txt`) |
 | Môi trường đã thử | Python 3.12, thư viện `arxiv` 4.0.1 (kéo theo `requests`) |
 | Kiểm thử đã làm | Kiểm thử **offline bằng mạng giả** (xem mục 11) |
 | Chưa kiểm chứng | Chưa chạy trên arXiv và Semantic Scholar **thật** (môi trường soạn code không truy cập được hai trang này). Việc đầu tiên khi nhận code là thử 1 bài thật |
@@ -47,7 +47,8 @@ Sau đó viết báo cáo thống kê và đo hiệu năng. Dữ liệu này là
 |---|---|
 | `data/` | Dữ liệu từng bài, từng version (mục 7) |
 | `logs/run_log.jsonl` | Nhật ký mỗi bài (mục 7.7) |
-| `stats/` | Số liệu thống kê và đo hiệu năng cho báo cáo (mục 7.8 đến 7.10) |
+| `logs/cooldowns.jsonl` | Mỗi lần crawler tự nghỉ vì lỗi mạng liên tiếp (mục 7.7.2) |
+| `stats/` | Số liệu thống kê và đo hiệu năng cho báo cáo (mục 7.8 đến 7.10). Số đo hiệu năng nằm trong `stats/runs/run_XX/` (mỗi đoạn chạy một thư mục) và được gộp thành `stats/benchmark_total.json` |
 
 ### 1.4 Nộp bài
 
@@ -77,7 +78,8 @@ Sau đó viết báo cáo thống kê và đo hiệu năng. Dữ liệu này là
 | Crawler `milestone1_crawler.py` (hỏi arXiv theo lô, tải từng version, hỏi Semantic Scholar, checkpoint, log) | Viết xong, test offline, **chưa test mạng thật** |
 | Sinh danh sách ID liên tục `make_ids.py` | Xong, có test |
 | Thống kê `make_stats.py` | Xong, test offline |
-| Đo hiệu năng `benchmark.py` | Xong, test offline |
+| Đo hiệu năng `benchmark.py` (chạy từng đoạn, chịu được việc bị ngắt) và gộp bằng `merge_benchmarks.py` | Xong, test offline bằng lệnh giả; **chưa chạy với crawler thật** |
+| Ghi thời gian cooldown (`logs/cooldowns.jsonl`) để báo cáo wall time đầy đủ và wall time trừ cooldown | Xong, test offline |
 | Xin API key Semantic Scholar (mức 1 request/giây) | Xong |
 | Cấu trúc repo đề xuất | Có (mục 3), chưa tạo repo |
 | README và `.gitignore` | Chưa viết |
@@ -104,7 +106,8 @@ intro-ds-arxiv-crawler/
     |-- make_stats.py            tính số liệu thống kê từ nhật ký
     |-- analyze_errors.py        cho biết vì sao các bài bị error (đọc logs/run_log.jsonl)
     |-- diagnose_download.py     tải thử một file bằng nhiều cách để tìm nguyên nhân khi tải bị đứt
-    `-- benchmark.py             chạy crawler và đo thời gian, RAM, đĩa
+    |-- benchmark.py             chạy crawler và đo thời gian, RAM, đĩa (mỗi đoạn một thư mục --out)
+    `-- merge_benchmarks.py      gộp các đoạn đo thành một kết quả cho cả lần crawl
 ```
 
 Các thư mục/file chỉ tồn tại trên máy chạy, **không commit** (ghi trong `.gitignore`):
@@ -120,7 +123,8 @@ data/   logs/   stats/   ids.txt   ids_part_*.txt   .venv/   __pycache__/   *.py
 | `make_stats.py` | Đọc `logs/run_log.jsonl`, tạo `stats/summary.json` và `stats/papers.csv` |
 | `analyze_errors.py` | Đọc `logs/run_log.jsonl`, chia các bài lỗi theo nhóm nguyên nhân, cho xu hướng lỗi theo thời gian |
 | `diagnose_download.py` | Tải cùng một file nguồn bằng 6 cách khác nhau (ví dụ header mặc định, `identity`, giữ kết nối, `urllib`, thử `Range`) rồi so sánh để tìm nguyên nhân khi tải bị đứt giữa chừng |
-| `benchmark.py` | Bọc quanh lệnh bất kỳ, đo thời gian, RAM, đĩa, tạo `stats/benchmark.json` |
+| `benchmark.py` | Bọc quanh lệnh bất kỳ, đo thời gian, RAM, đĩa của **một đoạn chạy**, tạo `benchmark.json` và `benchmark_samples.csv` trong thư mục `--out` (mục 7.10). Chịu được `Ctrl+C`, từ chối ghi đè kết quả cũ |
+| `merge_benchmarks.py` | Gộp mọi thư mục `stats/runs/run_*` (và `logs/cooldowns.jsonl`) thành `stats/benchmark_total.json` và `stats/benchmark_samples_all.csv` (mục 7.10.1) |
 | `requirements.txt` | Chỉ thư viện crawler cần: `arxiv`, `requests`, `psutil` |
 
 ### 3.2 Repo báo cáo (Jupyter Book)
@@ -214,7 +218,9 @@ Bắt buộc có `--id` hoặc `--ids-file`.
 
 **`make_stats.py`**: `[--log logs/run_log.jsonl] [--ids-file ids.txt] [--out stats]`.
 
-**`benchmark.py`**: `[--data-dir data] [--out stats] [--interval 1.0] [--disk-interval 5.0] -- <lệnh cần đo>`.
+**`benchmark.py`**: `[--data-dir data] [--out stats] [--interval 1.0] [--disk-interval 5.0] -- <lệnh cần đo>`. Mỗi đoạn chạy dùng một `--out` riêng (ví dụ `stats/runs/run_01`); nếu thư mục `--out` đã có `benchmark_samples.csv` thì script từ chối chạy để không ghi đè số liệu cũ.
+
+**`merge_benchmarks.py`**: `[--runs stats/runs] [--out stats] [--cooldown-log logs/cooldowns.jsonl]`. Gộp mọi thư mục `run_*` trong `--runs`.
 
 ### 4.6 Chạy thử 1 bài
 
@@ -245,15 +251,48 @@ Hỏi arXiv theo lô cho cả dải ID (khoảng 100 lần hỏi, vài phút), t
 
 ### 4.8 Chạy bản chính
 
-Cách khuyên dùng: chạy dưới `benchmark.py` để một lần chạy cho cả dữ liệu và số đo hiệu năng. Cần xóa `data/` và `logs/` trước (sau khi sao lưu thứ cần giữ) để lần chạy tính từ đầu:
+Cách khuyên dùng: chạy dưới `benchmark.py` để một lần chạy cho cả dữ liệu và số đo hiệu năng. Cần xóa `data/`, `logs/` và `stats/runs/` trước (sau khi sao lưu thứ cần giữ) để lần chạy tính từ đầu:
 ```
-python src/benchmark.py -- python src/milestone1_crawler.py --ids-file ids.txt
+python src/benchmark.py --out stats/runs/run_01 -- python src/milestone1_crawler.py --ids-file ids.txt
 ```
+Nếu bị ngắt giữa chừng, xem mục 4.8.1.
 Hoặc chạy trực tiếp: `python src/milestone1_crawler.py --ids-file ids.txt`.
 
 Chạy nền:
 - Linux, Mac: `nohup python src/milestone1_crawler.py --ids-file ids.txt > run.out 2>&1 &`
 - Windows: để cửa sổ chạy, tắt chế độ ngủ của máy (hoặc dùng WSL).
+
+### 4.8.1 Đo hiệu năng khi chạy bị gián đoạn
+
+Chạy 5000 ID mất nhiều giờ nên có thể bị ngắt (mất mạng, máy ngủ, `Ctrl+C`, crawler tự dừng sau 15 lỗi liên tiếp). Crawler tự chạy tiếp được (mục 5.6); việc đo thì làm theo từng **đoạn**, mỗi đoạn một thư mục `--out`, cuối cùng gộp lại:
+
+```
+# đoạn 1
+python src/benchmark.py --out stats/runs/run_01 -- python src/milestone1_crawler.py --ids-file ids.txt
+# bị ngắt: chạy tiếp, chỉ đổi tên thư mục --out
+python src/benchmark.py --out stats/runs/run_02 -- python src/milestone1_crawler.py --ids-file ids.txt
+# xong hết thì gộp
+python src/merge_benchmarks.py
+```
+
+Quy tắc:
+- Dùng **cùng** `--ids-file` và cùng thư mục `data/` ở mọi đoạn. Không chạy hai bản cùng lúc (arXiv chỉ cho một kết nối).
+- Tên thư mục bắt đầu bằng `run_` và **đệm số 0** (`run_01` ... `run_10`), vì `merge_benchmarks.py` sắp xếp theo thứ tự chữ cái: `run_10` sẽ đứng trước `run_2`.
+- `benchmark.py` từ chối chạy nếu `--out` đã có kết quả, nên không ghi đè nhầm. Luôn tăng số thứ tự cho đoạn mới.
+- Bị ngắt thì cứ chạy đoạn tiếp theo; **không cần canh** để bấm `Ctrl+C` lúc crawler đang `cooling down`. Thời gian cooldown được ghi vào `logs/cooldowns.jsonl` và được tách ra khi gộp.
+- `benchmark.py` vẫn ghi kết quả khi bị `Ctrl+C` (mẫu RAM và đĩa được ghi dần từng giây). Đoạn bị tắt máy đột ngột vẫn được gộp từ file mẫu.
+
+Cách `merge_benchmarks.py` tính:
+
+| Chỉ số | Cách tính |
+|---|---|
+| `total_wall_seconds` | Tổng thời gian các đoạn **thật sự chạy**. Khoảng nghỉ giữa các đoạn không tính |
+| `total_cooldown_seconds`, `wall_seconds_excl_cooldown` | Tổng thời gian crawler tự ngủ (cooldown) nằm trong các đoạn (khớp theo thời điểm với `logs/cooldowns.jsonl`), và wall time sau khi trừ đi. Đề tính wall time từ đầu đến cuối nên **số chính là số đầy đủ**; số trừ cooldown là số phụ |
+| `peak_rss_mb` | Lớn nhất qua mọi đoạn |
+| `avg_rss_mb` | Trung bình theo mẫu (khoảng cách mẫu cố định nên xấp xỉ trung bình theo thời gian) |
+| `peak_disk_mb`, `final_disk_mb` | Đĩa tích lũy qua các đoạn nên lấy lớn nhất, và giá trị cuối của đoạn cuối |
+
+Chi phí "tìm bài" nằm gần hết ở `run_01`: `discover_many` hỏi arXiv theo lô 50 ID (khoảng 100 lần gọi cho 5000 ID, cách nhau ít nhất 3 giây); các đoạn sau đọc lại `meta.json`.
 
 ### 4.9 Theo dõi tiến độ
 
@@ -264,7 +303,7 @@ Số `done.json` là số bài đã xong.
 
 ### 4.10 Dừng và chạy tiếp
 
-`Ctrl+C` để dừng. Chạy lại **đúng lệnh cũ**: bài đã xong được bỏ qua, version đã tải không tải lại (mục 5.6).
+`Ctrl+C` để dừng. Chạy lại **đúng lệnh cũ**: bài đã xong được bỏ qua, version đã tải không tải lại (mục 5.6). Nếu đang đo hiệu năng, chạy tiếp với thư mục `run_XX` kế tiếp (mục 4.8.1).
 
 ### 4.11 Chạy theo từng phần
 
@@ -332,7 +371,8 @@ ID đầu, ID cuối  -> ids.txt -> [ hỏi arXiv theo lô ]
                                [ từng bài: tải version + hỏi S2 ] -> data/  -> stats/summary.json
                                           |                           logs/  -> stats/papers.csv
                                           +--> logs/run_log.jsonl ------^
-benchmark.py: bọc quanh lệnh trên, đo thời gian / RAM / đĩa  ----------------> stats/benchmark.json
+benchmark.py: bọc quanh lệnh trên, đo thời gian / RAM / đĩa  ----------------> stats/runs/run_XX/ (mỗi đoạn một thư mục)
+merge_benchmarks.py: gộp các đoạn + logs/cooldowns.jsonl -----------------> stats/benchmark_total.json
 ```
 
 ### 5.2 Luồng của chương trình chính (`main`)
@@ -412,12 +452,12 @@ Mọi file JSON được ghi bằng **file tạm rồi đổi tên** (`write_jso
 | HTTP 404 | Coi là "không có", trả `None`, không thử lại |
 | HTTP 403 | Dừng ngay bài đó, báo lỗi rõ ràng (bị chặn), không thử lại |
 | HTTP 429, 500, 502, 503, 504 | Thử lại tối đa 4 lần sau lần đầu; chờ theo `Retry-After` nếu server gửi, không thì 5, 10, 20, 40 giây |
-| Mạng đứt, quá 60 giây, **kết nối đứt giữa lúc đang tải** (`ProtocolError`, `IncompleteRead`), hoặc nhận thiếu byte so với `Content-Length` | Thử lại như trên (tải lại từ đầu), hết lượt thì báo lỗi. Các lỗi này tính vào bộ đếm "bị chặn/mạng" bên dưới |
+| Mạng đứt, quá 60 giây, **kết nối đứt giữa lúc đang tải** (`ProtocolError`, `IncompleteRead`), hoặc nhận thiếu byte so với `Content-Length` | Thử lại với kết nối mới, chờ 5, 10, 20, 40 giây. Với file nguồn: **giữ phần đã nhận và xin tải tiếp** (`Range`, kèm `If-Range`) nếu máy chủ hỗ trợ; không hỗ trợ thì tải lại từ đầu. Lần thử nhận thêm được byte (khi tải tiếp được) không tính là thất bại, nên file lớn bị cắt nhiều lần vẫn tải xong (tối đa 60 lần gọi cho một file). Các lỗi này tính vào bộ đếm "bị chặn/mạng" bên dưới |
 | Một lô hỏi arXiv bị lỗi | In thông báo, bỏ qua lô, các bài trong lô được hỏi lẻ sau |
 | Lỗi trong một bài (kể cả lỗi từ Semantic Scholar) | Bắt ở `main`, ghi dòng `error` vào log (kèm `where`: dòng code nơi lỗi xảy ra), **chạy tiếp bài khác**. Bài không có `done.json` nên chạy lại sẽ làm tiếp; version đã tải xong không tải lại |
 | Version chỉ có PDF/Word hoặc không có file | Tạo `status.json` với `status = "empty"` (bản ghi rỗng), vẫn tiếp tục |
 | File nén hỏng hoặc bị cắt cụt (tải thiếu) | `kind = "corrupt"`, `status = "empty"` (bản ghi rỗng), **không** tính là `error`. Trước khi ghi file, code đọc hết luồng nén để kiểm tra, nên không để lại file dở. Muốn tải lại version đó thì xóa `v<n>/status.json` |
-| Nhiều lỗi kiểu bị chặn, mạng, quá tải liên tiếp (HTTP 403, 429, 5xx, mất mạng, quá thời gian) | Cứ 5 lỗi liên tiếp thì nghỉ (5 phút, rồi 10 phút, tối đa 30 phút) và không gửi thêm yêu cầu; 15 lỗi liên tiếp thì dừng cả lần chạy và báo cách chạy tiếp. Một bài chạy xong (`done`) đặt lại bộ đếm. Lỗi riêng của từng bài (ví dụ lỗi ghi file, hết dung lượng đĩa) không kích hoạt việc nghỉ |
+| Nhiều lỗi kiểu bị chặn, mạng, quá tải liên tiếp (HTTP 403, 429, 5xx, mất mạng, quá thời gian) | Cứ 5 lỗi liên tiếp thì nghỉ (5 phút, rồi 10 phút, tối đa 30 phút) và không gửi thêm yêu cầu; 15 lỗi liên tiếp thì dừng cả lần chạy và báo cách chạy tiếp. Một bài chạy xong (`done`) đặt lại bộ đếm. Mỗi lần nghỉ được ghi vào `logs/cooldowns.jsonl` (thời gian ngủ thực tế, kể cả khi bị `Ctrl+C` giữa chừng). Lỗi riêng của từng bài (ví dụ lỗi ghi file, hết dung lượng đĩa) không kích hoạt việc nghỉ |
 | Semantic Scholar chưa có bài (404) | `n_refs` = `null`, bài vẫn `done` |
 
 Lưu ý: `main` **trả mã thoát 0 ngay cả khi có bài `error`**. Hãy đọc dòng tổng kết hoặc chạy `make_stats.py` để biết số bài lỗi.
@@ -451,6 +491,7 @@ Hằng số cấu hình ở đầu file:
 | `ARXIV_CLIENT` | `arxiv.Client(page_size=100, delay_seconds=3.0, num_retries=3)` | Đối tượng thư viện `arxiv` để hỏi thông tin bài |
 | `ACCEPT_IDENTITY` | `True` (đổi bằng `--default-encoding`) | Có gửi `Accept-Encoding: identity` hay không |
 | `NETWORK_ERRORS` | `(requests.RequestException, urllib3.exceptions.HTTPError)` | Các loại lỗi mạng được thử lại; gồm cả lỗi của `urllib3` vì dữ liệu được đọc thô |
+| `MAX_ATTEMPTS` | `60` | Số lần gọi tối đa cho MỘT file (chặn vòng lặp vô tận khi mỗi lần đều tiến thêm một ít) |
 | `S2_FIELDS` | `title,references.title,references.authors,references.publicationDate,references.externalIds,references.paperId` | Các trường xin Semantic Scholar (không có dấu cách sau dấu phẩy) |
 
 Các hàm:
@@ -458,12 +499,14 @@ Các hàm:
 | Hàm | Làm gì | Kiểu trả về |
 |---|---|---|
 | `Throttle(min_gap, from_start=False)` | "Người gác cổng". `wait()` ngủ cho đủ `min_gap` giây tính từ lúc lần gọi trước **kết thúc** (hoặc **bắt đầu** nếu `from_start=True`); `mark()` ghi nhận lần gọi vừa kết thúc. Ngoài ra đo số lần gọi, tổng thời gian chờ, tổng thời gian gọi mạng; `summary()` trả các số này | Đối tượng; `wait()`, `mark()` trả `None`; `summary()` trả `dict` |
-| `fetch_bytes(url, throttle, headers=None, retries=4, raw=True)` | Tải một URL bằng `requests.Session` (giữ kết nối mở giữa các lần gọi), có chờ lịch sự và thử lại khi lỗi tạm thời. `raw=True`: đọc byte thô đúng như server gửi (cho file nguồn arXiv); `raw=False`: để thư viện tự giải nén (cho JSON của Semantic Scholar). Sau mỗi lỗi mạng, bỏ session cũ và mở kết nối mới cho lần thử sau. Khi báo lỗi, gắn thuộc tính `crawler_url` vào ngoại lệ | `bytes`; hoặc `None` nếu HTTP 404. HTTP 403 gây `RuntimeError`. Lỗi khác sau khi hết lượt thử gây ngoại lệ của `requests` hoặc `urllib3` (`ProtocolError`, `IncompleteRead`...). Nhận thiếu byte so với `Content-Length` (chế độ `raw`) cũng bị coi là lỗi và thử lại |
+| `fetch_bytes(url, throttle, headers=None, retries=4, raw=True)` | Tải một URL bằng `requests.Session` (giữ kết nối mở giữa các lần gọi), có chờ lịch sự và thử lại khi lỗi tạm thời. `raw=True`: đọc byte thô đúng như server gửi (cho file nguồn arXiv); `raw=False`: để thư viện tự giải nén (cho JSON của Semantic Scholar). Sau mỗi lỗi mạng, bỏ session cũ và mở kết nối mới cho lần thử sau; với `raw=True` còn tải tiếp phần còn thiếu bằng `Range` (xem `_fetch_bytes`). Khi báo lỗi, gắn thuộc tính `crawler_url` vào ngoại lệ | `bytes`; hoặc `None` nếu HTTP 404. HTTP 403 gây `RuntimeError`. Lỗi khác sau khi hết lượt thử gây ngoại lệ của `requests` hoặc `urllib3` (`ProtocolError`, `IncompleteRead`...). Nhận thiếu byte so với `Content-Length` (chế độ `raw`) cũng bị coi là lỗi và thử lại |
 | `_retry_after(value, default)` | Đọc giá trị header `Retry-After`, không đọc được thì dùng `default` | `float` (giây) |
 | `_session_for(throttle)` | Trả về `requests.Session` riêng của một "người gác cổng" (tạo lần đầu, dùng lại sau đó) | `requests.Session` |
 | `_drop_session(throttle)` | Đóng và bỏ session (kết nối) hiện tại của một "người gác cổng" | `None` |
-| `_fetch_bytes(url, throttle, headers, retries, raw)` | Phần việc thật của `fetch_bytes` (vòng thử lại); `fetch_bytes` chỉ bọc thêm việc gắn URL vào lỗi | `bytes` hoặc `None` |
-| `throttle_report(wall_seconds)` | In và ghi số liệu chờ đợi / gọi mạng của lần chạy vào `logs/throttle_runs.jsonl` | `None` |
+| `_parse_content_range(value)` | Đọc header `Content-Range`, ví dụ `bytes 1048576-5000000/5000001` | `(start, end, total)` hoặc `None` nếu không đọc được |
+| `_fetch_bytes(url, throttle, headers, retries, raw)` | Vòng tải thật. Giữ dữ liệu nhận được trong bộ đệm; khi đứt giữa chừng và máy chủ có `Accept-Ranges: bytes` thì lần sau xin tiếp `Range: bytes=<đã có>-` kèm `If-Range` (ETag hoặc Last-Modified). Kiểm tra `Content-Range` khớp vị trí và tổng dung lượng; máy chủ trả 200 (bỏ qua Range), 416 hoặc `Content-Range` sai thì bỏ phần đã có và tải lại từ đầu. Lỗi vĩnh viễn (400, 401...) báo ngay, không thử lại | `bytes` hoặc `None` |
+| `throttle_report(wall_seconds)` | In và ghi số liệu chờ đợi / gọi mạng của lần chạy (kèm `cooldown_seconds`) vào `logs/throttle_runs.jsonl` | `None` |
+| `sleep_cooldown(seconds)` | Ngủ để hạ nhiệt khi gặp nhiều lỗi mạng liên tiếp và ghi thời gian ngủ **thực tế** (kể cả khi bị `Ctrl+C`) vào `logs/cooldowns.jsonl`; cộng vào biến `COOLDOWN_TOTAL` | `None` |
 | `_safe_rel(name)` | Chuẩn hóa đường dẫn trong file nén, loại đường dẫn nguy hiểm | `str`, hoặc `None` nếu nguy hiểm |
 | `_save_tar(tar, out_dir)` | Duyệt túi nén, ghi các `.tex`/`.bib` ra đĩa | `(files: list[str], kept: int, everything: int)` |
 | `extract_tex_bib(data, out_dir)` | Nhận dạng loại file tải về và giải nén chọn lọc | `(kind: str, files: list[str], bytes_after: int, bytes_all: int)` |
@@ -505,7 +548,17 @@ Hỗ trợ ID kiểu mới (`YYMM.NNNNN`, cũng nhận 4 chữ số cho giai đo
 |---|---|---|
 | `dir_size(path)` | Tổng dung lượng các file trong thư mục (byte) | `int` |
 | `tree_rss(proc)` | RAM của tiến trình và các tiến trình con (byte) | `int` |
-| `main()` | Chạy lệnh sau `--` như tiến trình con, lấy mẫu RAM và đĩa, ghi kết quả | Thoát với đúng mã thoát của lệnh được đo |
+| `count_done(data_dir)` | Đếm số bài đã có `done.json` (để biết đoạn bắt đầu từ đâu) | `int` |
+| `main()` | Từ chối chạy nếu `--out` đã có kết quả; ghi `benchmark_start.json` ngay khi bắt đầu; chạy lệnh sau `--` như tiến trình con, lấy mẫu RAM và đĩa và ghi **dần** vào `benchmark_samples.csv` mỗi giây; bắt `Ctrl+C` để vẫn ghi `benchmark.json` (`interrupted = true`) | Thoát với đúng mã thoát của lệnh được đo |
+
+### 6.4.1 `merge_benchmarks.py`
+
+| Hàm | Làm gì | Kiểu trả về |
+|---|---|---|
+| `read_run(run_dir)` | Đọc một đoạn: file mẫu (bỏ qua dòng ghi dở), `benchmark.json` nếu có, thời điểm bắt đầu (từ `benchmark.json` hoặc `benchmark_start.json`) | `dict`, hoặc `None` nếu không có mẫu |
+| `read_cooldowns(path)` | Đọc `logs/cooldowns.jsonl` | `list[(start_epoch, seconds)]` |
+| `cooldown_in_run(cooldowns, run)` | Tổng giây cooldown có thời điểm bắt đầu nằm trong khoảng chạy của đoạn | `float`, hoặc `None` nếu không biết đoạn chạy lúc nào |
+| `main()` | Gộp các đoạn `run_*` theo thứ tự tên, ghi `benchmark_total.json` và `benchmark_samples_all.csv` (thời gian nối liền mạch giữa các đoạn) | `None` |
 
 ### 6.5 `analyze_errors.py`
 
@@ -520,7 +573,7 @@ Tham số: `--log` (mặc định `logs/run_log.jsonl`), `--bucket` (số lần 
 
 ### 6.6 `diagnose_download.py`
 
-Tải cùng một file nguồn bằng 6 cách, cách nhau `--gap` giây (mặc định 3,5; bắt buộc từ 3 trở lên với arxiv.org): (1) `requests`, kết nối mới, header mặc định (như `curl`); (2) kết nối mới, `identity`, đọc thô (cách crawler đang dùng); (3) và (4) cùng một session dùng lại hai lần (kiểm tra việc giữ kết nối); (5) `urllib` của Python; (6) thử xin 1 KB bằng `Range`. In trạng thái, số byte nhận được so với `Content-Length`, thời gian, lỗi (nếu có), một số header của máy chủ, và một dòng kết luận.
+Tải cùng một file nguồn bằng 6 cách, cách nhau `--gap` giây (mặc định 3,5; bắt buộc từ 3 trở lên với arxiv.org): (1) `requests`, kết nối mới, header mặc định (như `curl`); (2) kết nối mới, `identity`, đọc thô (cách crawler đang dùng); (3) và (4) cùng một session dùng lại hai lần (kiểm tra việc giữ kết nối); (5) `urllib` của Python; (6) thử xin 1 KB bằng `Range`. In trạng thái, số byte nhận được so với `Content-Length`, thời gian, lỗi (nếu có), một số header của máy chủ, và một dòng kết luận. Ngoài ra in: các số byte nhận được trước khi đứt (và nhận xét nếu **tất cả** đều là bội số của 1 MiB, dấu hiệu bên gửi cắt theo từng khối 1 MiB), và nhà cấp chứng chỉ TLS của kết nối (phần mềm diệt virus quét HTTPS thường chèn chứng chỉ của chính nó; script cảnh báo nếu tên giống phần mềm bảo mật hoặc proxy).
 
 | Tham số | Ý nghĩa |
 |---|---|
@@ -717,17 +770,33 @@ Bài bị bỏ qua (`skipped`) **không** ghi dòng mới. Một bài có thể 
 Mỗi lần chạy `milestone1_crawler.py` (kể cả `--discover-only`) thêm **một dòng** khi kết thúc, cho biết thời gian thật sự đi vào chờ đợi hay vào gọi mạng. Ví dụ (giá trị **minh họa**, không phải số đo):
 
 ```json
-{"time": "2026-10-20 01:03:41", "wall_seconds": 5400.0, "gap_from_start": false, "arxiv": {"requests": 1500, "min_gap": 3.0, "waited_seconds": 4500.0, "busy_seconds": 900.0, "avg_request_seconds": 0.6}, "semantic_scholar": {"requests": 1000, "min_gap": 1.1, "waited_seconds": 300.0, "busy_seconds": 400.0, "avg_request_seconds": 0.4}}
+{"time": "2026-10-20 01:03:41", "wall_seconds": 5400.0, "cooldown_seconds": 0.0, "gap_from_start": false, "arxiv": {"requests": 1500, "min_gap": 3.0, "waited_seconds": 4500.0, "busy_seconds": 900.0, "avg_request_seconds": 0.6}, "semantic_scholar": {"requests": 1000, "min_gap": 1.1, "waited_seconds": 300.0, "busy_seconds": 400.0, "avg_request_seconds": 0.4}}
 ```
 
 | Trường | Ý nghĩa |
 |---|---|
 | `time` | Giờ kết thúc lần chạy |
 | `wall_seconds` | Thời gian chạy của lần này |
+| `cooldown_seconds` | Tổng thời gian ngủ vì cooldown trong lần chạy này |
 | `gap_from_start` | `true` nếu bật `--gap-from-start` |
 | `arxiv` / `semantic_scholar` | Số liệu của từng "người gác cổng": `requests` (số lần gọi, tính cả lần thử lại), `min_gap`, `waited_seconds` (tổng thời gian ngủ để chờ), `busy_seconds` (tổng thời gian đang gọi mạng), `avg_request_seconds` (trung bình mỗi lần gọi, hay còn gọi là thời gian phản hồi `r` ở mục 10.9) |
 
-Các bộ đếm tính **theo từng lần chạy** (mỗi lần chạy đếm lại từ 0), nên chạy theo nhiều phần thì mỗi phần một dòng.
+Các bộ đếm tính **theo từng lần chạy** (mỗi lần chạy đếm lại từ 0), nên chạy theo nhiều phần thì mỗi phần một dòng. Dòng này chỉ được ghi khi lần chạy kết thúc bình thường; bị `Ctrl+C` thì không có dòng, và cooldown của lần đó chỉ còn trong `logs/cooldowns.jsonl`.
+
+### 7.7.2 `logs/cooldowns.jsonl`
+
+Mỗi lần crawler tự nghỉ (cooldown) thêm **một dòng** ngay sau khi nghỉ xong, hoặc khi bị ngắt giữa lúc nghỉ. Ví dụ (giá trị **minh họa**):
+
+```json
+{"start_epoch": 1792922774.4, "seconds": 300.0}
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `start_epoch` | Thời điểm bắt đầu nghỉ (giây Unix) |
+| `seconds` | Thời gian ngủ **thực tế** |
+
+`merge_benchmarks.py` dùng các dòng này, khớp theo thời điểm với từng đoạn đo, để tính tổng cooldown. Chỉ tính cooldown (nghỉ sau 5 lỗi mạng liên tiếp); các lần chờ giữa các lần thử lại và chờ giữ khoảng cách 3 giây không tính. File ghi thêm vào cuối, không bị xóa khi chạy lại; xóa cùng `logs/` khi muốn đo từ đầu.
 
 ### 7.8 `stats/summary.json`
 
@@ -773,7 +842,7 @@ Do `make_stats.py` tạo. Ví dụ (từ dữ liệu giả):
 | `ref_metadata_rate` | `papers_with_ref_metadata / papers_done`. **Cách định nghĩa này cần xác nhận với giảng viên** (mục 12.2) |
 | `avg_seconds_per_paper` | Trung bình `seconds` của các bài `done`, kể cả thời gian chờ lịch sự |
 | `avg_discover_seconds` | Trung bình `discover_seconds` (đã chia đều theo lô) |
-| `max_rss_mb_seen_in_log` | RAM lớn nhất ghi trong nhật ký (chỉ là mẫu tại thời điểm xong mỗi bài; số đo chính thức dùng `benchmark.json`) |
+| `max_rss_mb_seen_in_log` | RAM lớn nhất ghi trong nhật ký (chỉ là mẫu tại thời điểm xong mỗi bài; số đo chính thức dùng `stats/benchmark_total.json`) |
 
 ### 7.9 `stats/papers.csv`
 
@@ -787,18 +856,25 @@ id,status,n_versions,versions_with_tex,bytes_downloaded,bytes_before,bytes_after
 ```
 Bài `error` và `not_found` có các cột số để trống. `n_refs` trống ở bài `done` nghĩa là Semantic Scholar không có dữ liệu. File dùng để vẽ biểu đồ trong báo cáo (đọc bằng `pandas.read_csv`).
 
-### 7.10 `stats/benchmark.json` và `stats/benchmark_samples.csv`
+### 7.10 `stats/runs/run_XX/`: `benchmark.json`, `benchmark_samples.csv`, `benchmark_start.json`
+
+Mỗi đoạn chạy có một thư mục riêng (mục 4.8.1). Nếu chạy một mạch thì chỉ có `run_01`.
 
 ```json
 {
   "command": ["python", "src/milestone1_crawler.py", "--ids-file", "ids.txt"],
   "return_code": 0,
+  "interrupted": false,
   "wall_seconds": 2.52,
+  "started_at": 1792922773.2,
+  "ended_at": 1792922775.7,
   "peak_rss_mb": 8.9,
   "avg_rss_mb": 8.2,
   "peak_disk_mb": 0.1,
   "final_disk_mb": 0.1,
-  "n_samples": 5
+  "n_samples": 5,
+  "done_papers_at_start": 0,
+  "done_papers_at_end": 3
 }
 ```
 
@@ -806,14 +882,50 @@ Bài `error` và `not_found` có các cột số để trống. `n_refs` trống
 |---|---|
 | `command` | Lệnh đã đo |
 | `return_code` | Mã thoát của lệnh được đo |
-| `wall_seconds` | Tổng thời gian chạy (đồng hồ treo tường), từ lúc bắt đầu đến lúc kết thúc |
+| `interrupted` | `true` nếu đoạn bị `Ctrl+C` |
+| `wall_seconds` | Thời gian chạy của **đoạn này** (đồng hồ treo tường), từ lúc bắt đầu đến lúc kết thúc |
+| `started_at`, `ended_at` | Thời điểm bắt đầu và kết thúc đoạn (giây Unix); dùng để khớp với `logs/cooldowns.jsonl` |
 | `peak_rss_mb` | RAM lớn nhất (tiến trình và tiến trình con), lấy mẫu mỗi `--interval` giây |
 | `avg_rss_mb` | Trung bình các mẫu RAM |
 | `peak_disk_mb` | Dung lượng lớn nhất của thư mục `data/` (đo mỗi `--disk-interval` giây và một lần cuối) |
 | `final_disk_mb` | Dung lượng `data/` sau khi chạy xong |
 | `n_samples` | Số mẫu RAM đã lấy |
+| `done_papers_at_start`, `done_papers_at_end` | Số bài đã có `done.json` lúc bắt đầu và lúc kết thúc đoạn |
 
-`benchmark_samples.csv` có 3 cột `t_seconds,rss_mb,disk_mb`, mỗi dòng một mẫu theo thời gian, dùng để vẽ biểu đồ RAM và đĩa theo thời gian.
+`benchmark_samples.csv` có 3 cột `t_seconds,rss_mb,disk_mb`, mỗi dòng một mẫu theo thời gian, dùng để vẽ biểu đồ RAM và đĩa theo thời gian. Các mẫu được ghi dần từng giây, nên đoạn bị tắt máy đột ngột vẫn còn số liệu đến lúc đó. `benchmark_start.json` (`{"started_at": ...}`) được ghi ngay khi đoạn bắt đầu để biết đoạn chạy lúc nào kể cả khi không có `benchmark.json`.
+
+### 7.10.1 `stats/benchmark_total.json` và `stats/benchmark_samples_all.csv`
+
+Do `merge_benchmarks.py` tạo. Ví dụ (giá trị **minh họa** từ lần thử bằng lệnh giả, không phải số đo thật):
+
+```json
+{
+  "segments": 2,
+  "total_wall_seconds": 7.52,
+  "total_wall_hours": 0.0,
+  "total_cooldown_seconds": 4.8,
+  "wall_seconds_excl_cooldown": 2.72,
+  "peak_rss_mb": 35.3,
+  "avg_rss_mb": 31.2,
+  "peak_disk_mb": 0.0,
+  "final_disk_mb": 0.0,
+  "per_segment": [
+    {"name": "run_01", "wall_seconds": 4.53, "peak_rss_mb": 35.2, "done_papers_at_start": 0, "done_papers_at_end": 0, "cooldown_seconds": 2.0, "ended": "finished"},
+    {"name": "run_02", "wall_seconds": 2.99, "peak_rss_mb": 35.3, "done_papers_at_start": 0, "done_papers_at_end": 0, "cooldown_seconds": 2.8, "ended": "Ctrl+C"}
+  ]
+}
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `segments` | Số đoạn đã gộp |
+| `total_wall_seconds`, `total_wall_hours` | Tổng thời gian các đoạn thật sự chạy (không tính khoảng nghỉ giữa các đoạn) |
+| `total_cooldown_seconds`, `wall_seconds_excl_cooldown` | Tổng cooldown và wall time sau khi trừ. `null` nếu có đoạn không biết giờ bắt đầu |
+| `peak_rss_mb`, `avg_rss_mb` | RAM lớn nhất qua mọi đoạn; trung bình theo mẫu |
+| `peak_disk_mb`, `final_disk_mb` | Đĩa lớn nhất qua mọi đoạn; giá trị cuối của đoạn cuối |
+| `per_segment` | Từng đoạn: thời gian, RAM tối đa, số bài xong lúc đầu và cuối, cooldown, cách kết thúc (`finished`, `Ctrl+C`, hoặc `no benchmark.json (hard stop)` nếu bị tắt đột ngột) |
+
+`benchmark_samples_all.csv` có 3 cột `t_seconds,rss_mb,disk_mb`; thời gian nối liền mạch qua các đoạn, dùng để vẽ một biểu đồ cho cả lần crawl.
 
 ### 7.11 `ids.txt`
 
@@ -951,7 +1063,7 @@ Không làm (vì vi phạm quy tắc hoặc rủi ro): mở nhiều kết nối 
 ### 10.6 Dung lượng đĩa và RAM
 
 - **Đĩa:** `final_disk_mb` ~= `avg_bytes_after_per_paper x 5000`. Chưa đo trên dữ liệu thật. Cách ước lượng: chạy 100 bài đầu, đọc `avg_bytes_after_per_paper` trong `summary.json`, nhân 50. Kiểm tra dung lượng trống trước khi chạy dài.
-- **RAM:** chương trình giữ trong bộ nhớ một file tải về tại một thời điểm và giải nén từ đó. Chưa đo trên dữ liệu thật; số đo chính thức lấy từ `benchmark.json` (`peak_rss_mb`, `avg_rss_mb`).
+- **RAM:** chương trình giữ trong bộ nhớ một file tải về tại một thời điểm và giải nén từ đó. Chưa đo trên dữ liệu thật; số đo chính thức lấy từ `stats/benchmark_total.json` (`peak_rss_mb`, `avg_rss_mb`).
 
 ### 10.7 Cách đo (quy trình chuẩn)
 
@@ -959,26 +1071,30 @@ Bảng đối chiếu chỉ số báo cáo với nơi lấy số:
 
 | Chỉ số báo cáo | Lấy ở đâu |
 |---|---|
-| Tổng thời gian chạy | `stats/benchmark.json`, `wall_seconds` |
+| Tổng thời gian chạy | `stats/benchmark_total.json`, `total_wall_seconds` (tổng các đoạn; số chính theo đề) |
+| Thời gian chạy trừ cooldown (số phụ) | `stats/benchmark_total.json`, `wall_seconds_excl_cooldown` và `total_cooldown_seconds` |
 | Thời gian trung bình mỗi bài | `stats/summary.json`, `avg_seconds_per_paper` (hoặc `wall_seconds / papers_done`) |
 | Thời gian "tìm bài" | `stats/summary.json`, `avg_discover_seconds` (trung bình theo lô); hoặc tự đo riêng bằng `--discover-only` |
 | Thời gian phản hồi trung bình mỗi lần gọi arXiv, tổng thời gian chờ, tổng thời gian gọi mạng | `logs/throttle_runs.jsonl`, trường `arxiv` (`avg_request_seconds`, `waited_seconds`, `busy_seconds`) |
-| RAM tối đa, RAM trung bình | `stats/benchmark.json`, `peak_rss_mb`, `avg_rss_mb` |
-| Đĩa tối đa, đĩa cuối | `stats/benchmark.json`, `peak_disk_mb`, `final_disk_mb` |
+| RAM tối đa, RAM trung bình | `stats/benchmark_total.json`, `peak_rss_mb`, `avg_rss_mb` |
+| Đĩa tối đa, đĩa cuối | `stats/benchmark_total.json`, `peak_disk_mb`, `final_disk_mb` |
 | Tỷ lệ thành công | `stats/summary.json`, `paper_success_rate`, `version_tex_rate` |
 | Dung lượng trước và sau khi bỏ ảnh | `stats/summary.json`, `avg_bytes_before_per_paper`, `avg_bytes_after_per_paper`, `size_reduction_pct` |
 | Số tham khảo trung bình | `stats/summary.json`, `avg_refs_per_paper`, `avg_refs_with_arxiv_id_per_paper` |
 
 Quy trình đo:
-1. Xóa `data/` và `logs/` (để checkpoint không bỏ qua bài nào).
-2. Chạy `python src/benchmark.py -- python src/milestone1_crawler.py --ids-file <file ID>`.
-3. Chạy `python src/make_stats.py --ids-file <file ID>`.
+1. Xóa `data/`, `logs/` và `stats/runs/` (để checkpoint không bỏ qua bài nào, và `benchmark.py` không từ chối vì thư mục đã có kết quả).
+2. Chạy `python src/benchmark.py --out stats/runs/run_01 -- python src/milestone1_crawler.py --ids-file <file ID>`. Nếu bị ngắt, chạy tiếp với `run_02`, `run_03`... (mục 4.8.1).
+3. Chạy `python src/merge_benchmarks.py`, rồi `python src/make_stats.py --ids-file <file ID>`.
 4. Ghi lại cấu hình: số CPU, RAM của máy, phiên bản Python, ngày giờ chạy, loại mạng, có dùng API key không.
 5. Đo trên Google Colab chế độ CPU theo yêu cầu của đề. Không chạy việc nặng khác cùng lúc.
-6. Chạy lặp ít nhất 3 lần trên tập mẫu nhỏ nếu muốn có số đo đáng tin; mỗi lần phải xóa `data/` và `logs/`.
+6. Chạy lặp ít nhất 3 lần trên tập mẫu nhỏ nếu muốn có số đo đáng tin; mỗi lần phải xóa `data/`, `logs/` và `stats/runs/`.
 
 Lưu ý khi diễn giải:
-- Nếu lần chạy bị ngắt rồi chạy tiếp, `wall_seconds` chỉ phản ánh phần chạy cuối. Phải nói rõ trong báo cáo, hoặc đo trên tập mẫu chạy liền một mạch.
+- Nếu lần crawl bị ngắt rồi chạy tiếp, số đo là **tổng các đoạn**, không phải một lần chạy liền mạch. Nói rõ trong báo cáo lần crawl gồm bao nhiêu đoạn (`segments`), hoặc đo thêm một tập mẫu chạy liền một mạch.
+- Cooldown (nghỉ sau 5 lỗi mạng liên tiếp) nằm trong wall time. Báo cáo cả hai số: `total_wall_seconds` (đầy đủ, số chính vì đề tính từ đầu đến cuối) và `wall_seconds_excl_cooldown` (số phụ), kèm cách tính.
+- Bài đang chạy dở lúc bị ngắt, hoặc bài lỗi được thử lại, có `seconds` thấp hơn thực tế vì các version đã tải được bỏ qua. Chỉ ảnh hưởng số ít bài nhưng nên nêu.
+- Các lần chờ giữa các lần thử lại (retry) không được ghi riêng như cooldown; chúng vẫn nằm trong wall time.
 - Đo đĩa chỉ tính thư mục `data/` (tổng dung lượng file, không tính phần dư của ổ đĩa như lệnh `du`).
 - RAM lấy mẫu mỗi giây nên có thể bỏ lỡ đỉnh rất ngắn.
 - Nếu giảng viên cho phép đo trên tập con (mục 12.2), hãy ghi rõ cỡ mẫu và cách chọn.
@@ -990,6 +1106,7 @@ Lưu ý khi diễn giải:
 | Số bài chạy xong / được giao | (điền sau) | (điền sau) | |
 | Số version trung bình mỗi bài | (điền sau) | (điền sau) | |
 | Tổng thời gian chạy | (điền sau) | (điền sau) | |
+| Số đoạn chạy (nếu bị ngắt) / tổng cooldown | (điền sau) | (điền sau) | |
 | Thời gian trung bình mỗi bài | (điền sau) | (điền sau) | |
 | Thời gian "tìm bài" | (điền sau) | (điền sau) | |
 | RAM tối đa / trung bình | (điền sau) | (điền sau) | |
@@ -1070,9 +1187,13 @@ Dòng cuối cho thấy luồng Semantic Scholar chỉ "được che" khi nó nh
 | `analyze_errors.py` | Log giả 606 dòng có tỷ lệ lỗi tăng dần và nhiều nguyên nhân | Phân nhóm, xu hướng và lỗi lặp lại đúng |
 | Kết nối đứt giữa lúc tải | Server gửi `Content-Length` 3 MB nhưng đóng kết nối sau 1,5 MB: tải lại thành công ở lần thứ 3 (chờ 5 và 10 giây); luôn đứt thì báo lỗi mạng sau khi hết lượt thử. Đã tái hiện đúng thông báo `IncompleteRead` trong log của người dùng với code cũ | Đúng |
 | Chế độ tải `raw`, `--default-encoding`, URL trong lỗi | `raw=False` trả JSON đã giải nén, `raw=True` giữ nguyên byte gzip; `--default-encoding` bỏ header `identity`; lỗi có `crawler_url` và log có trường `url`; sau lỗi mạng mở kết nối mới | Đúng |
+| Tải tiếp khi đứt (`Range`) | File 10 MB, máy chủ cắt mỗi 1 MB: ghép đủ qua 10 lần gọi, đúng từng byte (vượt xa 4 lần thử vì mỗi lần đều tiến thêm); lần xin tiếp có `Range` và `If-Range` đúng; file đổi giữa các lần (ETag khác): nhận lại toàn bộ bản mới, không bị trộn; không hỗ trợ `Range`: tải lại từ đầu, chờ 5 và 10 giây như trước; máy chủ báo có `Range` nhưng trả 200: vẫn đúng; 416 và `Content-Range` sai vị trí: tải lại từ đầu; lỗi 400: báo ngay sau 1 lần gọi | Đúng |
 | `diagnose_download.py` | Bốn máy chủ thử: luôn đứt, chỉ đứt khi có header `identity`, chỉ đứt khi dùng lại kết nối, và máy chủ tốt | Kết luận in ra đúng cho từng trường hợp; nhận ra máy chủ có hỗ trợ `Range` |
 | `make_stats.py` | Chạy trên nhật ký giả có `done`, `error`, `not_found`, bài chưa chạy | Các con số khớp tính tay |
 | `benchmark.py` | Bọc một lệnh giả | Ra thời gian, RAM, đĩa, mã thoát; tạo file mẫu theo thời gian |
+| `benchmark.py` (chạy từng đoạn) | Lệnh giả bị `Ctrl+C` giữa chừng; chạy lại cùng thư mục `--out` | Vẫn ghi `benchmark.json` với `interrupted = true`; lần chạy lại cùng `--out` bị từ chối |
+| `merge_benchmarks.py` | 3 đoạn giả: bình thường, `Ctrl+C`, tắt đột ngột (chỉ có file mẫu, dòng cuối ghi dở) | Gộp đúng tổng thời gian, RAM, đĩa; đoạn thiếu `benchmark.json` vẫn được tính; dòng ghi dở bị bỏ qua |
+| `sleep_cooldown` và gộp cooldown | Nghỉ 2 giây ở đoạn 1; ngắt giữa lần nghỉ 20 giây ở đoạn 2 | `logs/cooldowns.jsonl` ghi 2,0 và 2,8 giây (thực tế); `total_cooldown_seconds` = 4,8 |
 | `make_ids.py` | Dải 5000 ID; ID kiểu cũ (120 ID); ID 4 chữ số; 1 ID; 5 loại lỗi nhập (khác tháng, thiếu số 0, ID kèm version, đầu lớn hơn cuối, khác số chữ số); `--chunk 500` | Đúng (5000 ID, 10 file mỗi file 500; lỗi báo rõ) |
 
 ### 11.2 Chưa kiểm thử
@@ -1080,6 +1201,7 @@ Dòng cuối cho thấy luồng Semantic Scholar chỉ "được che" khi nó nh
 - **Chạy thật** trên arXiv và Semantic Scholar: cách thư viện `arxiv` phản hồi với `id_list` 50 ID, ID kiểu cũ trên máy chủ thật; định dạng thật của phản hồi Semantic Scholar (code giả định `references` là danh sách các đối tượng có `paperId`, `externalIds`, `title`, `authors`, `publicationDate`); header `Retry-After` thật; tải source thật. Việc giữ kết nối mở mới được chứng minh trên server HTTP cục bộ (không có TLS); cách máy chủ arXiv thật xử lý chưa kiểm tra.
 - Phân trang hoặc bị cắt của danh sách tham khảo ở bài có rất nhiều tham khảo.
 - Windows, macOS, Google Colab (mới chạy thử trên Linux).
+- `benchmark.py` bắt `Ctrl+C`, `merge_benchmarks.py` và `sleep_cooldown` với crawler thật chạy nhiều giờ, và trên Windows (mới thử bằng lệnh giả trên Linux).
 - Chạy dài nhiều giờ, bị ngắt mạng thật, bị chặn 403 hoặc 429 thật.
 - Túi nén rất lớn hoặc hỏng ở mức thực tế.
 
@@ -1105,6 +1227,9 @@ Các đoạn kiểm thử trên được chạy thủ công trong lúc soạn co
 | Tải bằng `requests.Session`, gửi `Accept-Encoding: identity` và đọc byte thô | Giữ kết nối mở nhưng vẫn nhận đúng byte server gửi (không tự giải nén), để việc nhận dạng `.gz`/`.tar.gz` không đổi. `requests` đã là phụ thuộc của thư viện `arxiv` |
 | `--gap-from-start` là tùy chọn, mặc định tắt | Nhanh hơn nhưng mạnh hơn cách làm chuẩn của thư viện; chỉ bật khi giảng viên xác nhận |
 | Ghi `logs/throttle_runs.jsonl` mỗi lần chạy | Có số liệu thật để quyết định tối ưu và đưa vào báo cáo |
+| Đo hiệu năng theo từng đoạn rồi gộp (`merge_benchmarks.py`) | Chạy 5000 ID nhiều giờ dễ bị ngắt; `benchmark.py` bản đầu ghi đè mỗi lần chạy và không ghi gì nếu bị `Ctrl+C` |
+| `benchmark.py` từ chối ghi vào `--out` đã có kết quả | Tránh mất số liệu của đoạn trước khi quên đổi tên thư mục |
+| Ghi riêng thời gian cooldown (`logs/cooldowns.jsonl`) và báo cả hai số (đầy đủ, trừ cooldown) | Đề tính wall time từ đầu đến cuối nên số chính là số đầy đủ; cooldown là thời gian chờ mạng chứ không phải thời gian làm việc, nên cần số phụ để diễn giải |
 | Checkpoint nhiều mức, `done.json` ghi cuối cùng | Chạy lại không mất công; bài chỉ coi là xong khi mọi việc xong |
 | Ghi file qua file tạm rồi đổi tên | Bị ngắt giữa chừng không để lại file dở |
 | Lấy tham khảo một lần cho cả bài | Semantic Scholar khó phân biệt theo version (cần xác nhận, mục 12.2) |
@@ -1139,10 +1264,13 @@ Các đoạn kiểm thử trên được chạy thủ công trong lúc soạn co
 | ID đầu vào phải là ID gốc (không kèm version) | `make_ids.py` đã chặn; nếu dùng `--id` trực tiếp phải tự chú ý |
 | `main` luôn thoát mã 0, kể cả khi có bài `error` | Đọc dòng tổng kết hoặc chạy `make_stats.py`; có thể đổi sang mã thoát khác 0 khi có lỗi |
 | `discover_seconds` là trung bình theo lô, không phải thời gian riêng từng bài | Chấp nhận được; số tổng thể vẫn đúng |
-| Chạy lại khiến `wall_seconds` chỉ phản ánh phần chạy cuối | Ghi rõ trong báo cáo hoặc đo trên tập mẫu chạy liền mạch |
+| Chạy bị ngắt nhiều đoạn: số đo là tổng các đoạn, không phải một lần chạy liền mạch | Đã có cách đo theo đoạn và gộp (mục 4.8.1); ghi rõ số đoạn trong báo cáo, hoặc đo thêm một tập mẫu chạy liền một mạch |
+| Bài chạy dở lúc bị ngắt, hoặc bài lỗi được thử lại, có `seconds` thấp hơn thực tế vì các version đã tải được bỏ qua | Chỉ ảnh hưởng số ít bài; nêu rõ trong báo cáo |
+| Chỉ cooldown được ghi riêng; các lần chờ giữa các lần thử lại (retry) vẫn nằm trong wall time | Chấp nhận được; nếu cần thì ghi thêm tương tự `sleep_cooldown` |
 | Thời gian phản hồi `r` của mỗi lần gọi bị cộng thêm vào khoảng chờ 3 giây | Đo `r` thật rồi quyết định theo mục 10.9 |
 | Giữ kết nối mở chưa kiểm chứng với arXiv thật | Chạy 100 bài đầu, so `avg_request_seconds` |
-| Khi kết nối đứt giữa lúc tải, phải tải lại file từ đầu (chưa tiếp tục phần đã nhận) | Có thể dùng `Range` để tải tiếp nếu máy chủ hỗ trợ (chưa kiểm tra arXiv có hỗ trợ không) |
+| Tải tiếp (`Range`) chỉ có tác dụng nếu máy chủ hỗ trợ; nếu không, phải tải lại file từ đầu | Chạy `diagnose_download.py` (cách thứ 6) để biết arXiv có trả `206` không. Chưa kiểm tra trên arXiv thật |
+| Crawler gửi `If-Range` kèm ETag hoặc Last-Modified. Nếu máy chủ bỏ qua nó (ví dụ ETag dạng yếu `W/...`, hoặc khác nhau giữa các node CDN) thì trả `200`, crawler tải lại từ đầu mà không tiến thêm byte; file lớn bị cắt cùng một chỗ sẽ lỗi lặp lại sau mỗi lần chạy | **Giả thuyết, chưa xác nhận trên arXiv thật.** Kiểm tra: xin `Range` kèm `If-Range` ở vị trí từng bị đứt, xem trả `206` hay `200`. Nếu `200` thì bỏ `If-Range` (code vẫn kiểm tra `Content-Range` và CRC của gzip) |
 | Chưa có kiểm thử tự động trong repo | Đưa các kiểm thử ở mục 11.1 vào `tests/` |
 
 ---
@@ -1162,9 +1290,12 @@ Các đoạn kiểm thử trên được chạy thủ công trong lúc soạn co
 | Dòng `discover batch ... failed ...; will ask one by one` | Một lô hỏi arXiv lỗi mạng; script tự hỏi lẻ từng bài của lô đó. Nếu xuất hiện liên tục, kiểm tra mạng |
 | Có dòng `error` trong log | Chạy `python src/analyze_errors.py` để biết nhóm nguyên nhân (mục 4.14); chạy lại cùng lệnh để thử lại bài đó |
 | Số bài `error` tăng dần theo thời gian | Thường do bị chặn hoặc giới hạn tốc độ, mất mạng, đĩa đầy, hoặc chạy 2 bản cùng lúc (cùng key Semantic Scholar, cùng IP). Chạy `analyze_errors.py` xem phần xu hướng và nhóm nguyên nhân; kiểm tra dung lượng đĩa; chỉ chạy một bản tại một thời điểm |
-| `ProtocolError('Connection broken: IncompleteRead(... bytes read, ... more expected)')` | Kết nối bị đóng trước khi nhận đủ file. Có thể do mạng, máy chủ hoặc CDN, proxy hoặc phần mềm diệt virus, hoặc cách tải. Bản crawler mới tự thử lại bằng kết nối mới. Để tìm nguyên nhân: dừng crawler, chạy `python src/diagnose_download.py --id <ID>` (mục 4.14) |
+| `ProtocolError('Connection broken: IncompleteRead(... bytes read, ... more expected)')` | Kết nối bị đóng trước khi nhận đủ file. Có thể do mạng, máy chủ hoặc CDN, proxy hoặc phần mềm diệt virus, hoặc cách tải. Bản crawler mới tự thử lại bằng kết nối mới và tải tiếp phần còn thiếu nếu máy chủ hỗ trợ. Để tìm nguyên nhân: dừng crawler, chạy `python src/diagnose_download.py --id <ID>` (mục 4.14) |
 | Số bài `not_found` nhiều bất thường | Kiểm tra lại ID đầu và ID cuối, cách nhập dải ID |
-| Bị ngắt giữa chừng | Chạy lại đúng lệnh cũ |
+| `benchmark.py: error: ... already has results` | Thư mục `--out` đã có kết quả của đoạn trước. Dùng `run_XX` kế tiếp (không ghi đè); chỉ xóa thư mục cũ khi muốn đo lại từ đầu |
+| `merge_benchmarks.py` báo `no runs found` | Tên thư mục không bắt đầu bằng `run_`, hoặc `--runs` trỏ sai chỗ |
+| `total_cooldown_seconds` là `null` trong `benchmark_total.json` | Có đoạn không biết giờ bắt đầu (thiếu `benchmark_start.json`, ví dụ đoạn đo bằng bản `benchmark.py` cũ). Chỉ báo `total_wall_seconds` |
+| Bị ngắt giữa chừng | Chạy lại đúng lệnh cũ. Nếu đang đo hiệu năng, dùng thư mục `run_XX` kế tiếp (mục 4.8.1) |
 | Colab bị ngắt, mất dữ liệu | Chạy trong thư mục trên Google Drive, chia phần 500 ID |
 | Hết dung lượng đĩa | Kiểm tra dung lượng trống; ước lượng theo 10.6 |
 | Thiếu số RAM trong báo cáo | Chưa cài `psutil` |
@@ -1228,8 +1359,11 @@ python src/milestone1_crawler.py --ids-file ids.txt --limit 100
 # Biết tổng số version trước khi chạy dài
 python src/milestone1_crawler.py --ids-file ids.txt --discover-only
 
-# Chạy bản chính (kèm đo hiệu năng)
-python src/benchmark.py -- python src/milestone1_crawler.py --ids-file ids.txt
+# Chạy bản chính (kèm đo hiệu năng; mỗi đoạn một run_XX, bị ngắt thì chạy tiếp với run_02, run_03...)
+python src/benchmark.py --out stats/runs/run_01 -- python src/milestone1_crawler.py --ids-file ids.txt
+
+# Gộp các đoạn đo
+python src/merge_benchmarks.py
 
 # Tính số liệu
 python src/make_stats.py --ids-file ids.txt
@@ -1257,3 +1391,8 @@ python src/make_stats.py --ids-file ids.txt
 | 16 | Bắt cả lỗi của `urllib3` (`ProtocolError`/`IncompleteRead`) khi tải, kiểm tra đủ byte so với `Content-Length`, tính vào bộ đếm lỗi mạng; `where` ưu tiên dòng trong code của dự án | **Lỗi do chính code gây ra**: từ khi đổi sang đọc byte thô (dòng 10 của bảng này), lỗi đứt kết nối giữa lúc tải không được bọc bởi `requests` nên không được thử lại. Người dùng gặp lỗi này ở nhiều bài, đã tái hiện bằng server thử |
 | 17 | Sau lỗi mạng bỏ session cũ và mở kết nối mới; gắn URL vào lỗi và ghi `url` vào log; chế độ `raw=False` cho JSON | Không dùng lại kết nối có thể đã hỏng; biết chính xác URL nào lỗi |
 | 18 | Thêm `diagnose_download.py` và tùy chọn `--default-encoding` | Người dùng cho biết mạng bình thường, nên cần công cụ tách các khả năng (mạng, máy chủ, header, giữ kết nối) thay vì đoán |
+| 19 | Tải tiếp phần còn thiếu bằng `Range` + `If-Range`, kiểm tra `Content-Range`, lần thử có tiến triển không tính là thất bại, lỗi vĩnh viễn không thử lại | Đã kiểm chứng một đề xuất sửa lỗi từ nguồn khác bằng thực nghiệm: ý tưởng tải tiếp đúng, nhưng bản đề xuất hết lượt sau 7 lần dù mỗi lần đều tiến thêm, có thể ghép lẫn hai phiên bản file nếu file đổi giữa các lần, và thử lại vô ích 7 lần với lỗi 400 |
+| 20 | `diagnose_download.py` in thêm nhận xét bội số 1 MiB và nhà cấp chứng chỉ TLS | Số byte nhận được trong log đều là bội số của 1 MiB; đã kiểm tra rằng cách đọc của thư viện không tự làm tròn như vậy, nên cần xem bên gửi hay thiết bị trên đường đi |
+| 21 | `benchmark.py` ghi mẫu dần từng giây, vẫn lưu `benchmark.json` khi bị `Ctrl+C`, ghi `started_at` và `done_papers_*`; thêm `merge_benchmarks.py` gộp các đoạn | `benchmark.py` bản đầu ghi đè kết quả mỗi lần chạy và không ghi gì nếu bị ngắt; chạy 5000 ID nhiều giờ dễ bị ngắt, nên cần đo theo đoạn rồi gộp |
+| 22 | `benchmark.py` từ chối chạy nếu `--out` đã có kết quả | Tránh mất số liệu đoạn trước khi quên đổi tên thư mục `run_XX` |
+| 23 | Thêm `sleep_cooldown` và `logs/cooldowns.jsonl`; `throttle_report` ghi thêm `cooldown_seconds`; `merge_benchmarks.py` tính `wall_seconds_excl_cooldown` | Cooldown nằm trong wall time nhưng là thời gian chờ mạng, không phải thời gian làm việc; không cần canh máy để ngắt khi crawler đang nghỉ |
