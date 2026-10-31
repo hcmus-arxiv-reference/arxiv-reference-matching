@@ -59,10 +59,37 @@ Lượt tải local toàn Range 5.000 ID dùng `scripts.crawl_range`, có checkp
 tiến độ và retry phần thiếu. Xem [vận hành toàn Range](docs/full-range-crawl.md)
 để theo dõi, dừng an toàn và tiếp tục; không chạy thêm khi worker cũ còn hoạt động.
 
-Sau khi tích hợp nhánh Liễu, entry point tiếp tục Range là
-`python -m src.milestone1_crawler --data-dir data/crawl-smoke`:
-discovery theo lô, S2 chạy đồng thời với source, dùng lại cache/checksum hiện có.
-Xem [phạm vi merge và cách chạy bản Liễu](docs/lieu-integration.md).
+Crawler tích hợp nằm trong `src/crawl/`; script standalone
+`src.milestone1_crawler` nhận `--id` hoặc `--ids-file` và ghi vào thư mục
+`data/` đã cấu hình trong mã. Ví dụ: `python -m src.milestone1_crawler --id
+2508.02872`. CLI này không nhận `--data-dir`. Xem
+[lịch sử tích hợp](docs/lieu-integration.md).
+
+> **Lưu ý cho Liễu: hợp nhất engine crawl (quyết định 2026-10-31).**
+> `origin/main` có framework `CrawlPipeline` (`src/crawl/`) và một script
+> standalone (`src/milestone1_crawler.py`, 799 dòng). Script không định nghĩa
+> lớp `LieuPipeline`. Nhóm thống nhất dùng
+> **`src/crawl/` làm khung duy nhất**. Phần mạnh của bản Liễu không bị bỏ mà được
+> xem là ứng viên để chuyển vào khung:
+>
+> - **Discovery theo lô** hiện nằm trong `discover_many` của script standalone
+>   (mặc định 50 ID), không phải lớp `BatchedDiscovery`.
+> - **S2 chạy đồng thời với tải source** hiện dùng một worker trong
+>   `process_paper`; cần chuyển cách chạy này vào Runner của khung.
+> - Các công cụ phụ hiện có gồm `src/make_ids.py`, `src/benchmark.py`,
+>   `src/make_stats.py` và `analyze_errors.py`. `make_stats` hiện đọc
+>   `logs/run_log.jsonl`; cần chuyển để đọc được `crawl.jsonl` của khung.
+>
+> Script standalone ghi vào `data/<safe-publication-id>/v<n>/` kèm `done.json`
+> và log. `src/crawl/` dùng `data/raw/<publication-key>/v<n>/`, manifest và
+> Parquet exports. Tái sử dụng dữ liệu đòi hỏi migration và xác nhận; tương
+> thích chưa được kiểm tra. `tests/test_lieu_crawler.py` hiện kỳ vọng
+> `BatchedDiscovery` và `LieuPipeline` từ script standalone, nhưng hai tên này
+> không có trong đó. Test collection hiện dừng sớm hơn vì thiếu dependency
+> `arxiv` trong `requirements.txt`; cần xử lý cả hai vấn đề trước khi coi test
+> này là xác nhận cho khung mới. Chỉ xóa script sau khi chuyển hành vi đã chốt,
+> xác nhận migration dữ liệu và cập nhật test. Thay đổi crawler mới vui lòng
+> nhắm vào `src/crawl/`.
 
 Nhóm trưởng: [NTBao-coder](https://github.com/NTBao-coder). Thành viên: [ngochai06](https://github.com/ngochai06), [nhminh107](https://github.com/nhminh107), [langtucod0n](https://github.com/langtucod0n).
 

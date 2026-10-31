@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "member": "github-username",
+  "branch": "feat/<ten>-crawler",
+  "commit": "abc1234",
+  "range": { "prefix": "2508", "start": 2872, "end": 7871 },
+  "ids_attempted": 5000,
+
+  "run": {
+    "cold_run": true,
+    "resumed_passes": 0,
+    "started_at": "2026-10-20T08:00:00+07:00",
+    "finished_at": "2026-10-22T14:30:00+07:00",
+    "machine": "Windows 11, i5-1235U, 16 GB RAM, Wi-Fi",
+    "python": "3.12.4",
+    "s2_api_key": false,
+    "measured_by": "src.benchmark (psutil; RSS cả cây tiến trình, disk size qua os.walk)"
+  },
+
+  "stages": {
+    "discovery":  { "seconds": null, "requests": null, "retries": null, "errors_by_type": {} },
+    "source":     { "seconds": null, "requests": null, "retries": null, "errors_by_type": {} },
+    "references": { "seconds": null, "requests": null, "retries": null, "errors_by_type": {} },
+    "export":     { "seconds": null }
+  },
+
+  "totals": {
+    "wall_seconds": null,
+    "publications_found": null,
+    "publications_complete": null,
+    "versions_expected": null,
+    "versions_ok": null,
+    "versions_non_tex": null,
+    "versions_failed": null,
+    "references_total": null,
+    "references_with_arxiv_id": null,
+    "publications_s2_ok": null,
+    "bytes_before_figure_removal": null,
+    "bytes_after_figure_removal": null,
+    "peak_rss_mb": null,
+    "avg_rss_mb": null,
+    "peak_disk_mb": null,
+    "output_mb": null
+  },
+
+  "notes": "Ghi mọi điều làm số liệu khó so sánh: chạy nhiều lần, đổi code giữa chừng, mất mạng, bị 429 kéo dài..."
+}
