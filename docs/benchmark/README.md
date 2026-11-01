@@ -33,6 +33,32 @@ References, Export, Runner) để ghép vào khung `src/crawl/`
 
 Trường nào không có số liệu thật thì để `null`. **Không điền số ước lượng.**
 
+## Kiểm tra chất lượng đầu ra
+
+Với output theo layout của `src/crawl/`, chạy validator trên máy cục bộ:
+
+```sh
+python -m scripts.validate_crawl \
+  --data-dir data/crawl-smoke \
+  --benchmark benchmarks/<github-username>.json
+```
+
+Validator chỉ đọc dữ liệu. Nó đối chiếu số ID đã thử và các bộ đếm trong
+`totals` với manifest, metadata, receipt từng Version, file TeX/BibTeX và cache
+Semantic Scholar; đồng thời kiểm tra checksum, Version coverage và arXiv ID của
+references. Bộ đếm khai báo là `null` sẽ được bỏ qua. Lệnh in báo cáo JSON, thoát
+mã `0` khi không có phát hiện và `1` nếu có lỗi hoặc số liệu không khớp. Đây là
+kiểm tra tính nhất quán/độ phủ của output; nó không đánh giá nội dung khoa học
+của TeX hay xác minh các số đo hiệu năng không thể suy ra từ cache.
+
+`references_total` và `references_with_arxiv_id` được đếm trên các bản ghi S2
+thô của những Publication có cache hợp lệ; bản thứ hai đếm mỗi bản ghi có
+`citedPaper.externalIds.ArXiv`, trước bước khử trùng lặp khi xuất bảng.
+
+Hiện validator đọc manifest và layout của `src/crawl/`. Output của crawler
+khác cần được chuyển sang hợp đồng này trước khi kiểm tra; không được coi việc
+thiếu file trong layout chuẩn là bằng chứng rằng crawler khác tạo dữ liệu sai.
+
 ## Đo lại cho chuẩn (nếu muốn)
 
 Harness có sẵn trên `main`: `python -m src.benchmark` (mặc định lấy mẫu RSS cả
