@@ -100,3 +100,22 @@ Theo yêu cầu của Bảo, đã xóa các file `.md` không liên quan tới q
   trừ `AGENTS.md`/`README.md` (chưa xóa). `docs/m1-standalone-trial.md` (bằng chứng 0/59
   cho ADR 0001) và `docs/milestone2-source.md` (Q3) chỉ có trên backup, đưa vào cùng PR tương ứng.
 - `README.md` và `AGENTS.md` còn link tới các file đã xóa; sửa trong PR dọn đợt 2.
+
+## Đã chốt vòng 2 (2026-11-02)
+
+- **Q7 – Standalone:** không lên `main`. Tag `lieu-standalone-final` đặt tại `6941c1b`
+  (commit cuối của Liễu; ở đó `src/milestone1_crawler.py` là bản standalone có đủ 3 commit
+  sau). Bản standalone Bảo sửa (`src/lieu_standalone_crawler.py`) vẫn nằm trên nhánh backup.
+  `src/milestone1_crawler.py` thành shim: export `BatchedDiscovery`, `LieuPipeline`, `main`,
+  bỏ `--engine`, `main` gọi khung. Bỏ `arxiv`/`requests`, `tests/test_standalone_crawler.py`.
+  `src/analyze_errors.py`, `src/diagnose_download.py`, `src/estimate_time.py` đi theo tag.
+  `src/merge_benchmarks.py` **giữ lại**: nó gộp các đoạn benchmark bị ngắt của harness
+  chung `src/benchmark.py`, cần cho Q4(b).
+- **Q8 – ADR 0001:** sửa tại chỗ, giữ `accepted`; đã thêm "Bối cảnh bổ sung 2026-11-01"
+  và lựa chọn "Standalone làm Engine".
+- **Q9 – Liễu:** Bảo nhắn Liễu trước PR đầu tiên, kèm link ADR 0001; mời Liễu review PR
+  chuyển cải tiến HTTP.
+- **Q10 – Importer:** chỉ chuyển layout standalone → layout khung, chỉ đọc nguồn, kiểm
+  checksum và chạy validator; tùy chọn. Bảo hỏi nhóm ai đang giữ dữ liệu layout standalone.
+- **Q11 – Đặt tên:** theo kỹ thuật; `LieuPipeline` chỉ còn là alias, công ghi trong docstring
+  và README. Thuật ngữ "Cách cài đặt Stage" đã thêm vào `CONTEXT.md`.

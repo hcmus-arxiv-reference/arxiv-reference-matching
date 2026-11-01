@@ -17,3 +17,7 @@
   _Tránh_: module, bước, quá trình (khi muốn nói đúng nghĩa này).
 - **Engine:** một cách ghép đầy đủ các Stage thành crawler chạy được. `main` chỉ giữ
   một Engine (ADR 0001).
+- **Cách cài đặt Stage:** một cách hiện thực cụ thể của một Stage, đặt tên theo kỹ thuật
+  (ví dụ: discovery theo lô, tải references song song). Đây là đơn vị mà các thành viên
+  đóng góp và được so sánh với nhau. Mỗi Stage có đúng một cách cài đặt mặc định trên `main`.
+  _Tránh_: "pipeline của <tên người>", gọi một cách cài đặt Stage là Engine.
