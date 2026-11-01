@@ -119,3 +119,113 @@ Theo yêu cầu của Bảo, đã xóa các file `.md` không liên quan tới q
   checksum và chạy validator; tùy chọn. Bảo hỏi nhóm ai đang giữ dữ liệu layout standalone.
 - **Q11 – Đặt tên:** theo kỹ thuật; `LieuPipeline` chỉ còn là alias, công ghi trong docstring
   và README. Thuật ngữ "Cách cài đặt Stage" đã thêm vào `CONTEXT.md`.
+
+## Đã chốt vòng 3 (2026-11-02)
+
+- **Q12 – Cải tiến HTTP:** chuyển vào `HttpClient` (a) tải tiếp bằng HTTP Range với
+  `If-Range` ETag mạnh, (b) giới hạn tổng thời gian theo dung lượng, (c) bảng chờ
+  15/30/60/120/240 s ±20% và tôn trọng `Retry-After` tới 900 s; mỗi mục có test. (d) tiến
+  độ thành sự kiện trong `crawl.jsonl`. Không chuyển `estimate_time.py`. Chưa có bằng chứng
+  (a) cứu được file nào.
+- **Q13 – Cách đưa 9 commit lên `main`:** chia theo nhóm. Commit M2 dùng `cherry-pick -x`;
+  phần M1 lấy theo file, commit message ghi hash gốc; merge commit và commit chỉ có tài liệu
+  đã bị thay thế được ghi lý do bỏ trong bảng dưới. Nhánh backup giữ làm bản lưu đầy đủ.
+- **Q14 – `make_stats`:** viết lại thành script thống kê riêng đọc `crawl.jsonl`, không gộp
+  vào validator. Liễu review.
+
+## Kế hoạch merge
+
+Lệnh test chung (README): `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q`.
+Mọi PR vào `main` qua PR (Q5), chạy lệnh test trên máy và dán số đạt/thất bại vào mô tả PR.
+Lấy file từ nhánh backup bằng `git checkout origin/backup/local-2026-10-25 -- <đường dẫn>`
+thay vì `git merge`, nên không phát sinh xung đột merge; xung đột chỉ là chọn nội dung,
+ghi ở từng PR.
+
+**PR 0 – `docs/merge-lieu-grilling-2026-11-01`** (đang draft). Dọn `.md`, sửa ADR 0001,
+`CONTEXT.md`, handoff này. Điều kiện merge: đã bật branch protection (Q5), đã nhắn Liễu
+(Q9), tag `lieu-standalone-final` → `6941c1b` đã push.
+*Xong khi:* `git diff --stat origin/main` chỉ có file `.md`.
+
+**PR 1 – `fix/m1-integrated-entrypoint`**. Sửa lỗi test collection trên `main`.
+- Lấy từ backup: `src/crawl/lieu_pipeline.py`, `tests/test_lieu_crawler.py`,
+  `scripts/crawl_range.py`, `tests/test_crawl_range.py`, `tests/test_merge_benchmarks.py`,
+  `docs/m1-standalone-trial.md`.
+- Viết mới `src/milestone1_crawler.py` thành shim: export `BatchedDiscovery`, `LieuPipeline`,
+  `main`; `main` gọi `src.crawl.lieu_pipeline.main`; không có `--engine`.
+- Sửa docstring `src/crawl/lieu_pipeline.py` dòng 3–10: bỏ `--engine integrated` và câu
+  "standalone is now the default", trỏ tới ADR 0001.
+- `tests/test_crawler_entrypoint.py` lấy từ backup rồi sửa: giữ test import và test
+  `--help` có `--data-dir`, `--max-passes`, `--retry-delay`, `--discover-batch` (không còn
+  `--engine`); bỏ test mặc định standalone.
+- `docs/m1-standalone-trial.md`: thêm một dòng đầu file ghi rằng `scripts/trial_standalone.py`
+  chỉ có trên nhánh backup.
+- Xóa `src/analyze_errors.py`, `src/diagnose_download.py`, `src/estimate_time.py` (Q7).
+- Không lấy: `src/lieu_standalone_crawler.py`, `tests/test_standalone_crawler.py`,
+  `scripts/trial_standalone.py`, `tests/test_standalone_trial.py`, hai dòng `arxiv`/`requests`
+  trong `requirements.txt`, bản `src/requirements.txt` của backup.
+- `src/benchmark.py` không cần sửa: ví dụ `--ids-file`/`--id` vẫn đúng với entry point khung.
+*Xong khi:* lệnh test chung qua bước collection và đạt hết;
+`python -m src.milestone1_crawler --help` có `--max-passes`; `grep -rn "import arxiv" src scripts`
+không ra gì.
+
+**PR 2 – `fix/schema-m2-types`** (Q3). `git cherry-pick -x 6db45ed`
+(`src/common/schema.py`, `tests/test_schema.py`). `schema.py` trên `main` chưa đổi từ lúc
+tách nhánh nên cherry-pick sạch.
+*Xong khi:* `tests/test_schema.py`, `tests/test_crawl_validation.py`,
+`tests/test_crawl_publish.py` và lệnh test chung đều đạt.
+
+**PR 3 – `feat/http-resume`** (Q12). Reviewer: Liễu. Nguồn tham chiếu: `6d435fd`, `1b45e47`
+(xem bằng `git show lieu-standalone-final:src/milestone1_crawler.py`). Phạm vi:
+`src/crawl/http_client.py`, `src/crawl/source.py`, test mới với transport giả, không gọi mạng.
+Test tối thiểu: tải tiếp từ byte đã có khi nhận 206; tải lại từ 0 khi server trả 200; không
+gửi `If-Range` với ETag yếu; dừng khi quá giới hạn tổng; chờ đúng `Retry-After` ≤ 900 s và bỏ
+khi > 900 s; có sự kiện tiến độ trong `crawl.jsonl`.
+*Xong khi:* các test trên và lệnh test chung đạt; `min_interval` 3 s giữa các request arXiv
+giữ nguyên.
+
+**PR 4 – `refactor/stage-implementations`** (Q11). Đưa `BatchedDiscovery` vào Stage
+Discovery và chiến lược Runner tải references song song (đặt tên theo kỹ thuật) thành mặc
+định của `CrawlPipeline`; `LieuPipeline` thành alias; ghi công Liễu trong docstring/README.
+*Xong khi:* `tests/test_lieu_crawler.py` không sửa vẫn đạt; lệnh test chung đạt; resume
+trên `data/crawl-smoke/` không tải lại Version đã xác minh (chạy thử với `--limit 20`).
+
+**PR 5 – `feat/make-stats-crawl-jsonl`** (Q14). Reviewer: Liễu. `src/make_stats.py` đọc
+`manifests/crawl.jsonl`; giữ `load_last_per_id` cho test cũ hoặc sửa test cùng PR.
+*Xong khi:* có test đọc một `crawl.jsonl` mẫu; lệnh test chung đạt.
+
+**PR 6 – `docs/cleanup-wave-2`**. `README.md`: giữ hướng dẫn chạy, trạng thái thật và link
+đề, bỏ mục 1–12 cũ, sửa link hỏng. `AGENTS.md`: mục 2 thành link tới `CONTEXT.md`, bỏ mục 1
+và 5 đã cũ, giữ mục 3, 4, 6.
+*Xong khi:* `grep -rn "docs/.*\.md\|leader.md" README.md AGENTS.md` chỉ ra file còn tồn tại.
+
+**PR 7 – `feat/m2-source-assembly`** (Q3). `git cherry-pick -x d58289a`; khi xung đột, bỏ
+mọi thay đổi ở `leader.md`, `AGENTS.md`, `README.md`, giữ `src/parse/`,
+`scripts/assemble_source.py`, `docs/milestone2-source.md` và hai file test.
+*Xong khi:* `tests/test_parse_source.py`, `tests/test_assemble_source_cli.py` và lệnh test
+chung đạt.
+
+**PR 8 – Range nhiều Đoạn** (Q2). Bảo áp `range-segments-2026-11-01.patch` lên nhánh mới
+từ `main` sau PR 7; cần giá trị của Minh và Nghiêm (Q6).
+*Xong khi:* test validator trong patch và lệnh test chung đạt.
+
+**PR 9 – importer, tùy chọn** (Q10). Chỉ làm khi có thành viên giữ dữ liệu layout standalone.
+
+### Đối chiếu commit
+
+| Commit | Nội dung | Đi đâu |
+|---|---|---|
+| `34881fd` | M2 kickoff, chỉ sửa `leader.md` | Không port: `leader.md` đã xóa ở PR 0; xem `git show 34881fd` |
+| `6db45ed` | Kiểu cột M2 trong schema | PR 2, `cherry-pick -x` |
+| `d58289a` | Lắp source Version cho M2 | PR 7, `cherry-pick -x`, bỏ hunk tài liệu cũ |
+| `5a9aefd` | Merge `origin/main` (code standalone của Liễu) | Không port: nội dung đã có trên `main`, đi theo tag |
+| `0068a74` | Giữ resume khi thay entry point | PR 1 (`lieu_pipeline.py`, `crawl_range.py`, test); phần standalone ở lại backup |
+| `7504f68` | Tài liệu kiểm tra restart | Không port: chỉ sửa `AGENTS.md`/`lieu-integration.md`, đã thay thế |
+| `37513ed` | Merge `e5be40e` (benchmark) | PR 1 (`lieu_pipeline.py`, `tests/test_merge_benchmarks.py`); `src/benchmark.py`, `src/merge_benchmarks.py` đã giống `main` |
+| `14303c4` | Chọn standalone làm mặc định, thêm lượt thử | PR 1 lấy phần `lieu_pipeline.py`/test; dispatcher, standalone, trial ở lại backup (Q7) |
+| `2e89b20` | Ghi kết quả lượt thử, quy trình M1 mới | PR 1 lấy `docs/m1-standalone-trial.md`; tài liệu khác không port |
+| `6d435fd` (Liễu) | Giới hạn thời gian, tiến độ, `estimate_time.py` | PR 3 (HTTP); `estimate_time.py` xóa ở PR 1, còn ở tag |
+| `1b45e47` (Liễu) | Bảng chờ, `Retry-After`, ETag yếu | PR 3 |
+| `6941c1b` (Liễu) | Tài liệu kỹ thuật | Đã xóa ở PR 0, còn ở tag `lieu-standalone-final` |
+
+Phiên này không chạy được test (sandbox không tải được gói từ PyPI); mọi số liệu test phải
+lấy từ máy Bảo hoặc Colab.
