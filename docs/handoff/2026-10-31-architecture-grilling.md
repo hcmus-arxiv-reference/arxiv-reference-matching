@@ -59,13 +59,14 @@ buổi sau. Quy tắc chung của repo nằm trong `AGENTS.md`, áp dụng nguy�
   Bảo sẽ gửi tin nhắn cho nhóm sau khi tự kiểm tra mẫu benchmark.
 - Deadline: còn khoảng 30 ngày tính từ 2026-10-31.
 
-Còn mở, sẽ tiếp tục ở buổi sau:
+Đã chốt tiếp trong buổi làm việc kế tiếp:
 
-- **Q7**: tập ID đối chứng. Đề xuất: 100 ID, 20 ID từ Range của mỗi người, chọn ngẫu
-  nhiên với seed cố định. Còn một mâu thuẫn chưa giải: Bảo nói tổng khoảng 2.500,
-  nhưng repo ghi mỗi người được giao 5.000 ID.
-- **Q9**: ai viết validator cho giai đoạn sàng lọc (`scripts/validate_crawl.py`).
-  Đề xuất: Claude viết, kèm test.
+- **Q7**: mỗi thành viên được giao 5.000 ID. Giữ đề xuất tập đối chứng 100 ID,
+  lấy 20 từ Range của mỗi thành viên bằng seed cố định. Danh sách Range cụ thể
+  phải lấy từ cấu hình/phân công đã xác nhận trước khi sinh ID mẫu.
+- **Q9**: Codex viết `scripts/validate_crawl.py` kèm test. Validator đọc output
+  theo layout `src/crawl/`; phạm vi và lệnh chạy được ghi tại
+  [`docs/benchmark/README.md`](../benchmark/README.md).
 - Sau khi chốt Q7 và Q9: Bảo chạy `/improve-codebase-architecture` trên `main` để
   thiết kế interface cho từng Stage trước khi ghép.
 
