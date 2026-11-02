@@ -173,7 +173,7 @@ def test_receipt_required_and_no_tex_distinguished_from_missing(tmp_path):
     assert assemble_source(root, require_receipt=True).issues[0].code == "invalid_receipt"
 
     class Client:
-        def get(self, url):
+        def get(self, url, **_options):
             return HttpResponse(200, {}, b"%PDF-1.7 synthetic")
 
     source = ArxivSourceDownloader(Client(), tmp_path / "raw").download("2508.02872", 1)

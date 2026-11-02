@@ -242,5 +242,11 @@ lấy từ máy Bảo hoặc Colab.
 - Phát hiện mới: `src/benchmark.py` đếm `*/done.json` (layout standalone), nên
   `done_papers_*` bằng 0 trên layout `src/crawl/`. Nhận định "không cần sửa" ở PR 1 là sai
   về trường này; cần sửa cùng PR 5 hoặc PR riêng.
-- Còn lại: PR 3 (HTTP, Liễu review), PR 4 (Stage implementations), PR 5 (`make_stats`),
+- PR 3 `feat/http-resume` (dựa trên PR 6): Bảo tự review, báo Liễu sau.
+  **Q12(d) đổi:** sự kiện tiến độ ghi vào `manifests/http-events.jsonl`, không ghi vào
+  `crawl.jsonl`. Lý do: `crawl.jsonl` là Manifest, nạp bằng `TaskRecord(**json)`, và
+  validator (`src/crawl/validation.py`) chỉ nhận 3 kind; ghi sự kiện vào đó làm hỏng
+  validator dùng chung. Đổi kèm theo: 429/5xx trên mọi host (gồm S2) chờ theo bảng mới
+  thay vì 1/2/4 s; `Retry-After` tối đa 900 s thay vì 60 s.
+- Còn lại: PR 4 (Stage implementations), PR 5 (`make_stats`),
   PR 8 (Range nhiều Đoạn, chờ patch và giá trị của Minh/Nghiêm).
