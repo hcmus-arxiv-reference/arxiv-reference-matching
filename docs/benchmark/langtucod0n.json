@@ -1,0 +1,112 @@
+{
+  "segments": 11,
+  "total_wall_seconds": 293952.18,
+  "total_wall_hours": 81.65,
+  "total_cooldown_seconds": 0,
+  "wall_seconds_excl_cooldown": 293952.18,
+  "peak_rss_mb": 250.7,
+  "avg_rss_mb": 51.6,
+  "peak_disk_mb": 4221.41,
+  "final_disk_mb": 4221.41,
+  "per_segment": [
+    {
+      "name": "run_01",
+      "wall_seconds": 9321.77,
+      "peak_rss_mb": 250.7,
+      "done_papers_at_start": 0,
+      "done_papers_at_end": 145,
+      "cooldown_seconds": 0,
+      "ended": "Ctrl+C"
+    },
+    {
+      "name": "run_02",
+      "wall_seconds": 901.84,
+      "peak_rss_mb": 117.7,
+      "done_papers_at_start": 145,
+      "done_papers_at_end": 173,
+      "cooldown_seconds": 0,
+      "ended": "Ctrl+C"
+    },
+    {
+      "name": "run_03",
+      "wall_seconds": 1929.06,
+      "peak_rss_mb": 95.9,
+      "done_papers_at_start": 173,
+      "done_papers_at_end": 228,
+      "cooldown_seconds": 0,
+      "ended": "Ctrl+C"
+    },
+    {
+      "name": "run_04",
+      "wall_seconds": 37031.33,
+      "peak_rss_mb": 119.2,
+      "done_papers_at_start": 228,
+      "done_papers_at_end": 1182,
+      "cooldown_seconds": 0,
+      "ended": "Ctrl+C"
+    },
+    {
+      "name": "run_05",
+      "wall_seconds": 2628.19,
+      "peak_rss_mb": 165.8,
+      "done_papers_at_start": 1182,
+      "done_papers_at_end": 1209,
+      "cooldown_seconds": 0,
+      "ended": "Ctrl+C"
+    },
+    {
+      "name": "run_06",
+      "wall_seconds": 20388.77,
+      "peak_rss_mb": 173.3,
+      "done_papers_at_start": 1209,
+      "done_papers_at_end": 1392,
+      "cooldown_seconds": 0,
+      "ended": "Ctrl+C"
+    },
+    {
+      "name": "run_07",
+      "wall_seconds": 23947.56,
+      "peak_rss_mb": 76.1,
+      "done_papers_at_start": 1392,
+      "done_papers_at_end": 1623,
+      "cooldown_seconds": 0,
+      "ended": "Ctrl+C"
+    },
+    {
+      "name": "run_08",
+      "wall_seconds": 174757.39,
+      "peak_rss_mb": 150.9,
+      "done_papers_at_start": 1623,
+      "done_papers_at_end": 4463,
+      "cooldown_seconds": 0,
+      "ended": "Ctrl+C"
+    },
+    {
+      "name": "run_09",
+      "wall_seconds": 21010.59,
+      "peak_rss_mb": 116.2,
+      "done_papers_at_start": 4463,
+      "done_papers_at_end": 4979,
+      "cooldown_seconds": 0,
+      "ended": "finished"
+    },
+    {
+      "name": "run_10",
+      "wall_seconds": 2014.77,
+      "peak_rss_mb": 110.9,
+      "done_papers_at_start": 4979,
+      "done_papers_at_end": 4999,
+      "cooldown_seconds": 0,
+      "ended": "finished"
+    },
+    {
+      "name": "run_11",
+      "wall_seconds": 20.91,
+      "peak_rss_mb": 76.5,
+      "done_papers_at_start": 4999,
+      "done_papers_at_end": 5000,
+      "cooldown_seconds": 0,
+      "ended": "finished"
+    }
+  ]
+}
