@@ -52,10 +52,10 @@ các tài liệu cũ. Mọi thay đổi đi qua PR; lịch sử cũ vẫn giữ 
 Theo [docs/benchmark/README.md](benchmark/README.md), gồm hai giai đoạn:
 
 1. **Sàng lọc:** mỗi bạn nộp `benchmark.json` cho lượt crawl đã chạy trên Range của
-   mình. Giai đoạn này chủ yếu xem **chất lượng dữ liệu**. Số thời gian và RAM chỉ để
+   mình, **không cần chạy lại**. Giai đoạn này chủ yếu xem **chất lượng dữ liệu**. Số thời gian và RAM chỉ để
    tham khảo, vì mỗi người chạy trên máy và mạng khác nhau.
-2. **Đối chứng:** các bản ứng viên chạy trên cùng tập ID mẫu, cùng Colab CPU, cùng
-   harness đo. Số hiệu năng dùng để chọn lấy từ giai đoạn này.
+2. **Đối chứng:** Bảo chạy các bản ứng viên trên cùng một tập ID mẫu nhỏ, cùng Colab
+   CPU, cùng harness đo. Số hiệu năng dùng để chọn lấy từ giai đoạn này.
 
 Lưu ý: validator hiện chỉ đọc được layout của `src/crawl/`. Output lưu theo cách khác
 (SQLite, thư mục riêng…) **không bị coi là sai**. Bảo sẽ chuyển layout hoặc so ở giai
@@ -71,10 +71,12 @@ chạy Range của mình rồi cộng lại) thì Bảo đang hỏi giảng viê
 ## 6. Việc của từng bạn (hạn Thứ Năm 05/11/2026)
 
 - **Mọi người:**
-  - Nộp `benchmarks/<github-username>.json` theo mẫu
-    [benchmark.template.json](benchmark/benchmark.template.json), commit lên nhánh của
-    mình. Gửi Bảo đường dẫn tới thư mục output đã crawl.
-  - Trường nào không có số đo thật thì để `null`, không ước lượng.
+  - **Không cần chạy lại.** Điền `benchmarks/<github-username>.json` theo mẫu
+    [benchmark.template.json](benchmark/benchmark.template.json), lấy số từ lượt crawl
+    đã có (đếm từ output và log). Commit lên nhánh của mình, gửi Bảo đường dẫn tới thư
+    mục output đã crawl.
+  - Trường nào không có số đo thật thì để `null`, không ước lượng. Phần đo tốc độ Bảo tự
+    chạy cho cả 5 bản trên cùng tập ID nhỏ trên Colab.
 - **Mọi người:**
   - Giữ nguyên nhánh cũ, không sửa, không xóa.
   - Thay đổi crawler mới thì mở PR vào `src/crawl/` trên `main`.
