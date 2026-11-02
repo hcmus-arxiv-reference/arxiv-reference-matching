@@ -229,3 +229,18 @@ từ `main` sau PR 7; cần giá trị của Minh và Nghiêm (Q6).
 
 Phiên này không chạy được test (sandbox không tải được gói từ PyPI); mọi số liệu test phải
 lấy từ máy Bảo hoặc Colab.
+
+## Tiến độ thực hiện (2026-11-02)
+
+- `main` local đã lệch khỏi `origin/main` (ahead 9 / behind 11); 9 commit lệch trùng
+  `origin/backup/local-2026-10-25` nên `main` local đã được đặt lại về `origin/main`.
+- Đã làm trên máy Bảo, xếp chồng theo thứ tự (mỗi nhánh dựa trên nhánh trước), chưa push:
+  PR 1 `fix/m1-integrated-entrypoint` → PR 2 `fix/schema-m2-types` →
+  PR 7 `feat/m2-source-assembly` → PR 6 `docs/cleanup-wave-2`.
+  PR 7 làm trước PR 6 vì chỉ là cherry-pick; PR 6 mô tả cả lớp gom source M2.
+- Lệnh test chung trên nhánh cuối: xem mô tả commit từng nhánh.
+- Phát hiện mới: `src/benchmark.py` đếm `*/done.json` (layout standalone), nên
+  `done_papers_*` bằng 0 trên layout `src/crawl/`. Nhận định "không cần sửa" ở PR 1 là sai
+  về trường này; cần sửa cùng PR 5 hoặc PR riêng.
+- Còn lại: PR 3 (HTTP, Liễu review), PR 4 (Stage implementations), PR 5 (`make_stats`),
+  PR 8 (Range nhiều Đoạn, chờ patch và giá trị của Minh/Nghiêm).
