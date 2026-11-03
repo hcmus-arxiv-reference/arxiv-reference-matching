@@ -29,6 +29,7 @@ References, Export, Runner) để ghép vào khung `src/crawl/`
 | `bytes_before/after_figure_removal` | Tổng byte archive giải nén trước và sau khi bỏ file không phải `.tex/.bib`. |
 | `peak_rss_mb` / `avg_rss_mb` | RAM của **cả cây tiến trình**, lấy mẫu định kỳ. Không dùng `ru_maxrss` cho trung bình. |
 | `peak_disk_mb` / `output_mb` | Disk lớn nhất trong lúc chạy / dung lượng thư mục output cuối (`du -sb`). |
+| `range` | `{"prefix", "start", "end"}` cho một Đoạn. Range vắt qua tháng ghi `{"segments": [{"prefix", "start", "end"}, ...]}`, đúng như [configs/ranges.toml](../../configs/ranges.toml). |
 | `measured_by` | Công cụ đo thật sự đã dùng. Số không có nguồn đo sẽ không được dùng. |
 
 Trường nào không có số liệu thật thì để `null`. **Không điền số ước lượng.**

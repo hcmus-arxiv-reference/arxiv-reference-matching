@@ -262,3 +262,17 @@ lấy từ máy Bảo hoặc Colab.
   `crawl.jsonl`, giữ `load_last_per_id`; `src/benchmark.py` đếm `done_papers_*` trên cả
   hai layout. Trên `data/crawl-smoke/`: 4.941/5.000 `done`, khớp `range-run.json`.
 - Còn lại: PR 8 (Range nhiều Đoạn), PR 9 (importer, tùy chọn).
+- #14 lại merge vào nhánh nền sau khi #13 vào `main`; đã đổi base #15 sang `main`, #15
+  mang cả commit PR 4.
+- PR 8 → `feat/range-segments` (dựa trên #15). Không tìm thấy
+  `range-segments-2026-11-01.patch` trên máy, nên viết lại theo Q2/Q6: `configs/ranges.toml`,
+  `load_ranges`/`member_ids` trong `src/common/config.py`, `--member` cho
+  `src.milestone1_crawler` và `scripts.crawl_range`, validator nhận `range.segments`.
+  - Minh: Range kết thúc ở `2410.03024` (Minh xác nhận 2026-11-03). `last_september_id =
+    2409.20569` kiểm tra trên `export.arxiv.org` (có `2409.20569`, không có `2409.20570`),
+    tổng đúng 5.000 ID; `verified = true`.
+  - Nghiêm: GitHub `hohuunghiem`; Range `2409.08594`–`2409.13593` theo README nhánh
+    `feat/nghiem-crawler`.
+  - Hải (`ngochai06`), Liễu (`langtucod0n`): chưa có Range trong repo, chưa ghi vào
+    `configs/ranges.toml`. Khoảng `2409.13594`–`2409.18593` (5.000 ID) nằm giữa Range của
+    Nghiêm và Minh, chưa xác nhận là của ai.
