@@ -52,6 +52,10 @@ Không commit `.env` hoặc dữ liệu.
 # Chạy toàn Range theo lô, có checkpoint/resume và retry phần thiếu.
 .venv/bin/python -m src.milestone1_crawler --data-dir data/crawl-smoke
 
+# Range của một thành viên trong configs/ranges.toml (có thể nhiều Đoạn), hoặc cả nhóm.
+.venv/bin/python -m src.milestone1_crawler --member minh --data-dir data/minh
+.venv/bin/python -m src.milestone1_crawler --member all --data-dir data/group
+
 # Một vài ID hoặc danh sách ID.
 .venv/bin/python -m src.milestone1_crawler --id 2508.02872 --data-dir data/crawl-smoke
 .venv/bin/python -m src.make_ids 2508.02872 2508.07871 -o ids.txt
