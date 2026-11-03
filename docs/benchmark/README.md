@@ -65,15 +65,3 @@ Harness có sẵn trên `main`: `python -m src.benchmark` (mặc định lấy m
 cây tiến trình mỗi 1 giây, disk mỗi 5 giây; chỉnh bằng `--interval`,
 `--disk-interval`). Bọc lệnh crawl của mình bằng harness này để có
 `peak_rss_mb`, `avg_rss_mb`, `peak_disk_mb` đúng định nghĩa.
-
-## Tin nhắn gửi nhóm
-
-> Mọi người ơi, để chọn phần tốt nhất của từng người ghép vào bản chung, mỗi
-> người nộp giúp mình 1 file `benchmark.json` theo mẫu
-> `docs/benchmark/benchmark.template.json` trên `main`, đặt tại
-> `benchmarks/<github-username>.json` (commit lên nhánh của mình), và cho mình
-> đường dẫn tới thư mục output đã crawl. Đọc kỹ bảng định nghĩa trong
-> `docs/benchmark/README.md`; trường nào không đo được thật thì để `null`,
-> đừng ước lượng. Lần này mình so **chất lượng dữ liệu** trước; tốc độ sẽ đo lại
-> cho mọi người trên cùng Colab và cùng tập ID nên không cần lo máy yếu.
-> Hạn: <ngày>.
