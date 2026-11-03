@@ -16,9 +16,10 @@ Nhóm trưởng: [NTBao-coder](https://github.com/NTBao-coder). Thành viên:
 ## Trạng thái (2026-11-02)
 
 - **M1 – Crawling:** `src/crawl/` là Engine duy nhất trên `main`
-  ([ADR 0001](docs/adr/0001-src-crawl-la-khung-duy-nhat.md)). Discovery theo lô và
-  references chạy song song với source là phần đóng góp của Liễu (`langtucod0n`),
-  chạy qua `src.milestone1_crawler`. Range của Bảo (`2508.02872`–`2508.07871`):
+  ([ADR 0001](docs/adr/0001-src-crawl-la-khung-duy-nhat.md)). Discovery theo lô
+  (`BatchedDiscovery`) và tải references song song với source là đóng góp của Liễu
+  (`langtucod0n`), nay là cách cài đặt mặc định của `CrawlPipeline`; mọi lệnh crawl
+  (`src.milestone1_crawler`, `scripts.crawl_range`, `scripts.crawl`) đều dùng chúng. Range của Bảo (`2508.02872`–`2508.07871`):
   lần kiểm tra 25/10 có 4.941/5.000 Publication hoàn chỉnh; 59 Publication còn
   thiếu, phần lớn do arXiv trả HTTP 404 ([lượt thử](docs/m1-standalone-trial.md)).
   Range của các thành viên khác chưa gộp.
