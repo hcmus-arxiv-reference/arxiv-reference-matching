@@ -10,7 +10,7 @@ from src.crawl.source import ArxivSourceDownloader
 
 def source(tmp_path, payload):
     class Client:
-        def get(self, url):
+        def get(self, url, **_options):
             return HttpResponse(200, {}, payload)
     return ArxivSourceDownloader(Client(), tmp_path / "raw").download("2508.02872", 1).path
 
