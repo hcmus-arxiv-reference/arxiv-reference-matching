@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 from src.common.schema import read_table
 from src.crawl.manifest import TaskRecord
-from src.crawl.pipeline import CrawlPipeline
+from src.crawl.corpus import CorpusReader
 from src.crawl.semantic_scholar import reference_rows
 from src.crawl.source import verified_source
 from src.crawl.storage import key
@@ -63,9 +63,8 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None):
     state = json.loads(state_bytes) if state_bytes else {}
     if state.get("status") in {"running", "retry_wait"}:
         raise ValueError("Crawler is active; take a stable snapshot after it stops")
-    pipeline = object.__new__(CrawlPipeline)
-    pipeline.data_dir = cache
-    pipeline.manifest = SimpleNamespace(get=lambda pid, v, kind="source": records.get((pid,v,kind)))
+    manifest = SimpleNamespace(get=lambda pid, v, kind="source": records.get((pid,v,kind)))
+    corpus = CorpusReader(cache, manifest)
     counts = Counter(assigned=len(identifiers), discovered=0, complete=0, references_success=0,
                      expected_versions=0, success=0, non_tex=0, unavailable=0,
                      download_error=0, not_attempted=0)
@@ -76,7 +75,7 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None):
     metadata_issues = Counter()
     for identifier in identifiers:
         try:
-            publication = pipeline._load_publication(identifier)
+            publication = corpus.load_publication(identifier)
         except (OSError, ValueError, KeyError, TypeError):
             failures.append({"arxiv_id": identifier, "version": None, "kind": "discovery", "status": "unknown"})
             continue  # Unknown expected Version count is not represented as zero.
@@ -91,7 +90,7 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None):
         for version in range(1, publication.versions + 1):
             directory = cache / "raw" / key(identifier) / f"v{version}"
             source = verified_source(directory)
-            rec = pipeline.manifest.get(identifier, version)
+            rec = manifest.get(identifier, version)
             if source and rec and source.status == rec.status and source.checksum == rec.checksum:
                 status = source.status
                 verified += 1
@@ -106,7 +105,7 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None):
         retained_sizes.append(size)
         has_refs = False
         try:
-            rows = pipeline._load_references(identifier)
+            rows = corpus.load_references(identifier)
             has_refs = True
             counts["references_success"] += 1
             raw_refs += len(rows)
@@ -120,7 +119,7 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None):
             rel = f"references/{key(identifier)}.json"
             input_hashes[rel] = digest(cache / rel)
         except (OSError, ValueError, KeyError, TypeError):
-            rec = pipeline.manifest.get(identifier, None, "references")
+            rec = manifest.get(identifier, None, "references")
             failures.append({"arxiv_id": identifier, "version": None, "kind": "references",
                              "status": rec.status if rec else "not_attempted",
                              "http_status": rec.http_status if rec else None})

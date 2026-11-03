@@ -73,7 +73,7 @@ def test_resume_existing_main_cache_never_redownloads_valid_sources(tmp_path):
 
 def test_public_cli_resumes_existing_cache_without_network(tmp_path, monkeypatch):
     from types import SimpleNamespace
-    from src.crawl import lieu_pipeline
+    from src.crawl import cli as lieu_pipeline
     from src.milestone1_crawler import main
     pipeline, _, _ = setup(tmp_path)
     identifier = '2508.02872'
