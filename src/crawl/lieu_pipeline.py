@@ -17,7 +17,7 @@ import json
 from pathlib import Path
 import signal
 
-from src.common.config import get_settings
+from src.common.config import get_settings, member_ids
 from src.crawl.discovery import BatchedDiscovery
 from src.crawl.http_client import HttpClient
 from src.crawl.pipeline import CrawlPipeline
@@ -45,6 +45,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--id", action="append", dest="ids")
     parser.add_argument("--ids-file", type=Path)
+    parser.add_argument("--member", help="Range trong configs/ranges.toml; 'all' = cả nhóm")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--data-dir", type=Path)
     parser.add_argument("--discover-batch", type=int, default=50)
@@ -62,6 +63,11 @@ def main(argv=None):
     if args.ids_file:
         ids.extend(line.strip() for line in args.ids_file.read_text().splitlines()
                    if line.strip() and not line.strip().startswith("#"))
+    if args.member:
+        try:
+            ids.extend(member_ids(args.member))
+        except (KeyError, ValueError) as error:
+            parser.error(str(error))
     if not ids:
         ids = list(settings.arxiv_range.ids())
     ids = list(dict.fromkeys(require_id(i) for i in ids))

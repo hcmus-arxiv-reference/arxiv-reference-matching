@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import os
 import re
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+from itertools import chain
 from typing import Iterator, Mapping
 
 try:  # python-dotenv là tùy chọn: thiếu thì chỉ dùng biến môi trường có sẵn
@@ -25,6 +27,8 @@ PROJECT_VERSION = "0.1"
 DEFAULT_RANGE_PREFIX = "2508"
 DEFAULT_RANGE_START = 2872
 DEFAULT_RANGE_END = 7871
+# Range của cả nhóm, mỗi thành viên có thể gồm nhiều Đoạn (qua ranh giới tháng).
+DEFAULT_RANGES_PATH = Path(__file__).resolve().parents[2] / "configs" / "ranges.toml"
 
 
 @dataclass(frozen=True)
@@ -53,6 +57,78 @@ class ArxivRange:
             return False
         m = re.fullmatch(rf"{self.prefix}\.(\d{{5}})", arxiv_id)
         return bool(m) and self.start <= int(m.group(1)) <= self.end
+
+
+@dataclass(frozen=True)
+class SegmentedRange:
+    """Range gồm một hoặc nhiều Đoạn ArxivRange không chồng nhau, theo thứ tự khai báo."""
+
+    segments: tuple[ArxivRange, ...]
+
+    def __post_init__(self) -> None:
+        if not self.segments:
+            raise ValueError("Range cần ít nhất một Đoạn")
+        for i, a in enumerate(self.segments):
+            for b in self.segments[i + 1:]:
+                if overlaps(a, b):
+                    raise ValueError(f"Đoạn chồng nhau: {a} và {b}")
+
+    def ids(self) -> Iterator[str]:
+        return chain.from_iterable(segment.ids() for segment in self.segments)
+
+    def __len__(self) -> int:
+        return sum(len(segment) for segment in self.segments)
+
+    def __contains__(self, arxiv_id: object) -> bool:
+        return any(arxiv_id in segment for segment in self.segments)
+
+
+def overlaps(a: ArxivRange, b: ArxivRange) -> bool:
+    return a.prefix == b.prefix and a.start <= b.end and b.start <= a.end
+
+
+@dataclass(frozen=True)
+class MemberRange:
+    """Range được giao của một thành viên trong configs/ranges.toml."""
+
+    name: str
+    github: str
+    range: SegmentedRange
+    verified: bool
+    note: str | None = None
+
+
+def load_ranges(path: str | Path | None = None) -> dict[str, MemberRange]:
+    """Đọc configs/ranges.toml; báo lỗi nếu trùng tên, chồng Đoạn hoặc sai số ID.
+
+    Mỗi thành viên đúng `ids_per_member` ID; Đoạn của hai thành viên không được
+    chồng nhau. Thứ tự trả về theo thứ tự khai báo trong file.
+    """
+    data = tomllib.loads(Path(path or DEFAULT_RANGES_PATH).read_text(encoding="utf-8"))
+    size = data.get("ids_per_member")
+    if type(size) is not int or size < 1:
+        raise ValueError("ids_per_member phải là số nguyên dương")
+    members: dict[str, MemberRange] = {}
+    for entry in data.get("members", []):
+        name, github, verified = entry.get("name"), entry.get("github"), entry.get("verified")
+        if not isinstance(name, str) or not isinstance(github, str) or type(verified) is not bool:
+            raise ValueError(f"Thành viên thiếu name/github/verified: {entry!r}")
+        if name in members or any(m.github == github for m in members.values()):
+            raise ValueError(f"Trùng thành viên {name}/{github}")
+        segments = []
+        for seg in entry.get("segments", []):
+            if (not isinstance(seg.get("prefix"), str) or type(seg.get("start")) is not int
+                    or type(seg.get("end")) is not int):
+                raise ValueError(f"{name}: Đoạn cần prefix (chuỗi), start, end (số nguyên)")
+            segments.append(ArxivRange(seg["prefix"], seg["start"], seg["end"]))
+        member = MemberRange(name, github, SegmentedRange(tuple(segments)), verified, entry.get("note"))
+        if len(member.range) != size:
+            raise ValueError(f"{name}: {len(member.range)} ID, cần đúng {size}")
+        for other in members.values():
+            if any(overlaps(a, b) for a in member.range.segments for b in other.range.segments):
+                raise ValueError(f"Range của {name} chồng với {other.name}")
+        members[name] = member
+    return members
 
 
 @dataclass(frozen=True)
@@ -124,3 +200,16 @@ def get_settings(env: Mapping[str, str] | None = None) -> Settings:
             end=int(get("ARXIV_RANGE_END") or DEFAULT_RANGE_END),
         ),
     )
+
+
+def member_ids(name: str, path: str | Path | None = None) -> Iterator[str]:
+    """ID của một thành viên, hoặc của cả nhóm khi name="all"; chỉ Range đã xác minh."""
+    members = load_ranges(path)
+    chosen = list(members.values()) if name == "all" else [members.get(name)]
+    if chosen == [None]:
+        raise KeyError(f"Không có Range cho '{name}' trong configs/ranges.toml "
+                       f"(có: {', '.join(members)})")
+    unverified = [m.name for m in chosen if not m.verified]
+    if unverified:
+        raise ValueError(f"Range chưa xác minh: {', '.join(unverified)}")
+    return chain.from_iterable(m.range.ids() for m in chosen)

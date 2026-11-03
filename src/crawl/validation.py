@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from src.common.config import ArxivRange
+from src.common.config import ArxivRange, SegmentedRange
 from .manifest import TaskRecord
 from .semantic_scholar import reference_rows
 from .source import verified_source
@@ -46,11 +46,18 @@ def validate_crawl(data_dir: str | Path, benchmark_path: str | Path) -> dict[str
     try:
         if not isinstance(range_data, dict):
             raise ValueError("range must be an object")
-        if (not isinstance(range_data.get("prefix"), str)
-                or type(range_data.get("start")) is not int
-                or type(range_data.get("end")) is not int):
-            raise ValueError("range prefix/start/end have invalid types")
-        arxiv_range = ArxivRange(range_data["prefix"], range_data["start"], range_data["end"])
+        # One segment as {prefix,start,end}, or several as {"segments": [...]}.
+        parts = range_data["segments"] if "segments" in range_data else [range_data]
+        if not isinstance(parts, list) or not all(isinstance(part, dict) for part in parts):
+            raise ValueError("range.segments must be a list of objects")
+        segments = []
+        for part in parts:
+            if (not isinstance(part.get("prefix"), str)
+                    or type(part.get("start")) is not int
+                    or type(part.get("end")) is not int):
+                raise ValueError("range prefix/start/end have invalid types")
+            segments.append(ArxivRange(part["prefix"], part["start"], part["end"]))
+        arxiv_range = SegmentedRange(tuple(segments))
     except (KeyError, TypeError, ValueError) as error:
         return {"ok": False, "findings": [{"code": "benchmark_range", "message": str(error)}]}
 
@@ -187,6 +194,6 @@ def validate_crawl(data_dir: str | Path, benchmark_path: str | Path) -> dict[str
                 finding("counter_mismatch", f"totals.{name}: benchmark={declared!r}, observed={actual}")
 
     return {"ok": not findings, "member": benchmark.get("member"),
-            "range": {"prefix": arxiv_range.prefix, "start": arxiv_range.start, "end": arxiv_range.end,
-                      "size": len(arxiv_range)},
+            "range": {"segments": [{"prefix": s.prefix, "start": s.start, "end": s.end}
+                                   for s in arxiv_range.segments], "size": len(arxiv_range)},
             "observed": observed, "findings": findings}
