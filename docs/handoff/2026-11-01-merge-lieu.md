@@ -133,6 +133,17 @@ Theo yêu cầu của Bảo, đã xóa các file `.md` không liên quan tới q
 - **Q14 – `make_stats`:** viết lại thành script thống kê riêng đọc `crawl.jsonl`, không gộp
   vào validator. Liễu review.
 
+## Đã chốt vòng 4 (2026-11-03)
+
+- **Q15 – Tiêu chí tích hợp từ nhánh thành viên:** chỉ đưa vào `main` các cách cài đặt
+  Stage **đúng và có hướng phát triển tốt**. Phần sai bị bỏ qua hoàn toàn: không merge,
+  không sửa hộ trên nhánh gốc, không viết lại để giữ cho bằng được. Phần sai gồm:
+  vi phạm quy tắc AGENTS.md mục 4 (tải arXiv không lịch sự như proxy xoay IP hay nhiều
+  kết nối; bí mật ghi trong code); vượt hạn mức dịch vụ (ví dụ nhiều API key S2 song
+  song); sai đề hoặc sai schema chung; không có test hay không tái lập được. Phần đúng
+  vẫn theo Q11: đặt tên theo kỹ thuật, ghi công người viết. Nhánh gốc giữ nguyên làm case
+  study; lỗi tìm thấy ghi vào báo cáo và báo chủ nhánh, không tự sửa.
+
 ## Kế hoạch merge
 
 Lệnh test chung (README): `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q`.

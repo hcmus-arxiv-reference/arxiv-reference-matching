@@ -16,7 +16,9 @@ from src.common.config import Settings
 from src.common.hf_io import raw_prefix, table_path
 from src.common.schema import from_records, read_table, write_table
 from .source import verified_source
-from .storage import key, write_json
+from .export import PublicationBundle
+from .storage import key
+from src.common.json_io import write_json
 
 
 class HuggingFacePublisher:
@@ -36,11 +38,15 @@ class HuggingFacePublisher:
             raise ValueError("Dataset has no revision; initialize it with scripts.check_hf")
         return info
 
+    def validate_destination(self) -> None:
+        """Fail early unless the configured destination is an initialized private dataset."""
+        self._info()
+
     def _download(self, name: str, revision: str) -> Path:
         return Path(self.api.hf_hub_download(repo_id=self.settings.hf_repo_id, repo_type="dataset",
                     filename=name, revision=revision))
 
-    def publish(self, bundles: list[dict], tables: dict[str, Path]) -> dict:
+    def publish(self, bundles: list[PublicationBundle], tables: dict[str, Path]) -> dict:
         """One commit contains source, metadata and merged tables for this batch.
 
         Errors leave local data ready for retry. Never delete remote files or

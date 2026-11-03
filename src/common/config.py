@@ -108,8 +108,13 @@ def load_ranges(path: str | Path | None = None) -> dict[str, MemberRange]:
     size = data.get("ids_per_member")
     if type(size) is not int or size < 1:
         raise ValueError("ids_per_member phải là số nguyên dương")
+    entries = data.get("members")
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("members phải là danh sách không rỗng")
     members: dict[str, MemberRange] = {}
-    for entry in data.get("members", []):
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError("Mỗi thành viên phải là một bảng cấu hình")
         name, github, verified = entry.get("name"), entry.get("github"), entry.get("verified")
         if not isinstance(name, str) or not isinstance(github, str) or type(verified) is not bool:
             raise ValueError(f"Thành viên thiếu name/github/verified: {entry!r}")

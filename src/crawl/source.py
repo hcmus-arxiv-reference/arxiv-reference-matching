@@ -17,7 +17,8 @@ import zipfile
 from src.common.metrics import append_jsonl
 
 from .http_client import HttpClient, HttpStatusError
-from .storage import key, write_json
+from .storage import key
+from src.common.json_io import write_json
 
 MAX_EXTRACT_BYTES = 256 * 1024 * 1024
 MAX_FILES = 10000

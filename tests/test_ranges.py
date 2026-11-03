@@ -87,3 +87,53 @@ def test_validator_accepts_segmented_range(tmp_path):
     assert 'manifest_out_of_range' in {f['code'] for f in outside['findings']}
     overlap = check([{'prefix': '2508', 'start': 1, 'end': 3000}, {'prefix': '2508', 'start': 2872, 'end': 2900}])
     assert [f['code'] for f in overlap['findings']] == ['benchmark_range']
+
+
+@pytest.mark.parametrize('members', ['', 'members = []\n', 'members = "invalid"\n', 'members = [1]\n'])
+def test_missing_or_invalid_members_are_rejected(tmp_path, members):
+    path = tmp_path / 'ranges.toml'
+    path.write_text('ids_per_member = 5000\n' + members)
+    with pytest.raises(ValueError):
+        list(member_ids('all', path))
+
+
+def test_public_cli_passes_cross_month_ids_to_runner(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from src.crawl import cli, runner
+    from src.milestone1_crawler import main
+
+    path = write(tmp_path)
+    settings = SimpleNamespace(data_dir=tmp_path, user_agent=lambda: 'offline', s2_api_key=None,
+                               arxiv_range=ArxivRange('2508', 2872, 7871))
+    monkeypatch.setattr(cli, 'get_settings', lambda: settings)
+    monkeypatch.setattr(cli, 'member_ids', lambda name: member_ids(name, path))
+    monkeypatch.setattr(cli, 'HttpClient', Mock())
+    pipeline = Mock()
+    monkeypatch.setattr(cli, 'LieuPipeline', Mock(return_value=pipeline))
+    monkeypatch.setattr(cli.signal, 'signal', lambda *args: None)
+    run = Mock(return_value={'status': 'complete'})
+    monkeypatch.setattr(runner, 'run_range', run)
+
+    assert main(['--member', 'a']) == 0
+    assert run.call_args.args == (pipeline, ['2409.99998', '2409.99999', '2410.00001'])
+
+
+@pytest.mark.parametrize('source', ['member', 'file'])
+def test_explicit_empty_cli_selection_never_falls_back(tmp_path, monkeypatch, source):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from src.crawl import cli
+
+    settings = SimpleNamespace(arxiv_range=ArxivRange('2508', 2872, 7871))
+    monkeypatch.setattr(cli, 'get_settings', lambda: settings)
+    monkeypatch.setattr(cli, 'member_ids', lambda name: iter([]))
+    client = Mock(side_effect=AssertionError('must fail before HTTP setup'))
+    monkeypatch.setattr(cli, 'HttpClient', client)
+    path = tmp_path / 'ids.txt'
+    path.write_text('# no IDs\n')
+    args = ['--member', 'all'] if source == 'member' else ['--ids-file', str(path)]
+    with pytest.raises(SystemExit) as error:
+        cli.main(args)
+    assert error.value.code == 2
+    client.assert_not_called()
