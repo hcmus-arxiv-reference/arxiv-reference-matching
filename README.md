@@ -88,6 +88,15 @@ Chi tiết: [pipeline crawl](docs/crawl-pipeline.md).
 layout `src/crawl/`, và đếm `*/done.json` trên layout standalone. `make_stats` không kiểm
 checksum; số đã xác minh lấy từ `scripts.validate_crawl` hoặc `scripts.report_m1`.
 
+Tự kiểm thử trên Colab CPU (testbed của đề): mở
+[`notebooks/colab_m1_selftest.ipynb`](notebooks/colab_m1_selftest.ipynb) bằng
+<https://colab.research.google.com/github/hcmus-arxiv-reference/arxiv-reference-matching/blob/main/notebooks/colab_m1_selftest.ipynb>.
+Notebook clone `REF` (mặc định `main`, có thể là SHA), chạy pytest, crawl cold vào
+`/content/` qua `src.benchmark`, resume với mạng bị chặn kèm assertion, rồi `make_stats`,
+validator, đếm HTTP 429 và thời gian chờ. Mỗi lượt có `RUN_ID` riêng, được nén thành một
+`.tar.gz` kèm sha256 và chép lên Drive; phiên mới đặt `RESTORE_ARCHIVE` để khôi phục và
+resume lại. `CONTACT_EMAIL`, `S2_API_KEY` đặt trong Colab Secrets.
+
 Định nghĩa trường và quy trình so sánh giữa các thành viên:
 [docs/benchmark](docs/benchmark/README.md).
 
