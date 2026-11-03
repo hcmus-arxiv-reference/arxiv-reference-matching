@@ -8,7 +8,11 @@ Nguyên tắc:
 - Mọi thay đổi file này phải được nhóm trưởng duyệt: cả nhóm phụ thuộc vào nó.
 
 Nguồn Crawling: https://hcmus-cs-ta.github.io/lab-book/intro-ds/statement/crawling/
-Hai bảng Crawling đã đối chiếu; bốn bảng còn lại là DỰ THẢO, chưa đóng băng.
+Hai bảng Crawling đã đối chiếu; schema toàn dự án chưa đóng băng.
+M2 được Bảo duyệt ngày 2026-10-24: bibtex.authors là list<string>, year
+là int32 nullable; hierarchy chỉ chứa cạnh, parent_id không null. Root chỉ
+nằm trong elements. Năm không đọc được phải lưu giá trị thô trong log của
+bộ trích BibTeX, không ép chuỗi bẩn thành một năm phỏng đoán.
 validate() chỉ kiểm tra một bảng; không xác minh đủ Version hoặc khóa ngoại.
 """
 
@@ -140,7 +144,7 @@ SCHEMAS: dict[str, pa.Schema] = {
             _s("arxiv_id", nullable=False),
             pa.field("version", pa.int32(), nullable=False),  # 1, 2, 3, ...
             _s("element_id", nullable=False),
-            _s("parent_id"),  # null cho nút gốc (document)
+            _s("parent_id", nullable=False),  # root không có dòng cạnh lên cha
         ]
     ),
     "bibtex": pa.schema(
@@ -149,8 +153,8 @@ SCHEMAS: dict[str, pa.Schema] = {
             _s("citation_key", nullable=False),
             _s("entry_type", nullable=False),
             _s("title"),
-            _s("authors"),  # join_list(...)
-            _s("year"),  # chuỗi vì dữ liệu bẩn ("2020a", "n.d.")
+            _strings("authors"),
+            pa.field("year", pa.int32()),  # chưa xác định: null, giữ raw trong log
             _s("doi"),
             _s("journal"),
             _s("url"),
