@@ -7,7 +7,7 @@ from src.crawl.discovery import Publication
 from src.crawl.http_client import HttpClient, HttpResponse
 from src.crawl.pipeline import CrawlPipeline
 from src.crawl.source import ArxivSourceDownloader
-from scripts.crawl_range import inspect_publication, run_range
+from src.crawl.runner import inspect_publication, run_range
 
 
 def make_pipeline(tmp_path, transport=None):

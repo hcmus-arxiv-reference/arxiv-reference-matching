@@ -15,7 +15,8 @@ from .pipeline import CrawlPipeline
 from .publish import HuggingFacePublisher
 from .semantic_scholar import SemanticScholarClient
 from .source import ArxivSourceDownloader
-from .storage import require_id, write_json
+from .storage import require_id
+from src.common.json_io import write_json
 
 
 def run_crawl(ids: Iterable[str] | None = None, *, settings: Settings | None = None,
@@ -49,7 +50,7 @@ def run_crawl(ids: Iterable[str] | None = None, *, settings: Settings | None = N
                                  settings.data_dir, references=s2)
         publisher = HuggingFacePublisher(settings) if upload else None
         if publisher:
-            publisher._info()  # fail before expensive crawling if repo is not usable
+            publisher.validate_destination()  # fail before expensive crawling if repo is not usable
         while batch := list(islice(iterator, batch_size)):
             batch = list(dict.fromkeys(require_id(i) for i in batch))
             counts["requested"] += len(batch)

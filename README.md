@@ -101,3 +101,15 @@ checksum; số đã xác minh lấy từ `scripts.validate_crawl` hoặc `script
 - [`docs/handoff/`](docs/handoff/): biên bản các buổi chốt kiến trúc và kế hoạch merge.
 - Nhánh thành viên (`Hai`, `feat/Minh-crawler`, `feat/nghiem-crawler`) và tag
   `lieu-standalone-final` giữ nguyên làm case study, không merge vào `main`.
+
+## Kiến trúc thư viện M1
+
+- `src/crawl/cli.py`: đọc tham số và khởi tạo Engine.
+- `src/crawl/runner.py`: chạy Range, retry và checkpoint.
+- `src/crawl/pipeline.py`: điều phối Discovery, Source fetch và References.
+- `src/crawl/corpus.py`: đọc metadata/references đã xác minh, không sửa corpus.
+- `src/crawl/export.py`: xuất bảng batch và bundle cho publisher.
+- `src/common/json_io.py`: ghi checkpoint JSON nguyên tử dùng chung.
+
+Các lệnh cũ vẫn dùng được. Chi tiết tương thích:
+[ADR 0003](docs/adr/0003-crawl-library-boundaries.md).

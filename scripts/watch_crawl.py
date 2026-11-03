@@ -15,7 +15,7 @@ import subprocess
 import time
 
 from filelock import FileLock
-from src.crawl.storage import write_json
+from src.common.json_io import write_json
 
 
 def terminal_message(report, worker_alive=True):

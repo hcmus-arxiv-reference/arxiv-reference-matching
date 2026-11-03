@@ -5,7 +5,7 @@ import argparse
 import json
 from pathlib import Path
 
-from src.crawl.storage import write_json
+from src.common.json_io import write_json
 from src.parse import assemble_source
 
 
