@@ -5,6 +5,7 @@ Source: https://info.arxiv.org/help/api/user-manual.html
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import re
 from urllib.parse import urlencode, urlsplit
 import xml.etree.ElementTree as ET
@@ -90,3 +91,53 @@ class ArxivDiscovery:
             revisions.append(updated)
         return Publication(publication.arxiv_id, publication.title, publication.authors,
                            publication.submission_date, revisions, publication.venue, publication.versions)
+
+
+class BatchedDiscovery(ArxivDiscovery):
+    """Discovery theo lô: prefetch base-ID Atom entries, up to 100 IDs per query.
+
+    Contributed by Liễu (langtucod0n), originally in merge parent 0d19257.
+    The shared parser still fills all revision dates. Missing or failed batch
+    entries fall back to individual queries; a missing batch result is never
+    sufficient evidence that a Publication does not exist. All arXiv requests,
+    including revision lookups/source downloads, share one client and the
+    process-wide rate limiter. batch_size=0 disables batching.
+    """
+
+    def __init__(self, client: HttpClient, batch_size: int = 50) -> None:
+        super().__init__(client)
+        if not 0 <= batch_size <= 100:
+            raise ValueError("discover_batch must be between 0 and 100")
+        self.batch_size = batch_size
+        self.prefetched: dict[str, bytes] = {}
+
+    def prefetch(self, identifiers) -> None:
+        ids = list(dict.fromkeys(require_id(i) for i in identifiers))
+        ids = [i for i in ids if i not in self.prefetched]
+        if not self.batch_size:
+            return
+        for start in range(0, len(ids), self.batch_size):
+            chunk = ids[start:start + self.batch_size]
+            try:
+                response = self.client.get(f"{self.endpoint}?{urlencode({'id_list': ','.join(chunk)})}")
+                if response.status != 200:
+                    raise HttpStatusError(response.status, "arXiv batch metadata")
+                root = ET.fromstring(response.body)
+                found = {}
+                for entry in root.findall(f"{{{ATOM}}}entry"):
+                    feed = ET.Element(f"{{{ATOM}}}feed")
+                    feed.append(entry)
+                    body = ET.tostring(feed, encoding="utf-8")
+                    pub = parse_feed(body)
+                    if pub.arxiv_id not in chunk or pub.arxiv_id in found:
+                        raise ValueError("Unexpected or duplicate batch publication")
+                    found[pub.arxiv_id] = body
+                self.prefetched.update(found)
+            except Exception as error:
+                print(json.dumps({"event": "batch_discovery_fallback",
+                                  "error_type": type(error).__name__, "size": len(chunk)}), flush=True)
+
+    def _fetch(self, identifier: str) -> bytes:
+        if identifier in self.prefetched:
+            return self.prefetched.pop(identifier)
+        return super()._fetch(identifier)
