@@ -47,7 +47,8 @@ def test_http_client_retries_transient_status_and_paces() -> None:
     def transport(_request, _timeout):
         return responses.pop(0)
 
-    client = HttpClient("test-agent", min_interval=0, sleeper=sleeps.append, transport=transport)
+    client = HttpClient("test-agent", min_interval=0, sleeper=sleeps.append, transport=transport,
+                        jitter=lambda low, high: 1.0)
     response = client.get("https://example.invalid")
     assert response.status == 200
-    assert sleeps == [1.0]
+    assert sleeps == [15.0]  # first step of the 429/5xx wait table (Q12)

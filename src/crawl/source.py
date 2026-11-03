@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import gzip
 import hashlib
 import io
@@ -12,6 +13,8 @@ import shutil
 import tarfile
 import tempfile
 import zipfile
+
+from src.common.metrics import append_jsonl
 
 from .http_client import HttpClient, HttpStatusError
 from .storage import key, write_json
@@ -136,8 +139,22 @@ def verified_source(path: Path) -> SourceResult | None:
 
 
 class ArxivSourceDownloader:
-    def __init__(self, client: HttpClient, root: str | Path = "data/raw") -> None:
+    """Download Versions resumably; HTTP progress goes to manifests/http-events.jsonl.
+
+    Events live outside crawl.jsonl: that file is the Manifest and the validator
+    accepts only task records there (decision 2026-11-02, replacing Q12(d)).
+    """
+    def __init__(self, client: HttpClient, root: str | Path = "data/raw",
+                 events_path: str | Path | None = None) -> None:
         self.client, self.root = client, Path(root)
+        self.events_path = Path(events_path) if events_path else self.root.parent / "manifests" / "http-events.jsonl"
+
+    def _event_sink(self, arxiv_id: str, version: int):
+        def emit(event: dict) -> None:
+            append_jsonl(self.events_path, {
+                "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "arxiv_id": arxiv_id, "version": version, **event})
+        return emit
 
     def download(self, arxiv_id: str, version: int) -> SourceResult:
         publication_key = key(arxiv_id)
@@ -147,7 +164,8 @@ class ArxivSourceDownloader:
         cached = verified_source(path)
         if cached:
             return cached
-        response = self.client.get(f"https://export.arxiv.org/src/{arxiv_id}v{version}")
+        response = self.client.get(f"https://export.arxiv.org/src/{arxiv_id}v{version}",
+                                   resume=True, on_event=self._event_sink(arxiv_id, version))
         if response.status in {404, 410}:
             return SourceResult("unavailable", path, "", (), (), response.status)
         if response.status != 200:

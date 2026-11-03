@@ -18,6 +18,10 @@ Cục bộ (bên dưới `DATA_DIR`, mặc định `data/`, không commit Git):
 - `raw/<publication-key>/v<n>/`: `.tex`, `.bib` và `source.json` chứa trạng thái,
   checksum archive và checksum từng file. Version PDF/docx giữ receipt `non_tex`.
 - `manifests/crawl.jsonl`: trạng thái, số lần thử và loại lỗi theo task/Version.
+  Đây là Manifest để resume; chỉ chứa bản ghi task.
+- `manifests/http-events.jsonl`: sự kiện tải source (`retry`, `partial`, `resume`,
+  `restart`, `gave_up`) kèm `arxiv_id`, `version`, thời điểm UTC. Không có URL,
+  header hay payload. Chỉ để chẩn đoán, không dùng để resume.
 - `manifests/last-run.json`, `last-upload.json`: kết quả lượt chạy/upload gần nhất.
 - `tables/papers.parquet`, `references.parquet`: bảng của **batch gần nhất**
   đã xuất, không phải bản tổng hợp toàn bộ cache cục bộ.
@@ -105,7 +109,13 @@ HTTP server hoặc endpoint nhận token.
   không chạy song song trên nhiều máy để tăng hạn mức.
 - HTTP kiểm tra số byte thực nhận với `Content-Length`, đọc theo từng phần,
   giới hạn response 128 MiB và retry timeout/response bị cắt/429/5xx có giới hạn.
-  `Retry-After` hơn 60 giây trả lỗi để chạy lại sau, không bỏ qua chỉ dẫn máy chủ.
+  429/5xx chờ theo bảng 15/30/60/120/240 giây (lệch ngẫu nhiên ±20%), hoặc đúng
+  `Retry-After` nếu không quá 900 giây; lâu hơn thì trả lỗi để chạy lại sau.
+- Source arXiv bị cắt giữa chừng được tải tiếp bằng `Range: bytes=<đã có>-`;
+  `If-Range` chỉ gửi với ETag mạnh. Server trả 200 thì tải lại từ đầu; 206 lệch
+  `Content-Range` thì bỏ phần đã có. Mỗi file giới hạn tổng
+  `max(600 s, dung lượng / 10 KB/s)` (không rõ dung lượng: 3.600 s) và 60 lần thử.
+  Cải tiến này lấy từ crawler của Liễu (`6d435fd`, `1b45e47`).
 - Giải nén giới hạn 256 MiB và 10.000 thành viên; chỉ ghi `.tex`/`.bib`, bỏ
   symlink/hardlink/path traversal, từ chối đường dẫn trùng hoặc source không rõ loại.
   HTML/JSON lỗi không được ghi thành TeX. Không sửa bytes của source.
