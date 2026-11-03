@@ -30,3 +30,17 @@ github = "hohuunghiem"
 verified = true
 note = "README nhánh feat/nghiem-crawler"
 segments = [{ prefix = "2409", start = 8594, end = 13593 }]
+
+[[members]]
+name = "hai"
+github = "ngochai06"
+verified = true
+note = "Bảo xác nhận 2026-11-03"
+segments = [{ prefix = "2412", start = 8848, end = 13847 }]
+
+[[members]]
+name = "lieu"
+github = "langtucod0n"
+verified = true
+note = "Bảo xác nhận 2026-11-03"
+segments = [{ prefix = "2410", start = 8025, end = 13024 }]

@@ -273,6 +273,5 @@ lấy từ máy Bảo hoặc Colab.
     tổng đúng 5.000 ID; `verified = true`.
   - Nghiêm: GitHub `hohuunghiem`; Range `2409.08594`–`2409.13593` theo README nhánh
     `feat/nghiem-crawler`.
-  - Hải (`ngochai06`), Liễu (`langtucod0n`): chưa có Range trong repo, chưa ghi vào
-    `configs/ranges.toml`. Khoảng `2409.13594`–`2409.18593` (5.000 ID) nằm giữa Range của
-    Nghiêm và Minh, chưa xác nhận là của ai.
+  - Hải (`ngochai06`): `2412.08848`–`2412.13847`; Liễu (`langtucod0n`):
+    `2410.08025`–`2410.13024`. Bảo xác nhận 2026-11-03. Đủ 5 Range, 25.000 ID, không chồng nhau.
