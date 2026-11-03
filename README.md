@@ -76,12 +76,13 @@ Chi tiết: [pipeline crawl](docs/crawl-pipeline.md).
   .venv/bin/python -m src.milestone1_crawler --ids-file ids.txt --data-dir data/bench
 .venv/bin/python -m scripts.validate_crawl --data-dir data/bench \
   --benchmark stats/runs/run_01/benchmark.json
+# Thống kê cho báo cáo từ manifests/crawl.jsonl (chỉ đọc, chạy được khi crawler đang ghi).
+.venv/bin/python -m src.make_stats --data-dir data/bench --ids-file ids.txt --out stats/m1
 ```
 
-Giới hạn hiện tại: `src/benchmark.py` đếm Publication xong qua `*/done.json`
-(layout standalone), nên trường `done_papers_*` bằng 0 trên layout `src/crawl/`.
-Thời gian, RAM và dung lượng vẫn đo đúng; số Publication hoàn chỉnh lấy từ
-`scripts.validate_crawl`.
+`done_papers_*` của `src/benchmark.py` đếm Publication `done` theo `src.make_stats` trên
+layout `src/crawl/`, và đếm `*/done.json` trên layout standalone. `make_stats` không kiểm
+checksum; số đã xác minh lấy từ `scripts.validate_crawl` hoặc `scripts.report_m1`.
 
 Định nghĩa trường và quy trình so sánh giữa các thành viên:
 [docs/benchmark](docs/benchmark/README.md).

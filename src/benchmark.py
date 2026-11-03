@@ -29,6 +29,8 @@ from pathlib import Path
 
 import psutil
 
+from src import make_stats
+
 MB = 1024 * 1024
 
 
@@ -58,8 +60,15 @@ def tree_rss(proc):
 
 
 def count_done(data_dir):
-    """Số bài đã có done.json (để biết đoạn này bắt đầu từ đâu)."""
-    return sum(1 for _ in Path(data_dir).glob("*/done.json"))
+    """Số bài đã xong (để biết đoạn này bắt đầu từ đâu).
+
+    Layout `src/crawl/` (có manifests/crawl.jsonl): đếm Publication `done` theo
+    src.make_stats. Layout standalone: đếm thư mục có done.json.
+    """
+    data_dir = Path(data_dir)
+    if (data_dir / "manifests" / "crawl.jsonl").exists():
+        return make_stats.count_done(data_dir)
+    return sum(1 for _ in data_dir.glob("*/done.json"))
 
 
 def main():

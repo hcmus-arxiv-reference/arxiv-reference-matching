@@ -250,3 +250,15 @@ lấy từ máy Bảo hoặc Colab.
   thay vì 1/2/4 s; `Retry-After` tối đa 900 s thay vì 60 s.
 - Còn lại: PR 4 (Stage implementations), PR 5 (`make_stats`),
   PR 8 (Range nhiều Đoạn, chờ patch và giá trị của Minh/Nghiêm).
+
+## Tiến độ thực hiện (2026-11-03)
+
+- PR #7–#11 đã merge vào nhánh nền sau khi #6 vào `main`, nên chưa tới `main`;
+  PR #13 `chore/land-stacked-prs` đưa chúng lên `main`.
+- PR 4 → PR #14 `refactor/stage-implementations` (dựa trên #13): `BatchedDiscovery` ở
+  `src/crawl/discovery.py`, S2 song song trong `CrawlPipeline._crawl`, `LieuPipeline` là
+  alias. Resume `--limit 20` trên `data/crawl-smoke/` không gửi request nào.
+- PR 5 → `feat/make-stats-crawl-jsonl` (dựa trên #14): `src/make_stats.py` đọc
+  `crawl.jsonl`, giữ `load_last_per_id`; `src/benchmark.py` đếm `done_papers_*` trên cả
+  hai layout. Trên `data/crawl-smoke/`: 4.941/5.000 `done`, khớp `range-run.json`.
+- Còn lại: PR 8 (Range nhiều Đoạn), PR 9 (importer, tùy chọn).
