@@ -1,0 +1,66 @@
+{
+  "branch": "Hai_crawler",
+  "commit": "11bd1ebe74eb229482c4a23c8d6c691f082c2e78",
+  "ids_attempted": 10,
+  "member": "ngochai06",
+  "notes": "Fresh local sample only, NOT historical 5000-ID totals or common Colab comparison. Output: data/sample10-20261103-103748/output. Original crawler code restored before run; instrumentation wraps calls without altering HTTP intervals/retry policy. Archive sizes are measured on successful extraction payloads (regular tar members, otherwise decompressed payload bytes); retained bytes count TeX/BibTeX only. Sampling thread is included in process-tree RSS; final disk sample includes export. Wrapper/archive measurement adds small instrumentation overhead. Run-level exception: None. No old cache imported. Historical benchmark remains benchmarks/ngochai06-historical5000.json. Offline test collection ran in a separate process during approximately the first 130 seconds and was stopped before completion; this is an instrumented local pilot, not an isolated Colab speed comparison. A post-run output checksum/schema validation is outside the measured wall time. S2 failure after HTTP 429 is retained, not rerun into this cold-run result.",
+  "range": {
+    "end": 8857,
+    "prefix": "2412",
+    "start": 8848
+  },
+  "run": {
+    "cold_run": true,
+    "finished_at": "2026-11-03T10:42:26.215505+07:00",
+    "machine": "Windows-11-10.0.26200-SP0; AMD64; 12 logical CPUs; 11.71 GiB RAM",
+    "measured_by": "scripts.benchmark_sample; psutil process-tree RSS and output disk sampled every 1s; transport attempts and per-stage perf_counter",
+    "python": "3.14.0",
+    "resumed_passes": 0,
+    "s2_api_key": true,
+    "started_at": "2026-11-03T10:37:48.144410+07:00"
+  },
+  "schema_version": 1,
+  "stages": {
+    "discovery": {
+      "errors_by_type": {},
+      "requests": 2,
+      "retries": 0,
+      "seconds": 3.1055099000004702
+    },
+    "export": {
+      "seconds": 0.4477686000000176
+    },
+    "references": {
+      "errors_by_type": {
+        "429": 15
+      },
+      "requests": 24,
+      "retries": 14,
+      "seconds": 50.11037329999908
+    },
+    "source": {
+      "errors_by_type": {},
+      "requests": 15,
+      "retries": 0,
+      "seconds": 223.22075779999886
+    }
+  },
+  "totals": {
+    "avg_rss_mb": 67.8721892297048,
+    "bytes_after_figure_removal": 1288899,
+    "bytes_before_figure_removal": 89799271,
+    "output_mb": 1.4681015014648438,
+    "peak_disk_mb": 1.4681015014648438,
+    "peak_rss_mb": 103.3203125,
+    "publications_complete": 9,
+    "publications_found": 10,
+    "publications_s2_ok": 9,
+    "references_total": 217,
+    "references_with_arxiv_id": 101,
+    "versions_expected": 15,
+    "versions_failed": 0,
+    "versions_non_tex": 1,
+    "versions_ok": 15,
+    "wall_seconds": 278.02024789999996
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "member": "ngochai06",
+  "branch": "Hai_crawler",
+  "commit": "11bd1ebe74eb229482c4a23c8d6c691f082c2e78",
+  "range": {
+    "prefix": "2412",
+    "start": 8848,
+    "end": 13847
+  },
+  "ids_attempted": 5000,
+  "run": {
+    "cold_run": false,
+    "resumed_passes": null,
+    "started_at": null,
+    "finished_at": null,
+    "machine": "Windows; CPU/RAM/network of historical runs not recorded",
+    "python": null,
+    "s2_api_key": null,
+    "measured_by": "Offline snapshot and src.crawl.validation; no performance harness in historical runs"
+  },
+  "stages": {
+    "discovery": {
+      "seconds": null,
+      "requests": null,
+      "retries": null,
+      "errors_by_type": null
+    },
+    "source": {
+      "seconds": null,
+      "requests": null,
+      "retries": null,
+      "errors_by_type": null
+    },
+    "references": {
+      "seconds": null,
+      "requests": null,
+      "retries": null,
+      "errors_by_type": null
+    },
+    "export": {
+      "seconds": null
+    }
+  },
+  "totals": {
+    "wall_seconds": null,
+    "publications_found": 4985,
+    "publications_complete": 4775,
+    "versions_expected": 8086,
+    "versions_ok": 7900,
+    "versions_non_tex": 504,
+    "versions_failed": 186,
+    "references_total": 172954,
+    "references_with_arxiv_id": 84719,
+    "publications_s2_ok": 4917,
+    "bytes_before_figure_removal": null,
+    "bytes_after_figure_removal": null,
+    "peak_rss_mb": null,
+    "avg_rss_mb": null,
+    "peak_disk_mb": null,
+    "output_mb": 3832.6636867523193
+  },
+  "notes": "Resumed across overlapping local runs and separate arXiv/S2 workers; code changed between runs. Range contains 5000 IDs. Offline evidence snapshot data/benchmark-ngochai06 combines data/local-sequential/arxiv (metadata/source) and data/local-sequential/s2 (references). Source revision recorded as HEAD before the merge that was unresolved at audit time (subsequently aborted at user request); validation uses those HEAD modules and the newly pulled src/crawl/validation.py. No new crawl or speed measurement was run. Historical stage timing, HTTP request/retry/error-event counts, resume-pass count, peak/average memory and peak disk were not measured completely and are null. versions_failed includes all expected Versions missing or unverified at snapshot time, not a count of HTTP failures. Snapshot has no final Parquet export; per-service Parquet remains at data/local-sequential/{arxiv,s2}/tables. Do not modify the hard-linked snapshot or originals while collecting evidence. Shared output URL supplied by member: https://drive.google.com/drive/folders/1U7g1ln7nMlJQAVy-o75H5BzA8xBp23hD?usp=sharing; remote contents/access not verified against this local snapshot. Validator caches symlink metadata checks on the immutable snapshot; checksums and schema checks remain enabled. Validator S2/reference counters are scoped to the 4985 Publications with valid metadata: 4917 S2 successes. Another 15 S2 caches were separately verified for IDs missing valid metadata (4932 S2 successes across all 5000 IDs). Validator reports 68 missing S2 cache files; output is incomplete."
+}
