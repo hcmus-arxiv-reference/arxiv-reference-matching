@@ -1,6 +1,7 @@
 """Crawl tasks with per-Version failures, validated caches and resumable exports."""
 from __future__ import annotations
 
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict
 from datetime import datetime, timezone
 import hashlib
@@ -18,7 +19,16 @@ from .storage import key, require_id, write_json
 
 
 class CrawlPipeline:
-    """One writer per data directory. Source failures never overwrite discovery."""
+    """One writer per data directory. Source failures never overwrite discovery.
+
+    Default Stage implementations, both contributed by Liễu (langtucod0n):
+    batched Discovery when the discovery object has ``prefetch``
+    (``BatchedDiscovery``), and References fetched in one worker thread while
+    the main thread downloads that Publication's sources. Only the S2 network
+    call runs in the worker; cache checks, Manifest and cache writes stay on
+    the main thread, and a failed S2 request never marks a Publication done.
+    """
+    engine = "main"
     def __init__(self, discovery: ArxivDiscovery, sources: ArxivSourceDownloader,
                  data_dir: str | Path = "data", references: SemanticScholarClient | None = None) -> None:
         self.discovery, self.sources, self.references = discovery, sources, references
@@ -79,7 +89,7 @@ class CrawlPipeline:
         return payload["rows"]
 
     def _discover_publication(self, arxiv_id, *, refresh=False):
-        """Resolve and persist metadata, shared by serial and Lieu orchestration."""
+        """Resolve and persist metadata from the verified cache or Discovery."""
         try:
             if refresh:
                 raise ValueError("refresh")
@@ -93,6 +103,44 @@ class CrawlPipeline:
                          checksum=hashlib.sha256(path.read_bytes()).hexdigest())
             return publication
 
+    @property
+    def prefetch_size(self) -> int:
+        """IDs per prefetch call; the Runner uses it to schedule batches."""
+        size = getattr(self.discovery, "batch_size", 0)
+        return size if isinstance(size, int) and size > 0 else 1
+
+    def prefetch(self, identifiers) -> None:
+        """Batch-discover Publications whose metadata cache is not verified."""
+        batch = getattr(self.discovery, "prefetch", None)
+        if batch is None:
+            return
+        missing = []
+        for identifier in identifiers:
+            try:
+                self._load_publication(identifier)
+            except (OSError, ValueError, KeyError, TypeError):
+                missing.append(identifier)
+        batch(missing)
+
+    def _submit_references(self, pool, arxiv_id, refresh):
+        """Future of new S2 rows (None result for a verified cache); None without S2."""
+        if self.references is None:
+            return None
+        if not refresh:
+            try:
+                self._load_references(arxiv_id)
+                cached = Future()
+                cached.set_result(None)
+                return cached
+            except (OSError, ValueError, TypeError, KeyError):
+                pass
+        return pool.submit(self._fetch_references, arxiv_id)
+
+    def _fetch_references(self, arxiv_id):
+        rows = self.references.references(arxiv_id)
+        reference_rows(arxiv_id, rows)
+        return rows
+
     def crawl_ids(self, ids: list[str], *, refresh: bool = False) -> dict[str, int]:
         """Cache metadata until refresh=True; validate source files on every run."""
         ids = list(dict.fromkeys(require_id(i) for i in ids))
@@ -103,32 +151,35 @@ class CrawlPipeline:
     def _crawl(self, ids, *, refresh):
         stats = {"success": 0, "non_tex": 0, "unavailable": 0, "errors": 0, "skipped": 0,
                  "references_success": 0}
-        for arxiv_id in ids:
-            try:
-                publication = self._discover_publication(arxiv_id, refresh=refresh)
-            except Exception as error:
-                self._failure(arxiv_id, None, "discovery", error)
-                stats["errors"] += 1
-                continue
-            for version in range(1, publication.versions + 1):
+        if refresh and hasattr(self.discovery, "prefetch"):
+            self.discovery.prefetch(ids)
+        elif not refresh:
+            self.prefetch(ids)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            for arxiv_id in ids:
                 try:
-                    result = self.sources.download(arxiv_id, version)
-                    self._record(arxiv_id, version, "source", result.status,
-                                 attempted=not result.cached, http_status=result.http_status,
-                                 local_path=str(result.path), checksum=result.checksum)
-                    stats["skipped" if result.cached else result.status] += 1
+                    publication = self._discover_publication(arxiv_id, refresh=refresh)
                 except Exception as error:
-                    self._failure(arxiv_id, version, "source", error)
+                    self._failure(arxiv_id, None, "discovery", error)
                     stats["errors"] += 1
-            if self.references is not None:
-                try:
+                    continue
+                # One S2 task overlaps this Publication's serial arXiv downloads.
+                refs = self._submit_references(pool, arxiv_id, refresh)
+                for version in range(1, publication.versions + 1):
                     try:
-                        if refresh:
-                            raise ValueError("refresh")
-                        self._load_references(arxiv_id)
-                    except (OSError, ValueError, TypeError, KeyError):
-                        rows = self.references.references(arxiv_id)
-                        reference_rows(arxiv_id, rows)
+                        result = self.sources.download(arxiv_id, version)
+                        self._record(arxiv_id, version, "source", result.status,
+                                     attempted=not result.cached, http_status=result.http_status,
+                                     local_path=str(result.path), checksum=result.checksum)
+                        stats["skipped" if result.cached else result.status] += 1
+                    except Exception as error:
+                        self._failure(arxiv_id, version, "source", error)
+                        stats["errors"] += 1
+                if refs is None:
+                    continue
+                try:
+                    rows = refs.result()
+                    if rows is not None:
                         path = self._references_path(arxiv_id)
                         write_json(path, {"format": 1, "arxiv_id": arxiv_id, "rows": rows})
                         self._record(arxiv_id, None, "references", "success", local_path=str(path),

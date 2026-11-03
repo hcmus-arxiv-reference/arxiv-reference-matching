@@ -6,6 +6,12 @@ API Python: `src.crawl.api.run_crawl`. CLI: `python -m scripts.crawl`.
 Các bước: discovery → source theo Version → references S2 → validate → Parquet
 → upload vào dataset private. Schema `src/common/schema.py` giữ nguyên.
 
+Cách cài đặt Stage mặc định của `CrawlPipeline` (đóng góp của Liễu, `0d19257`):
+Discovery theo lô (`BatchedDiscovery`, tối đa 100 ID một truy vấn, lỗi lô thì quay về
+truy vấn từng ID) và tải references S2 trong một luồng phụ song song với việc tải source
+của cùng Publication. Kiểm tra cache, ghi Manifest và ghi cache đều ở luồng chính.
+`LieuPipeline` chỉ còn là alias để giữ import cũ và `engine: "lieu"` trong `range-run.json`.
+
 Cấu hình `.env`: `CONTACT_EMAIL`, `HF_TOKEN`, `HF_REPO_ID`, `MEMBER_NAME`,
 `DATA_DIR`, `ARXIV_RANGE_*`; `S2_API_KEY` tùy chọn. Không ghi token vào code.
 Kết nối dataset trước bằng `python -m scripts.check_hf`. Pipeline upload

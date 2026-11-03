@@ -8,7 +8,7 @@ from typing import Iterable
 
 from filelock import FileLock
 from src.common.config import Settings, get_settings
-from .discovery import ArxivDiscovery
+from .discovery import BatchedDiscovery
 from .http_client import HttpClient
 from .manifest import Manifest
 from .pipeline import CrawlPipeline
@@ -45,7 +45,7 @@ def run_crawl(ids: Iterable[str] | None = None, *, settings: Settings | None = N
     counts, uploads = Counter(), []
     iterator = iter(ids if ids is not None else settings.arxiv_range.ids())
     with FileLock(str(settings.data_dir / ".pipeline.lock"), timeout=0):
-        pipeline = CrawlPipeline(ArxivDiscovery(arxiv), ArxivSourceDownloader(arxiv, settings.data_dir / "raw"),
+        pipeline = CrawlPipeline(BatchedDiscovery(arxiv), ArxivSourceDownloader(arxiv, settings.data_dir / "raw"),
                                  settings.data_dir, references=s2)
         publisher = HuggingFacePublisher(settings) if upload else None
         if publisher:

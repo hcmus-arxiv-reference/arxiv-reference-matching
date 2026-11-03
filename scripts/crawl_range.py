@@ -20,7 +20,7 @@ import time
 from filelock import FileLock
 
 from src.common.config import get_settings
-from src.crawl.discovery import ArxivDiscovery
+from src.crawl.discovery import BatchedDiscovery
 from src.crawl.http_client import HttpClient
 from src.crawl.manifest import Manifest
 from src.crawl.pipeline import CrawlPipeline
@@ -162,7 +162,7 @@ def main(argv=None):
     arxiv = HttpClient(user_agent, min_interval=3.1)
     s2 = HttpClient(user_agent, min_interval=1.1 if settings.s2_api_key else 3.1,
                     headers={"x-api-key": settings.s2_api_key} if settings.s2_api_key else {})
-    pipeline = CrawlPipeline(ArxivDiscovery(arxiv),
+    pipeline = CrawlPipeline(BatchedDiscovery(arxiv),
         ArxivSourceDownloader(arxiv, settings.data_dir / "raw"), settings.data_dir,
         references=SemanticScholarClient(s2))
 

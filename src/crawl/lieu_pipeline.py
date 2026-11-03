@@ -1,146 +1,44 @@
-"""Lieu's batched discovery + overlapped S2/source crawler, integrated with main.
+"""M1 crawler CLI and compatibility aliases for Liễu's Stage implementations.
 
 Run: python -m src.milestone1_crawler --data-dir data/crawl-smoke
-The original implementation is preserved in merge parent 0d19257. This adapter
-keeps its batch-discovery and one-S2-worker design while using the shared
-schema, bounded HTTP, full S2 pagination and checksum-verified checkpoints.
-It resumes the existing main cache without renaming or copying raw files.
-src/crawl/ is the only Engine on main (docs/adr/0001-src-crawl-la-khung-duy-nhat.md);
-the standalone crawler is kept at tag lieu-standalone-final.
+Batched Discovery (src/crawl/discovery.py:BatchedDiscovery) and References
+overlapped with source downloads (CrawlPipeline._crawl) were contributed by
+Liễu (langtucod0n) in merge parent 0d19257 and are now the defaults of the
+shared Engine. src/crawl/ is the only Engine on main
+(docs/adr/0001-src-crawl-la-khung-duy-nhat.md); the standalone crawler is kept
+at tag lieu-standalone-final. LieuPipeline remains only so existing imports
+and range-run.json (engine "lieu") keep working; it adds no behaviour.
 """
 from __future__ import annotations
 
 import argparse
-from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
-import hashlib
 import json
 from pathlib import Path
 import signal
-from urllib.parse import urlencode
-import xml.etree.ElementTree as ET
 
 from src.common.config import get_settings
-from src.crawl.discovery import ATOM, ArxivDiscovery, parse_feed
-from src.crawl.http_client import HttpClient, HttpStatusError
+from src.crawl.discovery import BatchedDiscovery
+from src.crawl.http_client import HttpClient
 from src.crawl.pipeline import CrawlPipeline
-from src.crawl.semantic_scholar import SemanticScholarClient, reference_rows
+from src.crawl.semantic_scholar import SemanticScholarClient
 from src.crawl.source import ArxivSourceDownloader
-from src.crawl.storage import require_id, write_json
+from src.crawl.storage import require_id
 
-
-class BatchedDiscovery(ArxivDiscovery):
-    """Prefetch base-ID Atom entries; the shared parser fills all revision dates.
-
-    Missing or failed batch entries fall back to individual queries. A missing
-    batch result is never sufficient evidence that a Publication does not exist.
-    All arXiv requests, including revision lookups/source downloads, share one
-    client and the process-wide rate limiter.
-    """
-
-    def __init__(self, client, batch_size=50):
-        super().__init__(client)
-        if not 0 <= batch_size <= 100:
-            raise ValueError("discover_batch must be between 0 and 100")
-        self.batch_size = batch_size
-        self.prefetched = {}
-
-    def prefetch(self, identifiers):
-        ids = list(dict.fromkeys(require_id(i) for i in identifiers))
-        ids = [i for i in ids if i not in self.prefetched]
-        if not self.batch_size:
-            return
-        for start in range(0, len(ids), self.batch_size):
-            chunk = ids[start:start + self.batch_size]
-            try:
-                response = self.client.get(f"{self.endpoint}?{urlencode({'id_list': ','.join(chunk)})}")
-                if response.status != 200:
-                    raise HttpStatusError(response.status, "arXiv batch metadata")
-                root = ET.fromstring(response.body)
-                found = {}
-                for entry in root.findall(f"{{{ATOM}}}entry"):
-                    feed = ET.Element(f"{{{ATOM}}}feed")
-                    feed.append(entry)
-                    body = ET.tostring(feed, encoding="utf-8")
-                    pub = parse_feed(body)
-                    if pub.arxiv_id not in chunk or pub.arxiv_id in found:
-                        raise ValueError("Unexpected or duplicate batch publication")
-                    found[pub.arxiv_id] = body
-                self.prefetched.update(found)
-            except Exception as error:
-                print(json.dumps({"event": "batch_discovery_fallback",
-                                  "error_type": type(error).__name__, "size": len(chunk)}), flush=True)
-
-    def _fetch(self, identifier):
-        if identifier in self.prefetched:
-            return self.prefetched.pop(identifier)
-        return super()._fetch(identifier)
+__all__ = ["BatchedDiscovery", "LieuPipeline", "main"]
 
 
 class LieuPipeline(CrawlPipeline):
-    """Lieu orchestration with existing main receipts and single-threaded commits.
-
-    Only network work for S2 runs in the extra thread. Manifest and cache writes
-    stay on the main thread, and a failed S2 request never marks a paper done.
-    """
+    """Alias of CrawlPipeline; ``s2`` is the old name of ``references``."""
     engine = "lieu"
 
-    def __init__(self, discovery, sources, data_dir, references):
-        super().__init__(discovery, sources, data_dir, references=None)
-        self.s2 = references
-        self.prefetch_size = discovery.batch_size or 1
+    @property
+    def s2(self):
+        return self.references
 
-    def prefetch(self, identifiers):
-        missing = []
-        for identifier in identifiers:
-            try:
-                self._load_publication(identifier)
-            except (OSError, ValueError, KeyError, TypeError):
-                missing.append(identifier)
-        self.discovery.prefetch(missing)
-
-    def _reference_result(self, identifier, refresh):
-        if not refresh:
-            try:
-                self._load_references(identifier)
-                return None  # already verified, no mutation in the worker
-            except (OSError, ValueError, KeyError, TypeError):
-                pass
-        rows = self.s2.references(identifier)
-        reference_rows(identifier, rows)
-        return rows
-
-    def _crawl(self, ids, *, refresh):
-        if refresh:
-            self.discovery.prefetch(ids)
-        else:
-            self.prefetch(ids)
-        counts = Counter()
-        with ThreadPoolExecutor(max_workers=1) as pool:
-            for identifier in ids:
-                try:
-                    self._discover_publication(identifier, refresh=refresh)
-                except Exception as error:
-                    self._failure(identifier, None, "discovery", error)
-                    counts["errors"] += 1
-                    continue
-                # Same scheduling as Lieu: one S2 task while the main thread
-                # downloads this Publication's sources serially from arXiv.
-                refs = pool.submit(self._reference_result, identifier, refresh)
-                counts.update(super()._crawl([identifier], refresh=False))
-                try:
-                    rows = refs.result()
-                    if rows is not None:
-                        path = self._references_path(identifier)
-                        write_json(path, {"format": 1, "arxiv_id": identifier, "rows": rows})
-                        self._record(identifier, None, "references", "success", local_path=str(path),
-                                     checksum=hashlib.sha256(path.read_bytes()).hexdigest())
-                    counts["references_success"] += 1
-                except Exception as error:
-                    self._failure(identifier, None, "references", error)
-                    counts["errors"] += 1
-        return dict(counts)
+    @s2.setter
+    def s2(self, client):
+        self.references = client
 
 
 def main(argv=None):
