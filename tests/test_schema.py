@@ -49,6 +49,37 @@ class SchemaTests(unittest.TestCase):
                 table = s.from_records([paper(revised_dates=value)], "papers")
                 self.assertEqual(table.to_pylist()[0]["revised_dates"], value)
 
+    def test_bibtex_approved_types_round_trip(self):
+        rows = [
+            {"arxiv_id": "2508.02872", "citation_key": "known", "entry_type": "article",
+             "authors": ["Group; Collaboration", "Author B"], "year": 2025},
+            {"arxiv_id": "2508.02872", "citation_key": "unknown", "entry_type": "misc",
+             "authors": None, "year": None},
+            {"arxiv_id": "2508.02872", "citation_key": "empty", "entry_type": "misc",
+             "authors": [], "year": None},
+        ]
+        table = s.from_records(rows, "bibtex")
+        self.assertEqual(table["authors"].type, pa.list_(pa.string()))
+        self.assertEqual(table["year"].type, pa.int32())
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bibtex.parquet"
+            s.write_table(table, "bibtex", path)
+            self.assertTrue(s.read_table("bibtex", path).equals(table))
+        for col, value in (("authors", "Author A; Author B"), ("year", "2025a")):
+            index = table.schema.get_field_index(col)
+            old = table.set_column(index, col, pa.array([value] * 3))
+            self.assertIn(col, "\n".join(s.validate(old, "bibtex")))
+
+    def test_hierarchy_root_has_no_parent_edge(self):
+        root = {"element_id": "2508-02872#root1", "arxiv_id": "2508.02872",
+                "kind": "document", "content": "Version 1 root"}
+        s.from_records([root], "elements")
+        edge = {"arxiv_id": "2508.02872", "version": 1,
+                "element_id": "2508-02872#s1", "parent_id": root["element_id"]}
+        self.assertEqual(s.validate(s.from_records([edge], "hierarchy"), "hierarchy"), [])
+        with self.assertRaisesRegex(ValueError, "parent_id.*null"):
+            s.from_records([edge | {"element_id": root["element_id"], "parent_id": None}], "hierarchy")
+
     def test_missing_and_wrong_type_columns(self):
         table = s.from_records([paper()], "papers")
         self.assertIn("thiếu cột", "\n".join(s.validate(table.drop(["title"]), "papers")))
