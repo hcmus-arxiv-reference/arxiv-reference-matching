@@ -1,3 +1,4 @@
+
 # AGENTS.md: Kế hoạch cho agent (repo `arxiv-reference-matching`)
 
 Tài liệu này dành cho agent lập trình (Codex) làm việc **thay mặt Nguyễn Thành Bảo**, nhóm trưởng kiêm phụ trách **Parser** của nhóm 5 người. Đọc hết file trước khi viết code. Nếu một mục chưa rõ, **hỏi người dùng** thay vì đoán.
@@ -25,7 +26,53 @@ Tài liệu này dành cho agent lập trình (Codex) làm việc **thay mặt N
 - Có bất nhất chưa giải quyết: kế hoạch bên dưới nói **6 bảng**, README nói **7 bảng** với tên khác. Các tên bảng ngoài hai bảng Crawling chỉ là dự kiến cho tới khi đối chiếu đề Parsing/Matching và được người dùng xác nhận; không tự chọn một phía để triển khai.
 - Hạ tầng có test đạt không đồng nghĩa đã đạt toàn bộ DoD giai đoạn 2: schema toàn dự án chưa đóng băng. Manifest theo Version vẫn là đề xuất chưa triển khai. `metrics.peak_rss_mb` chỉ đo đỉnh từ khi khởi động của tiến trình hiện tại, không đo RAM trung bình/tiến trình con; `dir_size_mb` là ảnh chụp dung lượng hiện tại, không phải disk đỉnh.
 
+### Cập nhật vận hành 26/10/2026 trên nhánh Hai_crawler
+
+- Người dùng yêu cầu tích hợp code mới với output cũ, resume và Parquet bằng
+  một lệnh. Đã tái sử dụng core `src/crawl` từ commit `63df237`, thêm discovery
+  batch và CLI `scripts.crawl_range --start 2412.08848 --end 2412.13847`.
+- Range trên là yêu cầu crawl hiện tại, không tự thay thông tin phân công
+  thành viên ở mục 1. Mặc định lưu `data/crawl-2412-08848-13847/`.
+- Không đổi schema. Giữ `raw/`, metadata, references, manifest/receipt và hai
+  bảng Parquet; kiểm tra checksum khi resume, export mỗi 50 Publication và
+  cuối lượt/dừng có kiểm soát. Notebook/SQLite vẫn là luồng riêng.
+- Đã thử mạng thật 2412.08849: đủ 1 Version TeX, xuất 1 dòng papers, 0 dòng
+  references. Resume mẫu với transport chặn mạng thành công, zero network calls.
+  Chưa chạy toàn Range hay upload HF. Xem `docs/run-current-crawler.md`.
+- Cache `data/crawl-2412` cũ đã xóa theo xác nhận người dùng; giữ .venv/.env.
+- Không chạy nhiều crawler đồng thời. `.pipeline.lock` chỉ khóa cùng thư mục.
+- Kiểm thử cuối: 106 test và 28 subtest đạt trên Windows; HTTP trong test
+  được giả lập, độc lập với lượt thử mạng thật nêu trên.
+
+### Cập nhật tách Kaggle ngày 29/10/2026
+
+- Người dùng yêu cầu hai notebook chạy đồng thời: `notebooks/kaggle_arxiv.ipynb`
+  và `notebooks/kaggle_s2.ipynb`. Module `src/crawl/split.py` quản lý checkpoint
+  riêng, import cache read-only có checksum và ghép offline theo schema cũ.
+- Bộ upload private được tạo bằng `scripts.prepare_kaggle`, không chứa .env hay
+  script proxy có credential cũ. Dùng toàn Range 2412.08848–2412.13847 và bỏ qua
+  phần đã hợp lệ; không tự suy ra phần thiếu là 2.500 ID cuối.
+- `scripts.merge_split` ghép hai ZIP checkpoint thành cache và Parquet cho
+  Publication đủ cả arXiv/S2. Bảng riêng từng notebook là output từng dịch vụ,
+  chưa thể dùng làm dấu hiệu toàn pipeline hoàn tất. Không đổi schema chung.
+- Kaggle không chia sẻ ổ đĩa giữa hai phiên. Cần Save Version/Output và gắn
+  output đã lưu vào phiên sau để resume; chưa có tự động đồng bộ lên Dataset.
+- Test offline đạt 113 test, 28 subtest. Chưa chạy trong tài khoản Kaggle,
+  không khởi chạy thêm crawler mạng ở lần triển khai này.
+
+### Bổ sung local tuần tự 29/10/2026
+
+- Theo yêu cầu mới, `scripts.crawl_local` và `notebooks/local_crawl.ipynb`
+  đọc `.env`, nhập cache local hợp lệ, chạy arXiv rồi S2; không cần Kaggle.
+- Giữ toàn Range 2412.08848–2412.13847 để không bỏ sót lỗi trước mốc 2.500 bài.
+  Mặc định một lượt mỗi dịch vụ, không chờ retry giữa lượt; chạy lại để resume.
+- Output tại `data/local-sequential/{arxiv,s2,merged}`. Dừng arXiv có kiểm soát
+  thì không chạy tiếp S2. Bảng merged chỉ cập nhật sau hai lượt kết thúc bình thường.
+- Không khởi chạy crawl mạng trong lần sửa này. Xem `docs/local-sequential-crawl.md`.
+- Kiểm thử offline sau thay đổi: 116 test và 28 subtest đạt trên Windows.
+
 ## 2. Thuật ngữ (bắt buộc dùng đúng)
+
 
 | Thuật ngữ | Nghĩa |
 |---|---|

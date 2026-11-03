@@ -11,6 +11,9 @@ outputs/
 *.gz
 *.tex
 *.bib
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
 
 # Python and local tooling
 __pycache__/

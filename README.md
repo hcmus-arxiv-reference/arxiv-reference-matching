@@ -1,5 +1,18 @@
 # arXiv Reference Matching — Nhóm 3 KHDL24
 
+> **Local tuần tự (29/10/2026):** chạy `python -m scripts.crawl_local` hoặc
+> mở `notebooks/local_crawl.ipynb` trong VS Code. Tự dùng cache cũ, chạy arXiv
+> trước rồi S2, có resume và Parquet. [Hướng dẫn](docs/local-sequential-crawl.md).
+
+> **Hai notebook Kaggle (29/10/2026):** [hướng dẫn tách arXiv/S2, dùng cache và ghép Parquet](docs/kaggle-split-crawl.md).
+> Import `notebooks/kaggle_arxiv.ipynb` và `notebooks/kaggle_s2.ipynb`; dùng
+> Dataset private từ bốn file trong `data/kaggle-bundle/`.
+
+> **Crawl bằng một lệnh (26/10/2026):** đã tích hợp CLI có resume/checksum và
+> xuất `papers.parquet`, `references.parquet` theo schema cũ. Xem
+> [hướng dẫn chạy Range trên Windows](docs/run-current-crawler.md).
+> Notebook vẫn là luồng riêng; dùng CLI cho chạy toàn Range và xuất Parquet.
+
 Đồ án Nhập môn Khoa học Dữ liệu: thu thập bài báo arXiv, phân tích nguồn LaTeX thành cấu trúc phân cấp, rồi ghép các trích dẫn BibTeX với metadata tham khảo bằng một pipeline học máy.
 
 > **Trạng thái (2026-10-16):** phần lớn nội dung dưới đây là định hướng, cây thư mục và lệnh pipeline là đề xuất. Hiện có `src/common/{schema,config,hf_io,metrics}.py`; 54 test đạt (kèm 15 subtest). Hugging Face được kiểm tra bằng mock, chưa thử upload/download thật; chưa có crawler hoặc Parser chạy trên dữ liệu thật. Hai bảng Crawling đã đối chiếu, các bảng khác trong code vẫn là dự thảo. Xem [review hạ tầng](docs/infrastructure-review.md), [review schema](docs/schema-review.md) và [bối cảnh đã chốt](CONTEXT.md).

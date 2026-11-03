@@ -1,6 +1,7 @@
 """Focused tests for metadata insertion and SQLite author lists."""
 
 import json
+from contextlib import closing
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -51,7 +52,7 @@ class InsertMetadataTests(unittest.TestCase):
         ))
         self.assertIsNone(row[7])
         self.assertEqual(self.db.get_papers(), [row])
-        with sqlite3.connect(self.db_path) as connection:
+        with closing(sqlite3.connect(self.db_path)) as connection:
             self.assertEqual(connection.execute(
                 "SELECT typeof(authors), json_type(authors) FROM PAPERS"
             ).fetchone(), ("text", "array"))
