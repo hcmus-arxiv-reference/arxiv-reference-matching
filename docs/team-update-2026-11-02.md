@@ -32,6 +32,12 @@ Thuật ngữ (Stage, Engine, Cách cài đặt Stage) theo [`CONTEXT.md`](../CO
 Phần nào thắng ở bước so sẽ được chuyển vào khung qua PR, ghi công người viết trong code
 và README. Nhánh gốc không bị sửa hay xóa.
 
+**Tiêu chí (bổ sung 03/11):** chỉ ghép phần **đúng và có hướng phát triển tốt**. Phần sai
+thì bỏ qua, không merge vào `main`: vi phạm quy tắc tải arXiv hay Semantic Scholar (proxy
+xoay IP, nhiều kết nối, nhiều API key), ghi bí mật trong code, sai đề hoặc sai schema chung,
+không có test. Phần sai không làm mất công của bạn: vẫn được ghi trong báo cáo như một case
+study, và Bảo sẽ báo riêng cho chủ nhánh.
+
 ## 3. Bảo đã làm tuần này
 
 Đã giải xung đột giữa bản local của Bảo và các commit của Liễu trên `main`, và dọn
