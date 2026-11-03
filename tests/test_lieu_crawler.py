@@ -71,6 +71,30 @@ def test_resume_existing_main_cache_never_redownloads_valid_sources(tmp_path):
     assert len(calls) == 1 and '/src/' in calls[0]
 
 
+def test_public_cli_resumes_existing_cache_without_network(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from src.crawl import lieu_pipeline
+    from src.milestone1_crawler import main
+    pipeline, _, _ = setup(tmp_path)
+    identifier = '2508.02872'
+    pipeline.crawl_ids([identifier])
+    before = (tmp_path/'raw/2508-02872/v1/source.json').read_bytes()
+
+    def no_network(*args):
+        raise AssertionError('CLI redownloaded a verified cache')
+
+    client = HttpClient('offline', transport=no_network, max_retries=0)
+    settings = SimpleNamespace(data_dir=tmp_path, user_agent=lambda: 'offline', s2_api_key=None,
+                               arxiv_range=SimpleNamespace(ids=lambda: iter([identifier])))
+    monkeypatch.setattr(lieu_pipeline, 'get_settings', lambda: settings)
+    monkeypatch.setattr(lieu_pipeline, 'HttpClient', lambda *args, **kwargs: client)
+    monkeypatch.setattr(lieu_pipeline.signal, 'signal', lambda *args: None)
+    assert main(['--max-passes', '1']) == 0
+    assert (tmp_path/'raw/2508-02872/v1/source.json').read_bytes() == before
+    report = json.loads((tmp_path/'manifests/range-run.json').read_text())
+    assert report['visited_this_pass'] == 0 and report['counts']['complete'] == 1
+
+
 def test_s2_failure_is_pending_and_retry_keeps_source(tmp_path):
     pipeline, calls, refs = setup(tmp_path)
     refs.references.side_effect = [TimeoutError(), []]

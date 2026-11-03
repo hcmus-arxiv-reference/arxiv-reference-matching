@@ -52,6 +52,16 @@ def inspect_publication(pipeline, identifier):
     return result
 
 
+def publication_issues(manifest, identifier):
+    """Summarize unfinished tasks without exposing URLs, headers or payloads."""
+    return [
+        {"kind": record.kind, "version": record.version, "status": record.status,
+         "http_status": record.http_status, "error_reason": record.error_reason}
+        for record in manifest.records.values()
+        if record.arxiv_id == identifier and record.status not in {"success", "non_tex"}
+    ]
+
+
 def run_range(pipeline, identifiers, *, max_passes=3, retry_delay=1800,
               sleeper=time.sleep, min_free_bytes=5 * 1024**3):
     """Hold the pipeline lock, retry only incomplete Publications, and export all.
@@ -110,7 +120,8 @@ def run_range(pipeline, identifiers, *, max_passes=3, retry_delay=1800,
                     report = save("running")
                     print(json.dumps({"pass": pass_number, "id": current,
                                       "complete": report["counts"].get("complete", 0),
-                                      "pending": len(report["pending_ids"])}), flush=True)
+                                      "pending": len(report["pending_ids"]),
+                                      "issues": publication_issues(pipeline.manifest, current)}), flush=True)
                 current = None
                 with FileLock(str(root / ".crawl.lock"), timeout=0):
                     bundles, _ = pipeline.export(identifiers)
