@@ -167,7 +167,7 @@ def test_conflicting_remote_source_receipt_rejected(tmp_path):
 
 
 def test_public_python_api_crawl_upload_then_upload_only(tmp_path, monkeypatch):
-    from tests.test_crawl_pipeline import feed
+    from test_crawl_pipeline import feed
     data = tmp_path / "data"; hub = FakeHub(tmp_path / "hub")
     calls = []
     def transport(request, _):

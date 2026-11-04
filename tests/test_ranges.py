@@ -7,7 +7,7 @@ import pytest
 
 from src.common.config import ArxivRange, SegmentedRange, load_ranges, member_ids
 from src.crawl.validation import validate_crawl
-from tests.test_crawl_validation import make_run
+from test_crawl_validation import make_run  # tests/ is on sys.path (rootdir without __init__)
 
 TOML = '''ids_per_member = {size}
 [[members]]
