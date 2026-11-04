@@ -22,7 +22,7 @@ def atom(identifier, version=1):
             f'<published>2025-08-04T00:00:00Z</published><updated>2025-08-0{4+version}T00:00:00Z</updated></entry>')
 
 
-def setup(tmp_path, versions=None, source=None):
+def make_pipeline(tmp_path, versions=None, source=None):
     calls = []
     versions = versions or {}
     def transport(request, _):
@@ -46,7 +46,7 @@ def setup(tmp_path, versions=None, source=None):
 
 def test_range_batches_metadata_and_retains_revision_dates(tmp_path):
     ids = ['2508.02872', '2508.02873']
-    pipeline, calls, _ = setup(tmp_path, {ids[0]: 3})
+    pipeline, calls, _ = make_pipeline(tmp_path, {ids[0]: 3})
     result = run_range(pipeline, ids, max_passes=1, min_free_bytes=0)
     assert result['status'] == 'complete' and result['engine'] == 'lieu'
     queries = [parse_qs(urlsplit(url).query)['id_list'][0] for url in calls if '/api/query?' in url]
@@ -57,7 +57,7 @@ def test_range_batches_metadata_and_retains_revision_dates(tmp_path):
 
 
 def test_resume_existing_main_cache_never_redownloads_valid_sources(tmp_path):
-    pipeline, calls, refs = setup(tmp_path)
+    pipeline, calls, refs = make_pipeline(tmp_path)
     old = CrawlPipeline(ArxivDiscovery(pipeline.discovery.client), pipeline.sources, tmp_path, refs)
     old.crawl_ids(['2508.02872'])
     calls.clear(); refs.references.reset_mock()
@@ -75,7 +75,7 @@ def test_public_cli_resumes_existing_cache_without_network(tmp_path, monkeypatch
     from types import SimpleNamespace
     from src.crawl import cli as lieu_pipeline
     from src.milestone1_crawler import main
-    pipeline, _, _ = setup(tmp_path)
+    pipeline, _, _ = make_pipeline(tmp_path)
     identifier = '2508.02872'
     pipeline.crawl_ids([identifier])
     before = (tmp_path/'raw/2508-02872/v1/source.json').read_bytes()
@@ -96,7 +96,7 @@ def test_public_cli_resumes_existing_cache_without_network(tmp_path, monkeypatch
 
 
 def test_s2_failure_is_pending_and_retry_keeps_source(tmp_path):
-    pipeline, calls, refs = setup(tmp_path)
+    pipeline, calls, refs = make_pipeline(tmp_path)
     refs.references.side_effect = [TimeoutError(), []]
     result = run_range(pipeline, ['2508.02872'], max_passes=1, min_free_bytes=0)
     assert result['status'] == 'incomplete'
@@ -111,7 +111,7 @@ def test_pdf_is_empty_but_http_404_remains_unavailable(tmp_path):
         if '02873' in req.full_url:
             return HttpResponse(404, {}, b'')
         return HttpResponse(200, {}, b'%PDF-1.7')
-    pipeline, _, _ = setup(tmp_path, source=source)
+    pipeline, _, _ = make_pipeline(tmp_path, source=source)
     result = run_range(pipeline, ['2508.02872', '2508.02873'], max_passes=1, min_free_bytes=0)
     assert result['counts']['complete'] == 1
     assert result['counts']['non_tex_versions'] == 1
@@ -125,7 +125,7 @@ def test_s2_overlaps_source_and_follows_pagination(tmp_path):
         source_started.set()
         assert refs_started.wait(2), 'S2 did not overlap the source download'
         return HttpResponse(200, {}, b'\\documentclass{article}')
-    pipeline, _, _ = setup(tmp_path, source=source)
+    pipeline, _, _ = make_pipeline(tmp_path, source=source)
     offsets = []
     def s2_transport(req, _):
         offsets.append(parse_qs(urlsplit(req.full_url).query)['offset'][0])
@@ -140,7 +140,7 @@ def test_s2_overlaps_source_and_follows_pagination(tmp_path):
 
 
 def test_failed_batch_falls_back_to_single_discovery(tmp_path):
-    pipeline, calls, _ = setup(tmp_path)
+    pipeline, calls, _ = make_pipeline(tmp_path)
     original = pipeline.discovery.client._transport
     def transport(req, timeout):
         ids = parse_qs(urlsplit(req.full_url).query).get('id_list', [''])[0]
@@ -151,7 +151,7 @@ def test_failed_batch_falls_back_to_single_discovery(tmp_path):
 
 
 def test_truncated_batch_falls_back_without_aborting_range(tmp_path):
-    pipeline, _, _ = setup(tmp_path)
+    pipeline, _, _ = make_pipeline(tmp_path)
     original = pipeline.discovery.client._transport
     def transport(req, timeout):
         if ',' in parse_qs(urlsplit(req.full_url).query).get('id_list', [''])[0]:
