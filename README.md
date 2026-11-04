@@ -112,6 +112,7 @@ resume lại. `CONTACT_EMAIL`, `S2_API_KEY` đặt trong Colab Secrets.
 - [`CONTEXT.md`](CONTEXT.md): thuật ngữ (Publication, Version, Range, Stage, Engine).
 - [`docs/adr/`](docs/adr/): quyết định kiến trúc đã chốt.
 - [`docs/handoff/`](docs/handoff/): biên bản các buổi chốt kiến trúc và kế hoạch merge.
+- [Smoke test crawl thật 03/11](docs/m1-smoke-2026-11-03.md): 3 ID qua ranh giới tháng, resume và tải tiếp file bị cắt trên mạng thật.
 - Nhánh thành viên (`Hai`, `feat/Minh-crawler`, `feat/nghiem-crawler`) và tag
   `lieu-standalone-final` giữ nguyên làm case study, không merge vào `main`.
 
