@@ -1,12 +1,10 @@
 """Content-aware, bounded source extraction and checksum-verified resume."""
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timezone
 import gzip
 import hashlib
 import io
-import json
 from pathlib import Path, PurePosixPath
 import re
 import shutil
@@ -14,6 +12,8 @@ import tarfile
 import tempfile
 import zipfile
 
+from src.common.corpus import SourceResult, verified_source  # verified_source: compatibility re-export.
+from src.common.corpus import file_digest as _digest, safe_member as _safe_member
 from src.common.metrics import append_jsonl
 
 from .http_client import HttpClient, HttpStatusError
@@ -22,27 +22,6 @@ from src.common.json_io import write_json
 
 MAX_EXTRACT_BYTES = 256 * 1024 * 1024
 MAX_FILES = 10000
-
-
-@dataclass(frozen=True)
-class SourceResult:
-    status: str
-    path: Path
-    checksum: str
-    tex_files: tuple[str, ...]
-    bib_files: tuple[str, ...]
-    http_status: int = 200
-    cached: bool = False
-
-
-def _safe_member(name: str) -> bool:
-    path = PurePosixPath(name)
-    return bool(name) and not path.is_absolute() and ".." not in path.parts and "\\" not in name
-
-
-def _digest(path: Path) -> str:
-    with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def extract_source(payload: bytes, destination: Path) -> tuple[list[str], list[str]]:
@@ -104,39 +83,6 @@ def extract_source(payload: bytes, destination: Path) -> tuple[list[str], list[s
         (destination / "single.tex").write_bytes(payload)
         tex.append("single.tex")
     return sorted(tex), sorted(bib)
-
-
-def verified_source(path: Path) -> SourceResult | None:
-    """Only accept new receipts whose exact TeX/BibTeX inventory still matches."""
-    try:
-        if path.is_symlink():
-            return None
-        receipt = json.loads((path / "source.json").read_text())
-        if (receipt["format"] != 1 or receipt["status"] not in {"success", "non_tex"}
-                or key(receipt["arxiv_id"]) != path.parent.name
-                or type(receipt["version"]) is not int or receipt["version"] < 1
-                or f"v{receipt['version']}" != path.name):
-            return None
-        files = receipt["files"]
-        if not isinstance(files, dict):
-            return None
-        found = {p.relative_to(path).as_posix() for p in path.rglob("*")
-                 if p.suffix.lower() in {".tex", ".bib"} and p.is_file()}
-        if found != set(files):
-            return None
-        for name, digest in files.items():
-            if not _safe_member(name):
-                return None
-            source = path / name
-            if any(p.is_symlink() for p in (source, *source.parents)) or _digest(source) != digest:
-                return None
-        tex = tuple(sorted(n for n in files if n.lower().endswith(".tex")))
-        bib = tuple(sorted(n for n in files if n.lower().endswith(".bib")))
-        if (receipt["status"] == "success") != bool(tex):
-            return None
-        return SourceResult(receipt["status"], path, receipt["checksum"], tex, bib, cached=True)
-    except (OSError, ValueError, KeyError, TypeError):
-        return None
 
 
 class ArxivSourceDownloader:

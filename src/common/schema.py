@@ -67,6 +67,13 @@ ELEMENT_KINDS = (
 PARTITIONS = ("train", "valid", "test")
 
 
+def require_id(arxiv_id: str) -> str:
+    """Accept a base arXiv ID, never a URL, path traversal or version suffix."""
+    if not isinstance(arxiv_id, str) or not re.fullmatch(ARXIV_ID_PATTERN, arxiv_id):
+        raise ValueError(f"Invalid base arXiv ID: {arxiv_id!r}")
+    return arxiv_id
+
+
 def publication_key(arxiv_id: str) -> str:
     """Biến arxiv_id thành khóa an toàn cho tên file và element_id.
 

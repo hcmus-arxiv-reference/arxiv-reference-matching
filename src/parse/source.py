@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 import re
 
-from src.crawl.source import verified_source
+from src.common.corpus import verified_source
 
 ASSEMBLER_VERSION = "1"
 _VERBATIM = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"}
