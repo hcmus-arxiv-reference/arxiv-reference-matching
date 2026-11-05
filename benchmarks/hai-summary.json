@@ -1,0 +1,2124 @@
+{
+  "format": 1,
+  "member": "hai",
+  "scope": "Hai only; full assigned Range 2412.08848-2412.13847; other members not audited",
+  "snapshot_at": "2026-11-05T04:28:40.745780+00:00",
+  "source_commit": "b43afd077fdba396989a612e52eb81c09a0d7b47",
+  "range": {
+    "first": "2412.08848",
+    "last": "2412.13847"
+  },
+  "counts": {
+    "assigned": 5000,
+    "discovered": 4985,
+    "complete": 4775,
+    "references_success": 4917,
+    "expected_versions": 8086,
+    "success": 7396,
+    "non_tex": 504,
+    "unavailable": 29,
+    "download_error": 157,
+    "not_attempted": 0
+  },
+  "crawl": {
+    "engine": "Hai local sequential arXiv then S2",
+    "last_worker_commit": null,
+    "finished_at": null,
+    "status": "incomplete",
+    "note": "Accumulated resumed runs. Worker commit/end time not recorded reliably. Reporting performs no network crawl."
+  },
+  "versions_distribution": [
+    {
+      "versions": 1,
+      "publications": 2884
+    },
+    {
+      "versions": 2,
+      "publications": 1423
+    },
+    {
+      "versions": 3,
+      "publications": 461
+    },
+    {
+      "versions": 4,
+      "publications": 154
+    },
+    {
+      "versions": 5,
+      "publications": 41
+    },
+    {
+      "versions": 6,
+      "publications": 14
+    },
+    {
+      "versions": 7,
+      "publications": 3
+    },
+    {
+      "versions": 8,
+      "publications": 2
+    },
+    {
+      "versions": 9,
+      "publications": 1
+    },
+    {
+      "versions": 11,
+      "publications": 2
+    }
+  ],
+  "references": {
+    "all_records": 172954,
+    "with_arxiv_before_dedup": 84719,
+    "unique_arxiv_pairs": 84719,
+    "legacy_arxiv_pairs": 4563,
+    "successfully_empty_publications": 1121,
+    "per_successful_publication": {
+      "n": 4917,
+      "sum": 172954,
+      "mean": 35.1747000203376,
+      "median": 32,
+      "max": 428
+    },
+    "histogram": [
+      {
+        "lower": 0,
+        "upper_exclusive": 1,
+        "count": 1121
+      },
+      {
+        "lower": 1,
+        "upper_exclusive": 10,
+        "count": 251
+      },
+      {
+        "lower": 10,
+        "upper_exclusive": 25,
+        "count": 662
+      },
+      {
+        "lower": 25,
+        "upper_exclusive": 50,
+        "count": 1569
+      },
+      {
+        "lower": 50,
+        "upper_exclusive": 100,
+        "count": 1123
+      },
+      {
+        "lower": 100,
+        "upper_exclusive": 200,
+        "count": 166
+      },
+      {
+        "lower": 200,
+        "upper_exclusive": 500,
+        "count": 25
+      },
+      {
+        "lower": 500,
+        "upper_exclusive": 1000,
+        "count": 0
+      },
+      {
+        "lower": 1000,
+        "upper_exclusive": null,
+        "count": 0
+      }
+    ]
+  },
+  "storage": {
+    "active_output_bytes": {
+      "raw": 3821236162,
+      "metadata": 2388467,
+      "references": 189155971,
+      "tables": 9129715
+    },
+    "retained_tex_bib_bytes": 3816242614,
+    "complete_publication_retained_bytes": {
+      "n": 4775,
+      "sum": 3791304238,
+      "mean": 793990.4163350785,
+      "median": 129160,
+      "max": 192700276
+    },
+    "before_extraction_bytes": null,
+    "size_reduction_fraction": null,
+    "note": "Before-extraction sizes were not recorded for the integrated corpus. Disk is a current logical-size snapshot, not historical peak. Complete-Publication Parquet tables were freshly exported during this report from verified existing cache; output byte counts include these derived tables."
+  },
+  "checks": {
+    "tables": {
+      "papers": {
+        "valid": true,
+        "rows": 4775,
+        "duplicate_keys": 0,
+        "outside_range": 0,
+        "fields": [
+          {
+            "name": "arxiv_id",
+            "type": "string",
+            "nullable": false
+          },
+          {
+            "name": "title",
+            "type": "string",
+            "nullable": true
+          },
+          {
+            "name": "authors",
+            "type": "list<element: string>",
+            "nullable": true
+          },
+          {
+            "name": "submission_date",
+            "type": "string",
+            "nullable": true
+          },
+          {
+            "name": "revised_dates",
+            "type": "list<element: string>",
+            "nullable": true
+          },
+          {
+            "name": "venue",
+            "type": "string",
+            "nullable": true
+          }
+        ]
+      },
+      "references": {
+        "valid": true,
+        "rows": 81847,
+        "duplicate_keys": 0,
+        "outside_range": 0,
+        "fields": [
+          {
+            "name": "arxiv_id",
+            "type": "string",
+            "nullable": false
+          },
+          {
+            "name": "ref_arxiv_id",
+            "type": "string",
+            "nullable": false
+          },
+          {
+            "name": "ref_title",
+            "type": "string",
+            "nullable": true
+          },
+          {
+            "name": "ref_authors",
+            "type": "list<element: string>",
+            "nullable": true
+          },
+          {
+            "name": "ref_submission_date",
+            "type": "string",
+            "nullable": true
+          },
+          {
+            "name": "ref_s2_id",
+            "type": "string",
+            "nullable": true
+          }
+        ]
+      }
+    },
+    "unexpected_raw_files": [],
+    "metadata_issues": {}
+  },
+  "failures": [
+    {
+      "arxiv_id": "2412.08904",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.09259",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.09320",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.09335",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.09429",
+      "version": 3,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.09456",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.09497",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.09775",
+      "version": 3,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.09780",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.09789",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.09829",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.09902",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.09903",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.09911",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.09915",
+      "version": 4,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.09995",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.10133",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.10358",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.10388",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.10441",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.10560",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.10591",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.10744",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.10824",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.11009",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.11029",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.11049",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.11277",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.11386",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.11412",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.11432",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.11613",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.11635",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.11662",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.11694",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.11725",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.11735",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.11767",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.11792",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.11815",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.11841",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.11856",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.11904",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.11912",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.11917",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.11934",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.11946",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.11970",
+      "version": 3,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.12027",
+      "version": 3,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.12048",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12048",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12093",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12113",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12113",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12136",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12141",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12145",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12145",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.12145",
+      "version": 4,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.12149",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.12161",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12173",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12181",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12184",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12217",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12269",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12334",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12338",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.12359",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12366",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12371",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12431",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12434",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12441",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12505",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12506",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.12516",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12562",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12607",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12620",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12702",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12772",
+      "version": null,
+      "kind": "discovery",
+      "status": "unknown"
+    },
+    {
+      "arxiv_id": "2412.12776",
+      "version": null,
+      "kind": "discovery",
+      "status": "unknown"
+    },
+    {
+      "arxiv_id": "2412.12778",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.12801",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12808",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.12832",
+      "version": null,
+      "kind": "discovery",
+      "status": "unknown"
+    },
+    {
+      "arxiv_id": "2412.12833",
+      "version": null,
+      "kind": "discovery",
+      "status": "unknown"
+    },
+    {
+      "arxiv_id": "2412.12834",
+      "version": null,
+      "kind": "discovery",
+      "status": "unknown"
+    },
+    {
+      "arxiv_id": "2412.12835",
+      "version": null,
+      "kind": "discovery",
+      "status": "unknown"
+    },
+    {
+      "arxiv_id": "2412.12836",
+      "version": null,
+      "kind": "discovery",
+      "status": "unknown"
+    },
+    {
+      "arxiv_id": "2412.12837",
+      "version": null,
+      "kind": "discovery",
+      "status": "unknown"
+    },
+    {
+      "arxiv_id": "2412.12838",
+      "version": null,
+      "kind": "discovery",
+      "status": "unknown"
+    },
+    {
+      "arxiv_id": "2412.12839",
+      "version": null,
+      "kind": "discovery",
+      "status": "unknown"
+    },
+    {
+      "arxiv_id": "2412.12840",
+      "version": null,
+      "kind": "discovery",
+      "status": "unknown"
+    },
+    {
+      "arxiv_id": "2412.12841",
+      "version": null,
+      "kind": "discovery",
+      "status": "unknown"
+    },
+    {
+      "arxiv_id": "2412.12844",
+      "version": null,
+      "kind": "discovery",
+      "status": "unknown"
+    },
+    {
+      "arxiv_id": "2412.12845",
+      "version": null,
+      "kind": "discovery",
+      "status": "unknown"
+    },
+    {
+      "arxiv_id": "2412.12846",
+      "version": null,
+      "kind": "discovery",
+      "status": "unknown"
+    },
+    {
+      "arxiv_id": "2412.12848",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.12849",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12867",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12868",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12883",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12904",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12919",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12931",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12942",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12945",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12964",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12965",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12966",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12966",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12967",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12968",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12969",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12969",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12971",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12974",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12974",
+      "version": 3,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12974",
+      "version": 4,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12974",
+      "version": 5,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12974",
+      "version": 6,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12974",
+      "version": 7,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12974",
+      "version": 8,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12978",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12979",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12979",
+      "version": 3,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12979",
+      "version": 4,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12980",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12981",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12982",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.12983",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12985",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.12986",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13016",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13027",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13046",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13047",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13056",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13070",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13072",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13073",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13074",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13076",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13077",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13089",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13183",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13188",
+      "version": 3,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13190",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13190",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13193",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13194",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13195",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13195",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13196",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13198",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13214",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13223",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13227",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13247",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13250",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13250",
+      "version": 3,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13277",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.13284",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.13294",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13325",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13360",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13375",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13393",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13393",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13410",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.13417",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.13436",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13436",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13443",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13443",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13443",
+      "version": 3,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13453",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13458",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13459",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13469",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13475",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13481",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13481",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13486",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13506",
+      "version": 2,
+      "kind": "source",
+      "status": "unavailable",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.13508",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13509",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13513",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13513",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13517",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13518",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13526",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13526",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13526",
+      "version": 3,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13533",
+      "version": 3,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13533",
+      "version": 4,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13537",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13540",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13547",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13547",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13547",
+      "version": 3,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13548",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13548",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13548",
+      "version": 3,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13548",
+      "version": 4,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13548",
+      "version": 5,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13548",
+      "version": 6,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13549",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13549",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13550",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13554",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13558",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13565",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13574",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13578",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13586",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13588",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13588",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 404
+    },
+    {
+      "arxiv_id": "2412.13592",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13594",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13595",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13595",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13595",
+      "version": 3,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13603",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13612",
+      "version": 4,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13612",
+      "version": 5,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13614",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13621",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13627",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13627",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13630",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13636",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13637",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13638",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13641",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13645",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13647",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13652",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13654",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13654",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13681",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13713",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13714",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13728",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13729",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13735",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13736",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13736",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13738",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13739",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13749",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13750",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13762",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13763",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13780",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13781",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13801",
+      "version": 4,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13802",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13803",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13803",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13803",
+      "version": 3,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13807",
+      "version": null,
+      "kind": "references",
+      "status": "error",
+      "http_status": 429
+    },
+    {
+      "arxiv_id": "2412.13810",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13810",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13817",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13833",
+      "version": 1,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    },
+    {
+      "arxiv_id": "2412.13840",
+      "version": 2,
+      "kind": "source",
+      "status": "download_error",
+      "http_status": null
+    }
+  ],
+  "provenance": {
+    "verified_input_files": 17805,
+    "aggregate_input_hash": "5b13eec59d8cd40ba754abaeaf828df7b0904730351d098dc038b4e02bfa1dee",
+    "manifest_sha256": "04a9cd9912500e7f9939959b184708478b170aaed076e2106ec5658e34ec4ab4",
+    "summary_generated_at": "2026-11-05T04:28:40.899703+00:00",
+    "builder_contract": "origin/feat/m1-report:src/reporting/m1.py",
+    "builder_sha256": "a1a1147a5ad82aeab51dee47b11d97879abbf035b010a0a5d5c9cc8b2108bbe1",
+    "source_checks": "All retained source-file hashes rechecked; parallel I/O only, no API calls.",
+    "core_commit": "11bd1ebe74eb229482c4a23c8d6c691f082c2e78"
+  },
+  "benchmark": {
+    "testbed": "Historical full Range: no complete timing/RSS harness; 10-ID pilot is separate",
+    "total_wall_seconds": null,
+    "mean_seconds_per_publication": null,
+    "discovery_seconds": null,
+    "peak_rss_bytes": null,
+    "mean_rss_bytes": null,
+    "peak_disk_bytes": null
+  },
+  "smoke_samples": []
+}
