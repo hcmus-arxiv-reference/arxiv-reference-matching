@@ -20,8 +20,12 @@ Trạng thái Publication:
     incomplete     còn task chưa chạy
     not_attempted  chưa có bản ghi discovery
 
-Dung lượng: `bytes_after` là tổng .tex/.bib đã giữ. Layout `src/crawl/` không ghi
-dung lượng file nén hay dung lượng trước khi bỏ ảnh, nên các số đó là null.
+Dung lượng (ba số, so trên cùng tập Publication):
+    bytes_downloaded  byte tải qua mạng (thường là gói nén)
+    bytes_before      byte nội dung sau giải nén, trước khi chọn .tex/.bib
+    bytes_after       tổng .tex/.bib đã giữ
+Hai số đầu lấy từ `source.json`; Version tải trước khi có hai trường này cho null,
+và Publication có một Version như vậy bị loại khỏi phép so trước/sau.
 Thời gian và RAM lấy từ harness `src.benchmark`, không có trong Manifest.
 """
 import argparse
@@ -35,7 +39,8 @@ from src.crawl.storage import key
 
 CSV_COLUMNS = [
     "id", "status", "n_versions", "versions_with_tex", "versions_non_tex",
-    "versions_unavailable", "bytes_after", "n_refs", "n_refs_with_arxiv_id",
+    "versions_unavailable", "bytes_downloaded", "bytes_before", "bytes_after",
+    "n_refs", "n_refs_with_arxiv_id",
 ]
 SOURCE_OK = {"success", "non_tex"}
 
@@ -91,6 +96,8 @@ def publication_row(data_dir, records, arxiv_id):
     versions = metadata["publication"]["versions"]
     statuses = []
     tex = non_tex = size = 0
+    # None unless every kept Version has a receipt with the size fields.
+    downloaded = before = 0
     for version in range(1, versions + 1):
         rec = records.get((arxiv_id, version, "source"))
         status = rec.get("status") if rec else "not_attempted"
@@ -98,6 +105,11 @@ def publication_row(data_dir, records, arxiv_id):
         if status in SOURCE_OK:
             directory = data_dir / "raw" / key(arxiv_id) / f"v{version}"
             receipt = _read_json(directory / "source.json") or {}
+            if downloaded is not None and "downloaded_bytes" in receipt and "content_bytes" in receipt:
+                downloaded += receipt["downloaded_bytes"]
+                before += receipt["content_bytes"]
+            else:
+                downloaded = before = None
             for name in receipt.get("files", {}):
                 try:
                     size += (directory / name).stat().st_size
@@ -114,7 +126,8 @@ def publication_row(data_dir, records, arxiv_id):
             row["n_refs"] = len(payload["rows"])
             row["n_refs_with_arxiv_id"] = len(reference_rows(arxiv_id, payload["rows"]))
     row.update(n_versions=versions, versions_with_tex=tex, versions_non_tex=non_tex,
-               versions_unavailable=statuses.count("unavailable"), bytes_after=size)
+               versions_unavailable=statuses.count("unavailable"), bytes_after=size,
+               bytes_downloaded=downloaded, bytes_before=before)
     if all(s in SOURCE_OK for s in statuses[:-1]) and ref_status == "success":
         row["status"] = "done"
     elif "error" in statuses:
@@ -157,6 +170,9 @@ def summarize(rows, requested=None):
     versions = sum(r["n_versions"] for r in discovered)
     tex = sum(r["versions_with_tex"] for r in discovered)
     with_refs = [r for r in rows if r["n_refs"] is not None]
+    # Before/after are compared on the same Publications only.
+    sized = [r for r in done if r["bytes_before"] is not None]
+    before_total = sum(r["bytes_before"] for r in sized)
     return {
         "papers_requested": requested,
         **{f"papers_{s}": len(v) for s, v in by_status.items()},
@@ -166,10 +182,12 @@ def summarize(rows, requested=None):
         "versions_non_tex": sum(r["versions_non_tex"] for r in discovered),
         "versions_unavailable": sum(r["versions_unavailable"] for r in discovered),
         "version_tex_rate": ratio(tex, versions),
-        "avg_bytes_downloaded_per_paper": None,
-        "avg_bytes_before_per_paper": None,
+        "avg_bytes_downloaded_per_paper": avg([r["bytes_downloaded"] for r in sized]),
+        "avg_bytes_before_per_paper": avg([r["bytes_before"] for r in sized]),
         "avg_bytes_after_per_paper": avg([r["bytes_after"] for r in done]),
-        "size_reduction_pct": None,
+        "papers_with_size_before": len(sized),
+        "size_reduction_pct": (round(100 * (1 - sum(r["bytes_after"] for r in sized) / before_total), 2)
+                               if before_total else None),
         "avg_refs_per_paper": avg([r["n_refs"] for r in with_refs]),
         "avg_refs_with_arxiv_id_per_paper": avg([r["n_refs_with_arxiv_id"] for r in with_refs]),
         "papers_with_ref_metadata": len(with_refs),
