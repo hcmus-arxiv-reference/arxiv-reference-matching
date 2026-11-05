@@ -59,7 +59,7 @@ Làm từng lớp; mỗi lớp có code, test với fixture nhỏ tự viết, c
 5. **Khử trùng lặp giữa các Version** sau chuẩn hóa: phần tử giống hệt dùng chung `element_id`.
 6. Xuất `elements` và `hierarchy` đúng schema; một dòng `hierarchy` là một cạnh nút-cha của một Version; mọi `parent_id` trỏ tới `element_id` có thật.
 
-Còn mở: định dạng `element_id` và khóa `hierarchy` (xem `git show 062ba29:docs/schema-review.md`); phải hỏi người dùng trước khi chốt. Batch parse cần checkpoint/resume, log lỗi từng Version và số liệu cho báo cáo (tỉ lệ thành công, độ phủ Version, số phần tử trước/sau khử trùng lặp, thời gian, RAM, dung lượng).
+Hợp đồng dữ liệu giữa các milestone: `docs/data-contract.md`. Khóa `hierarchy` đã chốt là `(arxiv_id, version, element_id, parent_id)` (C2). `element_id` băm theo cây con (C1); thứ tự anh em giữ ở dữ liệu trung gian của M2 (C3). Batch parse cần checkpoint/resume, log lỗi từng Version và số liệu cho báo cáo (tỉ lệ thành công, độ phủ Version, số phần tử trước/sau khử trùng lặp, thời gian, RAM, dung lượng).
 
 ## 6. Khi nào phải dừng lại và hỏi người dùng
 

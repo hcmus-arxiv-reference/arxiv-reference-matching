@@ -11,7 +11,8 @@ Nguồn Crawling: https://hcmus-cs-ta.github.io/lab-book/intro-ds/statement/craw
 Hai bảng Crawling đã đối chiếu; schema toàn dự án chưa đóng băng.
 M2 được Bảo duyệt ngày 2026-10-24: bibtex.authors là list<string>, year
 là int32 nullable; hierarchy chỉ chứa cạnh, parent_id không null. Root chỉ
-nằm trong elements. Năm không đọc được phải lưu giá trị thô trong log của
+nằm trong elements. Khóa hierarchy gồm parent_id (chốt 2026-11-05, xem
+docs/data-contract.md mục C2). Năm không đọc được phải lưu giá trị thô trong log của
 bộ trích BibTeX, không ép chuỗi bẩn thành một năm phỏng đoán.
 validate() chỉ kiểm tra một bảng; không xác minh đủ Version hoặc khóa ngoại.
 """
@@ -181,7 +182,8 @@ PRIMARY_KEYS: dict[str, list[str]] = {
     "papers": ["arxiv_id"],
     "references": ["arxiv_id", "ref_arxiv_id"],
     "elements": ["element_id"],
-    "hierarchy": ["arxiv_id", "version", "element_id"],
+    # Một Element dùng chung có thể có nhiều cha trong một Version (C2, docs/data-contract.md).
+    "hierarchy": ["arxiv_id", "version", "element_id", "parent_id"],
     "bibtex": ["arxiv_id", "citation_key"],
     "predictions": ["arxiv_id", "citation_key"],
 }

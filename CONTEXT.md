@@ -7,6 +7,13 @@
 - **Reference:** bản ghi Semantic Scholar của bài được trích dẫn có arXiv ID.
 - **BibTeX entry:** mục trích dẫn sau chuẩn hóa và khử trùng lặp.
 - **Element:** nút của cây phân cấp tài liệu.
+- **Version đã xác minh:** thư mục Version có receipt `source.json` hợp lệ, danh sách và
+  checksum file `.tex/.bib` khớp, status `success` hoặc `non_tex`. Lúc crawl còn phải khớp
+  status và checksum trong Manifest. Định nghĩa đầy đủ: `docs/data-contract.md` mục 3.2.
+- **Publication hoàn chỉnh:** metadata hợp lệ, mọi Version từ `v1` tới số Version trong
+  metadata đều là Version đã xác minh, và có references hợp lệ. Bỏ điều kiện references thì
+  gọi là _đủ source_. Xem `docs/data-contract.md` mục 3.3.
+  _Tránh_: "bài xong", "done" (dễ lẫn với status `success` của một task trong Manifest).
 - **Range:** dải arXiv ID giao cho một thành viên. Mỗi thành viên chạy codebase
   chung trên Range của mình; dữ liệu các Range được gộp ở bước riêng.
 - **Stage:** một bước của crawler có interface riêng, là đơn vị để so sánh và ghép
