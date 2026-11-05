@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Protocol
 from src.common.corpus import (FileCorpus, Publication, PublicationState, VersionState,
                                validate_publication, verified_source)
+from src.common.references import CitationList
 from .manifest import TaskRecord
 
 
@@ -46,7 +47,7 @@ class CorpusReader:
 
     validate_publication = staticmethod(validate_publication)
 
-    def load_references(self, arxiv_id: str) -> list[dict]:
+    def load_references(self, arxiv_id: str) -> CitationList:
         body = self.references_path(arxiv_id).read_bytes()
         if not _matches(self.manifest.get(arxiv_id, None, "references"), body):
             raise ValueError("Unverified references cache")
@@ -69,8 +70,7 @@ class CorpusReader:
                             and task.checksum == source.checksum)
             versions.append(VersionState(version, source, verified, task))
         try:
-            self.load_references(arxiv_id)
-            references_ok = True
+            references = self.load_references(arxiv_id)
         except (OSError, ValueError, KeyError, TypeError):
-            references_ok = False
-        return PublicationState(arxiv_id, publication, tuple(versions), references_ok)
+            references = None
+        return PublicationState(arxiv_id, publication, tuple(versions), references)

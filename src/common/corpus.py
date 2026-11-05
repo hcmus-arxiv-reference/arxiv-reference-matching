@@ -15,9 +15,9 @@ from dataclasses import asdict, dataclass
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
-import re
 from typing import Any
 
+from src.common.references import CitationList, reference_rows  # reference_rows: compatibility re-export.
 from src.common.schema import from_records, publication_key, require_id
 
 SOURCE_OK = frozenset({"success", "non_tex"})
@@ -105,33 +105,6 @@ def validate_publication(publication: Publication, arxiv_id: str) -> None:
     from_records([row], "papers")
 
 
-def reference_rows(arxiv_id: str, raw_rows: list[dict]) -> list[dict]:
-    """Map raw Semantic Scholar rows to ``references`` rows.
-
-    Deduplicate arXiv-keyed candidates; never treat publicationDate as submission.
-    """
-    require_id(arxiv_id)
-    rows = {}
-    for raw in raw_rows:
-        paper = raw.get("citedPaper") or {}
-        external = paper.get("externalIds") or {}
-        identifier = external.get("ArXiv")
-        if not identifier:
-            continue
-        ref_id = require_id(re.sub(r"v\d+$", "", identifier))
-        row = {"arxiv_id": arxiv_id, "ref_arxiv_id": ref_id,
-               "ref_title": paper.get("title"),
-               "ref_authors": [a["name"] for a in (paper.get("authors") or []) if a.get("name")],
-               "ref_submission_date": None, "ref_s2_id": paper.get("paperId")}
-        if ref_id in rows:
-            # Preserve first supplied nonempty values, fill missing values only.
-            row = {k: rows[ref_id][k] or v for k, v in row.items()}
-        rows[ref_id] = row
-    result = [rows[k] for k in sorted(rows)]
-    from_records(result, "references")
-    return result
-
-
 @dataclass(frozen=True)
 class VersionState:
     """One expected Version of a Publication.
@@ -155,7 +128,11 @@ class PublicationState:
     arxiv_id: str
     publication: Publication | None
     versions: tuple[VersionState, ...]
-    references_ok: bool
+    references: CitationList | None
+
+    @property
+    def references_ok(self) -> bool:
+        return self.references is not None
 
     @property
     def expected_versions(self) -> int:
@@ -212,15 +189,14 @@ class FileCorpus:
         validate_publication(publication, arxiv_id)
         return publication
 
-    def read_references(self, arxiv_id: str, body: bytes | None = None) -> list[dict]:
-        """Raw Semantic Scholar rows after checking identity and mapping; raise on any problem."""
+    def read_references(self, arxiv_id: str, body: bytes | None = None) -> CitationList:
+        """S2 citation list after checking identity and mapping; raise on any problem."""
         if body is None:
             body = self.references_path(arxiv_id).read_bytes()
         payload = json.loads(body)
         if payload["format"] != 1 or payload["arxiv_id"] != arxiv_id:
             raise ValueError("Wrong references cache")
-        reference_rows(arxiv_id, payload["rows"])
-        return payload["rows"]
+        return CitationList.from_raw(arxiv_id, payload["rows"])
 
     def publication(self, arxiv_id: str) -> PublicationState:
         """State of one Publication from files only."""
@@ -234,8 +210,7 @@ class FileCorpus:
             source = verified_source(self.version_path(arxiv_id, version))
             versions.append(VersionState(version, source, verified=source is not None))
         try:
-            self.read_references(arxiv_id)
-            references_ok = True
+            references = self.read_references(arxiv_id)
         except (OSError, ValueError, KeyError, TypeError):
-            references_ok = False
-        return PublicationState(arxiv_id, publication, tuple(versions), references_ok)
+            references = None
+        return PublicationState(arxiv_id, publication, tuple(versions), references)

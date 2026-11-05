@@ -8,7 +8,7 @@ from typing import Any
 
 from src.common.config import ArxivRange, SegmentedRange
 from .manifest import TaskRecord
-from .semantic_scholar import reference_rows
+from src.common.references import CitationList
 from .source import verified_source
 from .storage import key
 
@@ -153,14 +153,12 @@ def validate_crawl(data_dir: str | Path, benchmark_path: str | Path) -> dict[str
                     or refs_data.get("format") != 1 or refs_data.get("arxiv_id") != arxiv_id
                     or not isinstance(raw_rows, list)):
                 raise ValueError("missing/mismatched reference receipt or payload")
-            normalized = reference_rows(arxiv_id, raw_rows)
+            # Reading and checksums above stay independent (ADR 0003); counting
+            # uses the one shared definition, and mapping checks every arXiv ID.
+            citations = CitationList.from_raw(arxiv_id, raw_rows)
             refs_ok = True
-            references_total += len(raw_rows)
-            references_with_arxiv_id += sum(bool(((row.get("citedPaper") or {}).get("externalIds") or {}).get("ArXiv"))
-                                             for row in raw_rows)
-            # Keep this call explicit: it ensures all arXiv IDs in the S2 cache
-            # pass the same shape and identifier checks as the production path.
-            del normalized
+            references_total += citations.total
+            references_with_arxiv_id += citations.with_arxiv_id
         except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
             finding("references_invalid", f"{arxiv_id}: {error}")
         if refs_ok:

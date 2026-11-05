@@ -14,7 +14,8 @@ from .discovery import ArxivDiscovery
 from .corpus import CorpusReader
 from .export import PublicationBundle, export_publications
 from .manifest import Manifest, TaskRecord
-from .semantic_scholar import SemanticScholarClient, reference_rows
+from src.common.references import CitationList
+from .semantic_scholar import SemanticScholarClient
 from .source import ArxivSourceDownloader
 from .storage import require_id
 from src.common.json_io import write_json
@@ -120,9 +121,7 @@ class CrawlPipeline:
         return pool.submit(self._fetch_references, arxiv_id)
 
     def _fetch_references(self, arxiv_id):
-        rows = self.references.references(arxiv_id)
-        reference_rows(arxiv_id, rows)
-        return rows
+        return CitationList.from_raw(arxiv_id, self.references.references(arxiv_id))
 
     def crawl_ids(self, ids: list[str], *, refresh: bool = False) -> dict[str, int]:
         """Cache metadata until refresh=True; validate source files on every run."""
@@ -161,10 +160,10 @@ class CrawlPipeline:
                 if refs is None:
                     continue
                 try:
-                    rows = refs.result()
-                    if rows is not None:
+                    citations = refs.result()
+                    if citations is not None:
                         path = self._references_path(arxiv_id)
-                        write_json(path, {"format": 1, "arxiv_id": arxiv_id, "rows": rows})
+                        write_json(path, {"format": 1, "arxiv_id": arxiv_id, "rows": list(citations.raw)})
                         self._record(arxiv_id, None, "references", "success", local_path=str(path),
                                      checksum=hashlib.sha256(path.read_bytes()).hexdigest())
                     stats["references_success"] += 1

@@ -30,12 +30,13 @@ import json
 import statistics
 from pathlib import Path
 
-from src.crawl.semantic_scholar import reference_rows
+from src.common.references import CitationList
 from src.crawl.storage import key
 
 CSV_COLUMNS = [
     "id", "status", "n_versions", "versions_with_tex", "versions_non_tex",
     "versions_unavailable", "bytes_after", "n_refs", "n_refs_with_arxiv_id",
+    "n_references",
 ]
 SOURCE_OK = {"success", "non_tex"}
 
@@ -111,8 +112,11 @@ def publication_row(data_dir, records, arxiv_id):
     if ref_status == "success":
         payload = _read_json(data_dir / "references" / f"{key(arxiv_id)}.json")
         if payload is not None:
-            row["n_refs"] = len(payload["rows"])
-            row["n_refs_with_arxiv_id"] = len(reference_rows(arxiv_id, payload["rows"]))
+            citations = CitationList.from_raw(arxiv_id, payload["rows"])
+            row["n_refs"] = citations.total
+            # Before deduplication, as in validation.py, the M1 report and Liễu's done.json.
+            row["n_refs_with_arxiv_id"] = citations.with_arxiv_id
+            row["n_references"] = len(citations.references)  # rows of the references table
     row.update(n_versions=versions, versions_with_tex=tex, versions_non_tex=non_tex,
                versions_unavailable=statuses.count("unavailable"), bytes_after=size)
     if all(s in SOURCE_OK for s in statuses[:-1]) and ref_status == "success":
@@ -172,6 +176,7 @@ def summarize(rows, requested=None):
         "size_reduction_pct": None,
         "avg_refs_per_paper": avg([r["n_refs"] for r in with_refs]),
         "avg_refs_with_arxiv_id_per_paper": avg([r["n_refs_with_arxiv_id"] for r in with_refs]),
+        "avg_references_per_paper": avg([r.get("n_references") for r in with_refs]),
         "papers_with_ref_metadata": len(with_refs),
         "ref_metadata_rate": ratio(len(with_refs), len(discovered)),
     }

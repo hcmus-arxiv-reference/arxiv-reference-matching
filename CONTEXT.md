@@ -5,6 +5,12 @@
 - **Publication:** bài arXiv có ID gốc, không kèm hậu tố version.
 - **Version:** một phiên bản của Publication (`v1`, `v2`, …).
 - **Reference:** bản ghi Semantic Scholar của bài được trích dẫn có arXiv ID.
+- **Danh sách trích dẫn S2:** mọi dòng `citedPaper` mà Semantic Scholar trả về cho một
+  Publication, kể cả dòng không có arXiv ID; cache giữ nguyên danh sách này. Reference là
+  tập con có arXiv ID, khử trùng lặp theo `ref_arxiv_id`. Mọi phép đếm của hai tập này
+  nằm ở `src/common/references.py` (`CitationList`): "có arXiv ID" luôn đếm dòng thô,
+  **trước** khử trùng lặp; số Reference là số dòng bảng `references`.
+  _Tránh_: gọi dòng không có arXiv ID là Reference.
 - **BibTeX entry:** mục trích dẫn sau chuẩn hóa và khử trùng lặp.
 - **Element:** nút của cây phân cấp tài liệu.
 - **Version đã xác minh:** thư mục Version có receipt `source.json` hợp lệ, danh sách và
