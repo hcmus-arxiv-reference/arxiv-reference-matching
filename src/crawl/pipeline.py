@@ -59,7 +59,8 @@ class CrawlPipeline:
     @property
     def corpus(self) -> CorpusReader:
         """Use the current Manifest, including after a runner reloads it."""
-        return CorpusReader(self.data_dir, self.manifest)
+        # Source fetch fakes may lack ``root``; the reader then uses data_dir/raw.
+        return CorpusReader(self.data_dir, self.manifest, getattr(self.sources, "root", None))
 
     # Compatibility for earlier callers; new code uses the public reader.
     def _load_publication(self, arxiv_id):

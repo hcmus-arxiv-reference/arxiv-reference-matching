@@ -7,31 +7,22 @@ import shutil
 import time
 from filelock import FileLock
 from .manifest import Manifest
-from .source import verified_source
-from .storage import key
 from src.common.json_io import write_json
 
 def inspect_publication(pipeline, identifier):
-    """Read and verify existing caches without issuing network requests."""
-    result = {"metadata": False, "expected_versions": 0, "verified_versions": 0,
-              "non_tex_versions": 0, "references": False, "complete": False}
-    try:
-        publication = pipeline.corpus.load_publication(identifier)
-        result.update(metadata=True, expected_versions=publication.versions)
-        for version in range(1, publication.versions + 1):
-            record = pipeline.manifest.get(identifier, version)
-            source = verified_source(pipeline.sources.root / key(identifier) / f"v{version}")
-            if (source and record and record.status == source.status
-                    and record.checksum == source.checksum):
-                result["verified_versions"] += 1
-                result["non_tex_versions"] += source.status == "non_tex"
-        pipeline.corpus.load_references(identifier)
-        result["references"] = True
-    except (OSError, ValueError, KeyError, TypeError):
-        pass
-    result["complete"] = (result["metadata"] and result["references"]
-                          and result["verified_versions"] == result["expected_versions"])
-    return result
+    """Read and verify existing caches without issuing network requests.
+
+    The dict keys are summed into ``range-run.json`` counts, so they stay as is;
+    the check itself is ``CorpusReader.status``.
+    """
+    state = pipeline.corpus.status(identifier)
+    metadata = state.publication is not None
+    return {"metadata": metadata, "expected_versions": state.expected_versions,
+            "verified_versions": state.verified_versions,
+            "non_tex_versions": state.non_tex_versions,
+            # References were only inspected after valid metadata; keep that count.
+            "references": metadata and state.references_ok,
+            "complete": state.complete}
 
 
 def publication_issues(manifest, identifier):

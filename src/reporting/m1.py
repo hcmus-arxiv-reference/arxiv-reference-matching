@@ -16,7 +16,6 @@ from src.common.schema import read_table
 from src.crawl.manifest import TaskRecord
 from src.crawl.corpus import CorpusReader
 from src.crawl.semantic_scholar import reference_rows
-from src.crawl.source import verified_source
 from src.crawl.storage import key
 
 
@@ -74,9 +73,9 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None):
     input_hashes = {"manifests/crawl.jsonl": hashlib.sha256(body).hexdigest()}
     metadata_issues = Counter()
     for identifier in identifiers:
-        try:
-            publication = corpus.load_publication(identifier)
-        except (OSError, ValueError, KeyError, TypeError):
+        pub_state = corpus.status(identifier)
+        publication = pub_state.publication
+        if publication is None:
             failures.append({"arxiv_id": identifier, "version": None, "kind": "discovery", "status": "unknown"})
             continue  # Unknown expected Version count is not represented as zero.
         counts["discovered"] += 1
@@ -87,11 +86,10 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None):
         rel = f"metadata/{key(identifier)}.json"
         input_hashes[rel] = digest(cache / rel)
         verified = size = 0
-        for version in range(1, publication.versions + 1):
-            directory = cache / "raw" / key(identifier) / f"v{version}"
-            source = verified_source(directory)
-            rec = manifest.get(identifier, version)
-            if source and rec and source.status == rec.status and source.checksum == rec.checksum:
+        for item in pub_state.versions:
+            version, source, rec = item.version, item.source, item.task
+            directory = corpus.files.version_path(identifier, version)
+            if item.verified:
                 status = source.status
                 verified += 1
                 size += sum((directory / name).stat().st_size for name in (*source.tex_files,*source.bib_files))
