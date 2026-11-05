@@ -1,253 +1,165 @@
-# Summary quá trình xây dựng và chạy crawler — Hải
+# SUMMARY
 
-## 1. Mục tiêu và phạm vi
+File Summary về quá trình crawl dữ liệu trên máy local của Hải, nhánh
+`Hai_crawler`. Range **2412.08848–2412.13847**, gồm **5.000 ID**, tính cả hai đầu.
 
-Phần thu thập của Hải xử lý Range **2412.08848–2412.13847**, gồm 5.000 ID
-tháng 12/2024, tính cả hai đầu. Mục tiêu là lấy metadata của từng Publication,
-tải source của mọi Version, lấy references từ Semantic Scholar (S2), sau đó
-xuất hai bảng `papers.parquet` và `references.parquet` theo schema chung.
+Quy trình: **crawl metadata/source arXiv → dùng danh sách ID gốc (index) để
+chạy S2 → ghép cache và xuất Parquet**. Chạy bằng `notebooks/local_crawl.ipynb`
+trong VS Code hoặc `scripts/crawl_local.py`.
 
-Quá trình thực hiện gồm tích hợp crawler với output cũ, bổ sung công cụ chạy
-Range có checkpoint, chuẩn bị hai notebook tách arXiv/S2 cho Kaggle, rồi chuyển
-sang chạy tuần tự trên máy local. Cache được giữ và nhập lại giữa các lượt để
-tiếp tục phần thiếu. Kết quả cuối trong tài liệu này được kiểm tra từ output
-local ngày 05/11/2026; không cộng kết quả Kaggle chưa được lưu hoặc tải về.
+## Crawl ARXIV LaTeX Source
 
-## 2. Xây dựng các bước thu thập
+### 1. Lấy ID theo Range
 
-Repo còn giữ notebook `src/arxiv_crawler.ipynb`, trong đó `get_id_list` đọc
-danh sách ID, `get_source` tải source bằng stream/chunk và ghi xuống đĩa,
-`crawl_sources` tổ chức lượt tải và ghi thông tin kết quả. Các hàm
-`write_done_files`/`write_json` hỗ trợ xuất thông tin cho từng bài. Notebook
-được giữ như một cách chạy riêng; không tự coi output của nó là cache đã
-được xác minh theo manifest của pipeline tổng hợp.
+1. Cấu hình Range trong notebook local bằng
+   `parse_range('2412.08848', '2412.13847')`, hoặc truyền `--start`, `--end`
+   khi chạy CLI. Range nằm trong cùng tháng 12/2024.
+2. Tạo danh sách `IDS` gồm 5.000 ID gốc, không kèm Version. Đây là danh sách
+   index đầu vào được giữ để dùng tiếp ở bước S2.
+3. `src/crawl/batched.py` gọi arXiv API theo batch tối đa 50 ID để lấy metadata,
+   xác định mỗi Publication có bao nhiêu Version và tải từ `v1` đến `vN`.
+   Các ngày sửa đổi của Version được tra cứu bổ sung khi cần.
+4. Nếu batch lỗi hoặc thiếu ID, crawler thử truy vấn riêng từng ID. Thiếu trong
+   một batch chưa đủ để kết luận Publication không tồn tại.
+5. Metadata được lưu vào `metadata/<publication-key>.json`; trạng thái được ghi
+   trong `manifests/crawl.jsonl`, danh sách ID của job trong `manifests/job.json`.
+   Chạy lại sẽ kiểm tra cache để tiếp tục phần chưa đủ.
 
-Để giữ output tương thích, bản CLI tái sử dụng core `src/crawl/` từ commit
-`63df237`, rồi tích hợp discovery theo lô và trình chạy Range. Đây là việc
-tái sử dụng và điều chỉnh các thành phần có sẵn trong nhóm, không phải toàn bộ
-module đều được viết mới từ đầu. Tại lượt đo mẫu, core được xác định bằng
-commit `11bd1ebe74eb229482c4a23c8d6c691f082c2e78` trên nhánh `Hai_crawler`.
+### 2. Chạy notebook local để tải source
 
-Ở bước discovery, `src/crawl/batched.py` bổ sung `BatchedDiscovery` cho
-`src/crawl/discovery.py`. Mặc định truy vấn metadata theo lô tối đa 50 ID,
-giúp giảm số lần gọi API so với truy vấn riêng từng ID. Khi lô không trả đủ
-hoặc bị lỗi, crawler thử truy vấn riêng; không coi việc thiếu trong một lô là
-bằng chứng Publication không tồn tại. Các lần tra cứu bổ sung lấy ngày sửa
-đổi của từng Version khi cần.
+- Mở `notebooks/local_crawl.ipynb` trong VS Code, chọn Python của `.venv`.
+  `CONTACT_EMAIL`, `S2_API_KEY` được đọc từ `.env`, không viết key trong notebook.
+- Chạy bước arXiv trước. `src/crawl/source.py` tải source từng Version từ
+  `export.arxiv.org/src/{id}v{n}`, giải nén và chỉ giữ `.tex`, `.bib` trong
+  `raw/<publication-key>/v<n>/`.
+- Hỗ trợ archive nhiều file và gzip chỉ có một file TeX. PDF/docx không có
+  TeX được ghi `non_tex`, vẫn giữ receipt để không bỏ mất Version.
+- Mỗi Version có `source.json` ghi trạng thái, checksum archive và các file
+  giữ lại. HTTP 404/410 ghi `unavailable`; lỗi tải/giải nén không được tính
+  thành công.
+- Tải source tuần tự, một kết nối arXiv tại một thời điểm, cách request ít
+  nhất 3,1 giây. Batch metadata giúp giảm request, không tạo nhiều luồng tải
+  source đồng thời.
+- Kết quả bước này ở `data/local-sequential/arxiv/`. Checkpoint ghi theo từng
+  tác vụ, bảng riêng của arXiv được xuất định kỳ sau mỗi 100 Publication được
+  xử lý và ở cuối lượt.
 
-Ở bước source, `src/crawl/source.py` tải mọi Version đã xác định, giải nén
-source và chỉ giữ `.tex`/`.bib`. Nó xử lý cả archive nhiều file lẫn gzip chỉ
-chứa một file TeX. Những Version chỉ có PDF/docx được ghi receipt `non_tex`,
-vẫn được tính là đã xử lý nếu xác minh được định dạng. HTTP 404/410 được ghi
-`unavailable`; dữ liệu tải lỗi hoặc hỏng không được tính thành công.
+### 3. Cơ chế retry và resume
 
-Ở bước S2, `src/crawl/semantic_scholar.py` gọi API theo ID gốc của Publication
-và đọc hết các trang references, mặc định 100 bản ghi/trang. Cache JSON giữ
-cả references không có arXiv ID để phục vụ thống kê. Khi xuất bảng, chỉ giữ
-bản ghi có arXiv ID, bỏ hậu tố Version và khử trùng lặp theo cặp
-`(arxiv_id, ref_arxiv_id)`. Danh sách rỗng từ một phản hồi hợp lệ được tính là
-lấy S2 thành công; lỗi API được giữ thành trạng thái lỗi riêng.
+- HTTP client mặc định timeout 60 giây, tối đa 4 lần retry sau lần gửi đầu.
+  HTTP 429/5xx và một số lỗi mạng được thử lại hữu hạn, có giãn cách/backoff.
+  Nếu `Retry-After` quá dài, client ghi lỗi để lượt sau thử lại.
+- Luồng local mặc định chạy một lượt mỗi dịch vụ. Kết thúc lượt arXiv, dù
+  còn bài source lỗi, runner vẫn có thể chuyển sang S2 để lấy phần dữ liệu
+  độc lập. Có thể tăng `--max-passes`; `--retry-delay` cấu hình chờ giữa lượt.
+- Resume kiểm tra manifest và checksum. Phần đã hợp lệ được bỏ qua; phần
+  thiếu/hỏng mới tải lại. Vẫn xét cả Range để không bỏ sót lỗi trước mốc
+  “bài thứ 2.500”.
+- Dừng bằng Ctrl+C hoặc Interrupt cell để lưu tiến độ. Nếu dừng ở bước arXiv,
+  runner không tự chạy tiếp S2. Chạy lại cùng thư mục output để resume.
 
-`src/crawl/http_client.py` dùng chung cho các bước tải, có timeout và retry
-hữu hạn cho lỗi mạng/429/5xx. Request arXiv dùng `export.arxiv.org`, cách nhau
-ít nhất 3,1 giây trong cấu hình runner và chỉ một kết nối tại một thời điểm.
-Client S2 có giãn cách riêng: 1,1 giây nếu có API key, 3,1 giây nếu không có.
-Giãn cách này không bảo đảm hết 429, vì còn phụ thuộc quota thực tế của dịch vụ.
+## Crawl references bằng Semantic Scholar
 
-## 3. Tổ chức luồng chạy và những lần điều chỉnh
+Phần này lấy **references của Publication** để đối chiếu với BibTeX entry;
+không trực tiếp parse `\bibitem` từ LaTeX.
 
-### 3.1. CLI chạy toàn Range
+1. Sau khi kết thúc lượt arXiv, runner dùng lại danh sách ID gốc `IDS` để
+   chạy S2. Trong code hiện tại, index là danh sách ID trong bộ nhớ và
+   được ghi lại trong `manifests/job.json`; runner chuyển cùng danh sách này
+   sang bước S2.
+2. S2 dùng toàn bộ ID trong Range, không yêu cầu bài đã tải đủ source. Vì vậy,
+   bài thiếu một Version vẫn có thể có cache references để dùng tiếp sau này.
+3. `src/crawl/semantic_scholar.py` dùng `S2_API_KEY` từ `.env`, xử lý tuần tự
+   các ID chưa có references hợp lệ. Bản local này không dùng nhiều S2 worker
+   bất đồng bộ. Client giãn cách 1,1 giây khi có key, 3,1 giây khi không có.
+4. Gọi `/paper/ARXIV:{id}/references`, lấy `paperId`, `externalIds`, tiêu đề,
+   tác giả và `publicationDate`. Theo trường `next` để lấy hết các trang;
+   mặc định 100 references/trang.
+5. Áp dụng retry hữu hạn cho lỗi có thể thử lại. Nếu vẫn lỗi, manifest ghi
+   `error` và runner tiếp tục ID kế tiếp. Danh sách rỗng từ phản hồi thành công
+   là kết quả hợp lệ; lỗi API không được ghi thành danh sách rỗng thành công.
+6. Lưu JSON thô vào `references/<publication-key>.json`, giữ cả references
+   không có arXiv ID. Checkpoint riêng ở `data/local-sequential/s2/`; chạy lại
+   bỏ qua các cache đã xác minh và chỉ bổ sung phần thiếu.
+7. Sau hai bước, ghép cache và xuất `papers.parquet`, `references.parquet`.
+   Bảng cuối chỉ gồm Publication có metadata, đủ source mọi Version và S2
+   thành công. References xuất ra phải có arXiv ID, được khử trùng lặp theo
+   `(arxiv_id, ref_arxiv_id)`. Không lấy ngày xuất bản S2 thay ngày nộp arXiv;
+   `ref_submission_date` chưa xác minh vẫn để null.
 
-`scripts/crawl_range.py` cung cấp một lệnh nhận ID đầu/cuối. Runner kiểm tra
-cache, prefetch metadata theo lô, rồi lần lượt xử lý các Publication còn thiếu.
-Trong bản CLI này, phần tải source và lấy S2 được thực hiện lần lượt trong
-quá trình xử lý Publication; discovery theo lô không có nghĩa là tải source
-bằng 50 kết nối song song.
+Lệnh local tự chạy lần lượt arXiv, S2 rồi ghép:
 
-Runner ghi tiến độ, danh sách còn thiếu và xuất Parquet định kỳ. Mặc định bản
-CLI này cho phép tối đa ba lượt, chờ 1.800 giây giữa các lượt retry. HTTP client
-còn có retry/backoff riêng cho từng request. Hai mức chờ này có vai trò khác
-nhau và đều có thể làm thời gian vận hành kéo dài.
+```powershell
+.\.venv\Scripts\python.exe -X utf8 -u -m scripts.crawl_local
+```
 
-### 3.2. Tách arXiv và S2 cho Kaggle
+Các thư mục `data/local-sequential/arxiv/`, `s2/`, `merged/` lưu checkpoint
+và output riêng. File lock ngăn hai writer dùng chung thư mục. Bảng riêng
+của từng dịch vụ thể hiện tiến độ dịch vụ đó; chỉ bảng ghép cuối dùng để
+đếm Publication hoàn chỉnh.
 
-Sau khi lượt crawl dài còn nhiều phần thiếu, đã chuẩn bị
-`notebooks/kaggle_arxiv.ipynb` và `notebooks/kaggle_s2.ipynb`, dùng các hàm
-trong `src/crawl/split.py`. Notebook arXiv chỉ xử lý discovery/source;
-notebook S2 lấy references từ danh sách ID có sẵn nên không phải chờ source
-tải xong. Hai notebook có thể chạy đồng thời như hai công việc độc lập, mỗi
-công việc ghi vào thư mục riêng. Đây không phải cách tăng số kết nối arXiv.
+## Số liệu
 
-`scripts/prepare_kaggle.py` đóng gói code và cache đã xác minh để đưa vào
-Dataset input; checkpoint của từng notebook được đóng gói riêng. Hai phiên
-Kaggle không chia sẻ ổ đĩa đang ghi. Muốn resume ở phiên sau cần lưu Output,
-gắn lại checkpoint làm Input; muốn chuyển về local cần tải checkpoint về máy.
+### 1. Kết quả crawl arXiv trên local — toàn Range
 
-Trong vận hành, việc dùng `Stop Session` khi chưa lưu Output đã làm phát sinh
-khó khăn truy cập checkpoint. Vì vậy, số liệu tổng hợp chỉ dùng các file thực
-sự còn trên máy; không suy ra rằng mọi dữ liệu từng chạy trên Kaggle đều đã
-được nhập về. Thời lượng chạy thực tế của từng phiên Kaggle không có log đầy
-đủ để đưa vào bảng so sánh hiệu năng.
+Kiểm tra lại cache local ngày **05/11/2026**, không chạy lại crawl mạng trong
+lần tổng hợp. Nguồn số liệu: [hai-summary.json](hai-summary.json).
 
-### 3.3. Chuyển sang local: arXiv trước, S2 sau
+- Đầu vào **5.000 ID**; metadata hợp lệ của **4.985 Publication (99,70%)**.
+  Chưa xác định số Version kỳ vọng của 15 ID thiếu metadata hợp lệ.
+- Tổng Version kỳ vọng trên các bài tìm thấy: **8.086**.
+- Version có TeX: **7.396**; non-TeX hợp lệ: **504**.
+- Tổng source hợp lệ: **7.900/8.086 Version (97,70%)**.
+- Còn **29 Version unavailable (404/410)** và **157 Version lỗi/chưa hợp lệ**.
+- Tổng TeX/BibTeX giữ lại: **3.816.242.614 byte**. Với các Publication hoàn chỉnh,
+  trung bình source sau lọc **793.990,42 byte/bài**, trung vị **129.160 byte**.
+- Kích thước trước bỏ hình của toàn Range chưa được ghi nhận đầy đủ. Không dùng
+  số đo một mẫu nhỏ thay cho toàn bộ corpus.
 
-Theo nhu cầu tiếp tục chạy trên VS Code, đã tạo `scripts/crawl_local.py` và
-`notebooks/local_crawl.ipynb`. Hai entry point này đọc `.env`, nhập cache hợp
-lệ từ các lượt cũ và chạy theo thứ tự:
+### 2. Kết quả lấy references và xuất bảng — toàn Range
 
-1. Kiểm tra cache, bổ sung metadata/source arXiv còn thiếu.
-2. Kết thúc lượt arXiv rồi mới chạy S2 cho các ID chưa có cache references hợp lệ.
-3. Ghép kết quả hai dịch vụ và xuất hai Parquet cuối.
+- Trong **4.985 Publication có metadata hợp lệ**, **4.917 bài** lấy S2 thành
+  công (**98,64%**), gồm **1.121 bài** nhận danh sách rỗng hợp lệ; còn 68 bài
+  thiếu cache S2 hợp lệ.
+- Có **172.954 Reference thô**, trung bình **35,17 Reference/bài lấy S2 thành công**;
+  trong đó **84.719 bản ghi có arXiv ID** trước dedup.
+- Worker S2 còn có 15 cache thành công ở các ID thiếu metadata. Tổng worker
+  ghi nhận **4.932/5.000 ID thành công**, nhưng thống kê theo cấu trúc báo cáo
+  chỉ dùng 4.917 bài đã có metadata hợp lệ như trên.
+- Đủ cả metadata, source mọi Version và S2: **4.775/5.000 Publication (95,50%)**.
+- Bảng cuối: **4.775 dòng papers**, **81.847 dòng references**; cả hai đọc đúng
+  schema, không có khóa trùng hoặc ID của bài trích dẫn nằm ngoài Range.
+- Bảng cuối có ít references hơn 84.719 vì chỉ xuất các Publication hoàn chỉnh.
+  Cache S2 của bài còn thiếu source vẫn giữ lại để resume.
 
-Mặc định local chạy một lượt mỗi dịch vụ, không có khoảng chờ 30 phút giữa
-nhiều lượt. Nếu một lượt kết thúc vẫn còn bài lỗi, trạng thái là `incomplete`
-và lần chạy sau tiếp tục thử phần thiếu. Nếu người dùng ngắt arXiv có kiểm
-soát, runner lưu tiến độ và không tự khởi chạy tiếp S2.
+Hai bảng đã xác minh dùng cho summary ở `data/benchmark-ngochai06/tables/`,
+được xuất từ snapshot cache đã gom của hai bước local. Còn 225 ID chưa đạt
+điều kiện hoàn chỉnh; các nhóm thiếu metadata, thiếu Version và thiếu S2 có
+thể chồng nhau, không cộng trực tiếp.
 
-Không đặt lại mốc bắt đầu cứng ở “bài thứ 2.500”, vì có thể còn lỗi nằm xen
-giữa các ID đã đi qua. Thay vào đó, runner xét toàn bộ Range rồi bỏ qua từng
-thành phần đã xác minh. Thư mục làm việc tách thành
-`data/local-sequential/arxiv/`, `s2/` và `merged/` để hai dịch vụ có checkpoint
-riêng. S2 trong bản này vẫn gọi tuần tự; không sử dụng nhiều S2 worker đồng thời.
+### 3. Thời gian đo trên local — mẫu 10 ID
 
-## 4. Checkpoint, resume và xuất dữ liệu
+Lượt đo riêng ngày **03/11/2026** chạy `2412.08848–2412.08857` trên cache trống,
+bằng `scripts/benchmark_sample.py`. Đây là số đo mẫu 10 bài, không phải thời
+gian của toàn Range.
 
-`src/crawl/manifest.py` lưu trạng thái theo tác vụ discovery, từng Version
-source và references. Metadata/reference có checksum; mỗi Version có
-`source.json` ghi loại source, checksum và danh sách file. Resume kiểm tra
-các bằng chứng này thay vì chỉ dựa vào việc thư mục đã tồn tại. Một Publication
-đã đủ source nhưng thiếu S2 chỉ cần bổ sung phần references.
-
-`src/crawl/split.py` hỗ trợ nhập cache từ các Range chồng nhau, chọn thành
-phần hợp lệ và ghép offline. Việc này giúp dùng lại các lượt crawl trước khi
-chuyển entry point hoặc môi trường chạy. File lock bảo vệ thư mục đang được
-ghi; không khởi chạy nhiều writer trên cùng cache.
-
-Bảng riêng của mỗi dịch vụ thể hiện tiến độ của dịch vụ đó. Hai bảng cuối
-chỉ chứa Publication có metadata hợp lệ, đủ mọi Version và lấy S2 thành công.
-`authors`, `revised_dates`, `ref_authors` vẫn là list of strings. Ngày xuất bản
-của S2 không được tự dùng thay ngày nộp arXiv, nên `ref_submission_date` chưa
-xác minh được vẫn để null.
-
-## 5. Thời gian chạy và số đo hiệu năng
-
-### 5.1. Lượt tích lũy toàn Range
-
-Lượt 5.000 ID đã chạy qua nhiều lần dừng/resume và thay đổi cách tổ chức luồng.
-Trong trao đổi vận hành, người chạy từng ghi nhận khoảng 20 giờ cho khoảng
-2.500 bài. Đây là thông tin ước lượng được báo lại, không phải kết quả harness;
-không xác định được nó bao gồm những lần dừng/chờ nào hoặc định nghĩa “được
-một bài” ở thời điểm đó.
-
-Vì không có log đo liên tục đầy đủ, không chốt tổng wall time, thời gian từng
-Stage, RAM đỉnh/trung bình hoặc disk đỉnh cho toàn Range. Cấu hình chờ retry
-1.800 giây cũng không được tự nhân lên thành thời gian cooldown đã xảy ra.
-
-### 5.2. Lượt đo thật 10 ID đầu ngày 03/11/2026
-
-Để có số đo trực tiếp từ code của Hải, `scripts/benchmark_sample.py` chạy
-**2412.08848–2412.08857** trên cache trống, với các thiết lập HTTP của crawler
-cũ. Wrapper ghi thời gian từng Stage, số request thực sự gửi đi và retry;
-psutil lấy mẫu RSS toàn cây tiến trình cùng dung lượng output mỗi giây.
-
-Kết quả đo trên Windows local CPU, Python 3.14.0:
-
-- Discovery: **3,106 giây**, **2 request**, không retry.
+- Lấy ID/metadata: **3,106 giây**, **2 request**, không retry.
 - Tải và xử lý source: **223,221 giây**, **15 request**, không retry;
-  đủ **15/15 Version**, gồm một non-TeX.
-- S2: **50,110 giây**, **24 request**, **14 retry** và **15 phản hồi HTTP 429**;
-  thành công 9/10 Publication. Bài `2412.08852` còn thiếu references.
-- Export: **0,448 giây**, xuất 9 dòng papers và 101 dòng references.
+  đủ 15/15 Version, gồm một non-TeX.
+- S2: **50,110 giây**, **24 request**, **14 retry**, có **15 phản hồi HTTP 429**;
+  9/10 bài thành công, bài `2412.08852` còn thiếu references.
+- Export: **0,448 giây**; xuất 9 dòng papers và 101 dòng references.
 - Tổng wall time: **278,020 giây**, khoảng **4 phút 38 giây**.
-- RSS đỉnh **103,320 MiB**, trung bình mẫu **67,872 MiB**;
-  disk output đỉnh/cuối **1,468 MiB**.
+- RAM đỉnh **103,320 MiB**, trung bình mẫu **67,872 MiB**; disk output
+  đỉnh/cuối **1,468 MiB**, lấy mẫu mỗi giây trên Windows local CPU.
 
-Tổng thời gian các Stage không bằng wall time vì runner, ghi checkpoint và
-các thao tác ngoài lời gọi Stage còn có overhead. Bộ đo cũng thêm overhead
-lấy mẫu và thống kê archive. Khoảng 130 giây đầu có một tiến trình thu thập
-test offline chạy riêng rồi được dừng, nên đây là pilot local, chưa phải
-đối chứng Colab trong môi trường cô lập. Không nhân thời gian mẫu lên để
-ước lượng lượt 5.000 ID.
+Thời gian Stage gồm chờ rate limit/backoff trong lời gọi đó. Tổng Stage khác
+wall time do runner và ghi checkpoint còn overhead. Khoảng 130 giây đầu có
+một tiến trình thu thập test offline chạy riêng rồi được dừng, nên lượt mẫu
+chưa phải phép đo trong môi trường cô lập. Bằng chứng nằm ở
+[ngochai06-sample10.json](ngochai06-sample10.json) và
+`data/sample10-20261103-103748/samples.csv`.
 
-Bằng chứng đo nằm ở [ngochai06-sample10.json](ngochai06-sample10.json) và
-`data/sample10-20261103-103748/samples.csv`. File [hai.json](hai.json) trình bày
-cùng lượt mẫu theo cấu trúc benchmark tổng hợp; không dùng thay số liệu corpus.
-
-## 6. Tổng hợp kết quả toàn Range
-
-Các mục dưới theo cấu trúc [Kết quả thu thập của nhóm](https://hcmus-arxiv-reference.github.io/Jupyter-Notebook-report-for-mile1/ket-qua).
-Số liệu lấy từ cache local, kiểm tra lại ngày 05/11/2026. File máy đọc được là
-[hai-summary.json](hai-summary.json), snapshot `format: 1` cho toàn Range 5.000 ID.
-
-### 6.1. Publication và Version
-
-- Publication tìm thấy: **4.985/5.000 (99,70%)**.
-- Publication hoàn chỉnh: **4.775/5.000 (95,50%)**. Hoàn chỉnh nghĩa là đủ mọi
-  Version đã xác minh và lấy S2 thành công; còn 225 ID chưa đạt điều kiện này.
-- Version kỳ vọng trên các Publication tìm thấy: **8.086**,
-  trung bình **1,62 Version/Publication**.
-- Source TeX: **7.396**; non-TeX: **504**; tổng hợp lệ: **7.900/8.086 (97,70%)**.
-- Không tải được (404/410): **29**; lỗi tải/chưa hợp lệ: **157**; chưa thử: **0**.
-  Số Version của 15 ID chưa có metadata hợp lệ chưa xác định, không coi là 0.
-- Phân bố số Version của Publication nằm trong `versions_distribution` của JSON.
-
-### 6.2. Kích thước source
-
-- Tổng TeX/BibTeX giữ lại ở các Version hợp lệ: **3.816.242.614 byte**.
-- Với **4.775 Publication hoàn chỉnh**, trung bình sau khi bỏ hình:
-  **793.990,42 byte/bài (0,794 MB)**; trung vị **129.160 byte**;
-  lớn nhất **192.700.276 byte**.
-- Tổng dung lượng source giữ lại của các bài hoàn chỉnh: **3.791.304.238 byte**.
-- Kích thước trước bỏ hình và tỷ lệ giảm của toàn Range **chưa được đo**.
-  Không dùng số của lượt 10 bài để thay vào đây. Đơn vị MB trong phần này là
-  1.000.000 byte, đúng cách trình bày trên trang báo cáo.
-
-### 6.3. References
-
-- Thành công: **4.917/4.985 (98,64%)** Publication đã có metadata hợp lệ;
-  trong đó **1.121 bài** được S2 trả về danh sách rỗng hợp lệ.
-- Có **172.954 Reference thô**, trung bình **35,17/bài thành công**;
-  trung vị **32**, lớn nhất **428**.
-- Bản ghi có arXiv ID trước dedup: **84.719/172.954 (48,98%)**;
-  sau dedup cũng là **84.719** cặp, gồm **4.563** cặp có arXiv ID dạng cũ.
-- Biểu đồ phân bố có thể dựng từ `references.histogram` trong JSON;
-  đây là phân bố số Reference thô, không phải số dòng Parquet.
-- Cache worker S2 có thêm 15 kết quả thành công ở các ID thiếu metadata.
-  Chúng không được cộng vào tỷ lệ 4.917/4.985 theo hợp đồng snapshot của báo cáo.
-
-### 6.4. Kiểm tra bảng xuất ra
-
-- `papers.parquet`: **4.775 dòng**, đúng schema, **0 khóa trùng**, **0 ID ngoài Range**.
-- `references.parquet`: **81.847 dòng**, đúng schema, **0 khóa trùng**, **0 ID ngoài Range**.
-- Bảng cuối chỉ gồm Publication hoàn chỉnh nên số dòng references nhỏ hơn
-  84.719 cặp của toàn bộ các Publication lấy S2 thành công.
-- Đã kiểm tra lại checksum source, metadata, cache S2 và hai bảng được xuất
-  từ dữ liệu có sẵn. Danh sách lỗi còn lại nằm trong `failures` của JSON.
-- Output đầy đủ và hai Parquet ở `data/benchmark-ngochai06/`. Chỉ xuất summary
-  và bảng từ cache; không gọi API crawl lại trong lần tổng hợp này.
-
-## 7. Đánh giá và tài liệu đối chiếu
-
-Checkpoint theo từng thành phần giúp dùng lại dữ liệu khi chuyển giữa CLI,
-Kaggle và local; batch discovery giảm request metadata, còn tách arXiv/S2 giúp
-lỗi hoặc quota của một dịch vụ không làm mất kết quả của dịch vụ kia. Tuy vậy,
-Range vẫn chưa hoàn tất: còn 15 ID thiếu metadata hợp lệ, 186 Version đã biết
-chưa có source hợp lệ và 68 Publication có metadata nhưng thiếu cache S2.
-Các nhóm này có thể chồng nhau, không cộng trực tiếp thành số bài lỗi.
-
-Lượt mẫu cho thấy chờ tải source và giới hạn S2 có thể chiếm phần lớn thời gian,
-nhưng chưa đủ để kết luận về tốc độ của cả corpus hoặc so thắng/thua với crawler
-khác. Phần đối chứng cần cùng tập ID, cùng môi trường Colab và cùng cách đo.
-Sau lần khôi phục code cũ và bổ sung bộ đo, bộ test offline đã đạt **118 test và
-28 subtest**; đây là bằng chứng kiểm thử code, tách với kiểm tra output thật.
-
-Các file đối chiếu chính gồm [hướng dẫn CLI](../docs/run-current-crawler.md),
-[luồng local](../docs/local-sequential-crawl.md),
-[luồng Kaggle](../docs/kaggle-split-crawl.md),
-[thống kê lịch sử 5.000 ID](ngochai06-historical5000.json), và
-`data/benchmark-audit/validation-report.json`.
-
-Để đưa vào repo báo cáo, chép `hai-summary.json` thành
-`data/m1/snapshots/hai.json`. Không thay bằng `benchmarks/hai.json` vì file đó
-là benchmark mẫu 10 ID, dùng cấu trúc và phạm vi khác. Không điền thời gian/RAM
-của mẫu 10 bài vào benchmark toàn Range chưa được đo.
+Lượt 5.000 ID tích lũy qua nhiều lần chạy/resume chưa có log đo liên tục đầy
+đủ để chốt tổng thời gian và thời gian từng bước. Không cộng thời gian nghỉ
+theo cấu hình hoặc nhân thời gian mẫu 10 bài để suy ra số đo toàn Range.
