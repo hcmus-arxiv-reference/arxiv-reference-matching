@@ -8,9 +8,8 @@ from typing import TypedDict
 from src.common.schema import from_records, write_table
 from .corpus import CorpusReader
 from .discovery import Publication
-from .source import verified_source, SourceResult
+from .source import SourceResult
 from .semantic_scholar import reference_rows
-from .storage import key
 
 
 class PublicationBundle(TypedDict):
@@ -25,22 +24,14 @@ def export_publications(corpus: CorpusReader, source_root: Path, ids: list[str],
                         require_references: bool = True) -> tuple[list[PublicationBundle], dict[str, Path]]:
     """Write only complete Publications; preserve the existing batch semantics."""
     bundles, papers, references = [], [], []
+    reader = CorpusReader(corpus.data_dir, corpus.manifest, source_root)
     for arxiv_id in dict.fromkeys(ids):
         try:
-            record = corpus.manifest.get(arxiv_id, None, "discovery")
-            if not record or record.status != "success":
+            state = reader.status(arxiv_id)
+            if not (state.complete if require_references else state.sources_complete):
                 continue
-            publication = corpus.load_publication(arxiv_id)
-            sources = []
-            for version in range(1, publication.versions + 1):
-                task = corpus.manifest.get(arxiv_id, version)
-                if not task or task.status not in {"success", "non_tex"}:
-                    raise ValueError("Incomplete source coverage")
-                source = verified_source(source_root / key(arxiv_id) / f"v{version}")
-                if not source or source.checksum != task.checksum:
-                    raise ValueError("Source checksum mismatch")
-                sources.append(source)
-            raw_refs = corpus.load_references(arxiv_id) if require_references else None
+            publication, sources = state.publication, state.sources()
+            raw_refs = reader.load_references(arxiv_id) if require_references else None
             row = asdict(publication)
             row.pop("versions")
             papers.append(row)

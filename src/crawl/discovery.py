@@ -4,28 +4,17 @@ Source: https://info.arxiv.org/help/api/user-manual.html
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
 import re
 from urllib.parse import urlencode, urlsplit
 import xml.etree.ElementTree as ET
 
+from src.common.corpus import Publication  # Compatibility re-export.
 from .http_client import HttpClient, HttpStatusError
 from .storage import require_id
 
 ATOM = "http://www.w3.org/2005/Atom"
 ARXIV = "http://arxiv.org/schemas/atom"
-
-
-@dataclass(frozen=True)
-class Publication:
-    arxiv_id: str
-    title: str | None
-    authors: list[str]
-    submission_date: str | None
-    revised_dates: list[str]
-    venue: str | None
-    versions: int
 
 
 def _text(parent: ET.Element, name: str, namespace: str = ATOM) -> str | None:

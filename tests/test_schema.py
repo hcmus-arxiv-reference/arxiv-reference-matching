@@ -80,6 +80,15 @@ class SchemaTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "parent_id.*null"):
             s.from_records([edge | {"element_id": root["element_id"], "parent_id": None}], "hierarchy")
 
+    def test_hierarchy_shared_element_may_have_two_parents(self):
+        # Cùng một câu dưới hai Section trong một Version: hai cạnh hợp lệ.
+        edges = [{"arxiv_id": "2508.02872", "version": 1,
+                  "element_id": "2508-02872#e1", "parent_id": parent}
+                 for parent in ("2508-02872#s1", "2508-02872#s2")]
+        self.assertEqual(s.validate(s.from_records(edges, "hierarchy"), "hierarchy"), [])
+        with self.assertRaisesRegex(ValueError, "bị trùng"):
+            s.from_records([edges[0], edges[0]], "hierarchy")
+
     def test_missing_and_wrong_type_columns(self):
         table = s.from_records([paper()], "papers")
         self.assertIn("thiếu cột", "\n".join(s.validate(table.drop(["title"]), "papers")))
