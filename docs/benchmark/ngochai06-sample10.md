@@ -1,7 +1,8 @@
 # Đo thật crawler cũ Hải: 10 ID đầu, 03/11/2026
 
-File nộp: `benchmarks/ngochai06.json`; bản cùng nội dung có tên rõ phạm vi tại
-`benchmarks/ngochai06-sample10.json`. Thống kê 5.000 ID cũ chuyển sang
+File nộp: `benchmarks/ngochai06.json` và `benchmarks/hai.json`, cùng cấu trúc
+segment/profile theo mẫu `nghiem.json` người dùng gửi ngày 05/11. Bản đo gốc
+theo Stage vẫn ở `benchmarks/ngochai06-sample10.json`. Thống kê 5.000 ID cũ chuyển sang
 `benchmarks/ngochai06-historical5000.json`; không dùng thời gian mẫu để điền vào lượt cũ.
 
 ## Cấu hình
@@ -52,3 +53,15 @@ Sau lượt đo: **118 test và 28 subtest đạt**, chạy offline bằng `pyte
 
 Link Drive do người dùng cung cấp ở `benchmarks/ngochai06-output.md` chưa được
 đối chiếu/upload mẫu mới; khi gửi Bảo cần kèm đúng output của lượt đo này.
+
+## Xuất theo mẫu JSON mới
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 -m scripts.format_benchmark
+```
+
+Lệnh chỉ đọc lượt đo 03/11 trên 10 ID của Hải, CSV lấy mẫu và output thực tế;
+không crawl lại hoặc lấy số liệu từ file mẫu Nghiêm. `source_profile` thống kê
+file của 9 Publication hoàn chỉnh, còn `version_distribution` xét cả 10
+Publication đã có metadata. Vì thế dung lượng source profile nhỏ hơn số byte
+TeX/BibTeX giữ lại của toàn bộ 10 bài trong bản đo Stage gốc.
