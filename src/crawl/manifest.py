@@ -32,6 +32,8 @@ class Manifest:
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         self.records: dict[tuple[str, int | None, str], TaskRecord] = {}
+        # Latest record per task, grouped by Publication; kept in step with ``records``.
+        self._by_id: dict[str, dict[tuple[str, int | None, str], TaskRecord]] = {}
         if self.path.exists():
             data = self.path.read_bytes()
             lines = data.splitlines(keepends=True)
@@ -45,7 +47,7 @@ class Manifest:
                     with self.path.open("r+b") as stream:
                         stream.truncate(offset)
                     break
-                self.records[record.key] = record
+                self._index(record)
                 offset += len(line)
             else:
                 if data and not data.endswith(b"\n"):
@@ -61,7 +63,15 @@ class Manifest:
             stream.write(json.dumps(asdict(record), ensure_ascii=False) + "\n")
             stream.flush()
             os.fsync(stream.fileno())
+        self._index(record)
+
+    def _index(self, record: TaskRecord) -> None:
         self.records[record.key] = record
+        self._by_id.setdefault(record.arxiv_id, {})[record.key] = record
+
+    def records_for(self, arxiv_id: str) -> list[TaskRecord]:
+        """Latest record of every task of one Publication, without scanning the log."""
+        return list(self._by_id.get(arxiv_id, {}).values())
 
     def pending(self, records: Iterable[TaskRecord]) -> list[TaskRecord]:
         return [r for r in records if (self.get(*r.key) or r).status not in {"success", "non_tex"}]

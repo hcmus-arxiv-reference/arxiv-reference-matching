@@ -6,11 +6,9 @@ from itertools import islice
 import math
 from typing import Iterable
 
-from filelock import FileLock
 from src.common.config import Settings, get_settings
 from .discovery import BatchedDiscovery
 from .http_client import HttpClient
-from .manifest import Manifest
 from .pipeline import CrawlPipeline
 from .publish import HuggingFacePublisher
 from .semantic_scholar import SemanticScholarClient
@@ -45,9 +43,9 @@ def run_crawl(ids: Iterable[str] | None = None, *, settings: Settings | None = N
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     counts, uploads = Counter(), []
     iterator = iter(ids if ids is not None else settings.arxiv_range.ids())
-    with FileLock(str(settings.data_dir / ".pipeline.lock"), timeout=0):
-        pipeline = CrawlPipeline(BatchedDiscovery(arxiv), ArxivSourceDownloader(arxiv, settings.data_dir / "raw"),
-                                 settings.data_dir, references=s2)
+    pipeline = CrawlPipeline(BatchedDiscovery(arxiv), ArxivSourceDownloader(arxiv, settings.data_dir / "raw"),
+                             settings.data_dir, references=s2)
+    with pipeline.exclusive():
         publisher = HuggingFacePublisher(settings) if upload else None
         if publisher:
             publisher.validate_destination()  # fail before expensive crawling if repo is not usable
@@ -56,8 +54,8 @@ def run_crawl(ids: Iterable[str] | None = None, *, settings: Settings | None = N
             counts["requested"] += len(batch)
             if not upload_only:
                 counts.update(pipeline.crawl_ids(batch, refresh=refresh))
-            with FileLock(str(settings.data_dir / ".crawl.lock"), timeout=0):
-                pipeline.manifest = Manifest(pipeline.manifest.path)
+            # Hold the corpus lock until upload ends so tables match the bundles.
+            with pipeline.corpus_lock():
                 bundles, tables = pipeline.export(batch, require_references=references)
                 counts["ready"] += len(bundles)
                 counts["not_ready"] += len(batch) - len(bundles)
