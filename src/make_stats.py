@@ -114,7 +114,7 @@ def publication_row(data_dir, records, arxiv_id):
         if payload is not None:
             citations = CitationList.from_raw(arxiv_id, payload["rows"])
             row["n_refs"] = citations.total
-            # Before deduplication, as in validation.py, the M1 report and Liễu's done.json.
+            # One definition everywhere (CitationList): raw rows before deduplication.
             row["n_refs_with_arxiv_id"] = citations.with_arxiv_id
             row["n_references"] = len(citations.references)  # rows of the references table
     row.update(n_versions=versions, versions_with_tex=tex, versions_non_tex=non_tex,
