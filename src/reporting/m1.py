@@ -15,7 +15,6 @@ from types import SimpleNamespace
 from src.common.schema import read_table
 from src.crawl.manifest import TaskRecord
 from src.crawl.corpus import CorpusReader
-from src.crawl.semantic_scholar import reference_rows
 from src.crawl.storage import key
 
 
@@ -102,21 +101,19 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None):
             counts[status] += 1
         retained_sizes.append(size)
         has_refs = False
-        try:
-            rows = corpus.load_references(identifier)
+        citations = pub_state.references
+        if citations is not None:
             has_refs = True
             counts["references_success"] += 1
-            raw_refs += len(rows)
-            ref_counts.append(len(rows))
-            empty_refs += not rows
-            arxiv_refs += sum(bool((r.get('citedPaper') or {}).get('externalIds',{}).get('ArXiv'))
-                              for r in rows if (r.get('citedPaper') or {}).get('externalIds') is not None)
-            mapped = reference_rows(identifier, rows)
-            unique_refs += len(mapped)
-            legacy_refs += sum('/' in r['ref_arxiv_id'] for r in mapped)
+            raw_refs += citations.total
+            ref_counts.append(citations.total)
+            empty_refs += citations.total == 0
+            arxiv_refs += citations.with_arxiv_id
+            unique_refs += len(citations.references)
+            legacy_refs += citations.legacy_ids
             rel = f"references/{key(identifier)}.json"
             input_hashes[rel] = digest(cache / rel)
-        except (OSError, ValueError, KeyError, TypeError):
+        else:
             rec = manifest.get(identifier, None, "references")
             failures.append({"arxiv_id": identifier, "version": None, "kind": "references",
                              "status": rec.status if rec else "not_attempted",

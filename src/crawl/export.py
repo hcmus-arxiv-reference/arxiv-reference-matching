@@ -9,7 +9,6 @@ from src.common.schema import from_records, write_table
 from .corpus import CorpusReader
 from .discovery import Publication
 from .source import SourceResult
-from .semantic_scholar import reference_rows
 
 
 class PublicationBundle(TypedDict):
@@ -31,15 +30,15 @@ def export_publications(corpus: CorpusReader, source_root: Path, ids: list[str],
             if not (state.complete if require_references else state.sources_complete):
                 continue
             publication, sources = state.publication, state.sources()
-            raw_refs = reader.load_references(arxiv_id) if require_references else None
+            citations = state.references if require_references else None
             row = asdict(publication)
             row.pop("versions")
             papers.append(row)
-            if raw_refs is not None:
-                references.extend(reference_rows(arxiv_id, raw_refs))
+            if citations is not None:
+                references.extend(citations.references)
             bundles.append({"publication": publication, "sources": sources,
                             "metadata": corpus.metadata_path(arxiv_id),
-                            "references": corpus.references_path(arxiv_id) if raw_refs is not None else None})
+                            "references": corpus.references_path(arxiv_id) if citations is not None else None})
         except (OSError, ValueError, KeyError, TypeError):
             continue
     paths = {}

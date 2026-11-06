@@ -1,21 +1,56 @@
-"""Run a Range with bounded retries and resumable, verified progress."""
+"""Run a Range with bounded retries and resumable, verified progress.
+
+The Runner owns policy only: which Publications to retry, when to stop, how
+long to cool down, and what ``range-run.json`` reports. Everything it needs from
+the crawler crosses the ``Engine`` seam below; ``CrawlPipeline`` is the Engine
+on ``main`` (ADR 0001) and tests drive the Runner with an in-memory Engine.
+"""
 from collections import Counter
+from contextlib import AbstractContextManager
 from datetime import datetime, timezone
 import json
 import os
+from pathlib import Path
 import shutil
 import time
-from filelock import FileLock
-from .manifest import Manifest
+from typing import Protocol, Sequence
+
+from src.common.corpus import PublicationState
 from src.common.json_io import write_json
 
-def inspect_publication(pipeline, identifier):
+
+class Engine(Protocol):
+    """What the Runner needs from an Engine.
+
+    - ``engine``: label written to ``range-run.json``.
+    - ``data_dir``: holds ``STOP_RANGE``, ``manifests/range-run.json`` and is
+      checked for free disk space.
+    - ``exclusive()``: one run per data directory; fails at once if taken and
+      reloads checkpoints from disk on entry.
+    - ``status(id)``: verified state from local files only, no network.
+    - ``crawl_ids(ids, upcoming=...)``: crawl ``ids``; ``upcoming`` is the rest
+      of this pass in order, so the Engine may choose its own Discovery batch.
+    - ``export(ids)``: write ``papers``/``references`` for every ready
+      Publication of ``ids``; returns ``(bundles, table paths)``.
+    - ``issues(id)``: unfinished tasks of one Publication, safe to print.
+    """
+    engine: str
+    data_dir: Path
+
+    def exclusive(self) -> AbstractContextManager: ...
+    def status(self, arxiv_id: str) -> PublicationState: ...
+    def crawl_ids(self, ids: list[str], *, upcoming: Sequence[str] = ()) -> dict[str, int]: ...
+    def export(self, ids: list[str]) -> tuple[list, dict]: ...
+    def issues(self, arxiv_id: str) -> list[dict]: ...
+
+
+def inspect_publication(pipeline: Engine, identifier):
     """Read and verify existing caches without issuing network requests.
 
     The dict keys are summed into ``range-run.json`` counts, so they stay as is;
-    the check itself is ``CorpusReader.status``.
+    the check itself is ``Engine.status``.
     """
-    state = pipeline.corpus.status(identifier)
+    state = pipeline.status(identifier)
     metadata = state.publication is not None
     return {"metadata": metadata, "expected_versions": state.expected_versions,
             "verified_versions": state.verified_versions,
@@ -26,16 +61,19 @@ def inspect_publication(pipeline, identifier):
 
 
 def publication_issues(manifest, identifier):
-    """Summarize unfinished tasks without exposing URLs, headers or payloads."""
+    """Summarize unfinished tasks without exposing URLs, headers or payloads.
+
+    Kept for earlier callers; the Runner asks ``Engine.issues``.
+    """
     return [
         {"kind": record.kind, "version": record.version, "status": record.status,
          "http_status": record.http_status, "error_reason": record.error_reason}
-        for record in manifest.records.values()
-        if record.arxiv_id == identifier and record.status not in {"success", "non_tex"}
+        for record in manifest.records_for(identifier)
+        if record.status not in {"success", "non_tex"}
     ]
 
 
-def run_range(pipeline, identifiers, *, max_passes=3, retry_delay=1800,
+def run_range(pipeline: Engine, identifiers, *, max_passes=3, retry_delay=1800,
               sleeper=time.sleep, min_free_bytes=5 * 1024**3):
     """Hold the pipeline lock, retry only incomplete Publications, and export all.
 
@@ -57,7 +95,7 @@ def run_range(pipeline, identifiers, *, max_passes=3, retry_delay=1800,
         for item in states.values():
             totals.update({k: int(v) for k, v in item.items()})
         report = {"status": status, "pid": os.getpid(), "started_at": started,
-                  "engine": getattr(pipeline, "engine", "main"),
+                  "engine": pipeline.engine,
                   "updated_at": datetime.now(timezone.utc).isoformat(),
                   "range_first": identifiers[0] if identifiers else None,
                   "range_last": identifiers[-1] if identifiers else None,
@@ -69,8 +107,7 @@ def run_range(pipeline, identifiers, *, max_passes=3, retry_delay=1800,
         write_json(status_path, report)
         return report
 
-    with FileLock(str(root / ".pipeline.lock"), timeout=0):
-        pipeline.manifest = Manifest(pipeline.manifest.path)
+    with pipeline.exclusive():
         states = {i: inspect_publication(pipeline, i) for i in identifiers}
         save("running")
         try:
@@ -83,21 +120,16 @@ def run_range(pipeline, identifiers, *, max_passes=3, retry_delay=1800,
                     if shutil.disk_usage(root).free < min_free_bytes:
                         raise OSError("Insufficient free disk space")
                     save("running")
-                    prefetch = getattr(pipeline, "prefetch", None)
-                    size = getattr(pipeline, "prefetch_size", 50)
-                    if prefetch is not None and position % size == 0:
-                        prefetch(pending[position:position + size])
-                    pipeline.crawl_ids([current])
+                    pipeline.crawl_ids([current], upcoming=pending[position + 1:])
                     states[current] = inspect_publication(pipeline, current)
                     visited += 1
                     report = save("running")
                     print(json.dumps({"pass": pass_number, "id": current,
                                       "complete": report["counts"].get("complete", 0),
                                       "pending": len(report["pending_ids"]),
-                                      "issues": publication_issues(pipeline.manifest, current)}), flush=True)
+                                      "issues": pipeline.issues(current)}), flush=True)
                 current = None
-                with FileLock(str(root / ".crawl.lock"), timeout=0):
-                    bundles, _ = pipeline.export(identifiers)
+                bundles, _ = pipeline.export(identifiers)
                 # Export performs its own full validation, not just manifest counts.
                 if len(bundles) == len(identifiers):
                     return save("complete", exported_publications=len(bundles))
@@ -114,8 +146,7 @@ def run_range(pipeline, identifiers, *, max_passes=3, retry_delay=1800,
                         remaining -= delay
             return save("incomplete", exported_publications=len(bundles))
         except (KeyboardInterrupt, InterruptedError):
-            with FileLock(str(root / ".crawl.lock"), timeout=0):
-                bundles, _ = pipeline.export(identifiers)
+            bundles, _ = pipeline.export(identifiers)
             return save("stopped", exported_publications=len(bundles))
         except Exception as error:
             save("failed", error_type=type(error).__name__)

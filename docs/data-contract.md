@@ -150,7 +150,8 @@ Ngoại lệ: chế độ `references=False` của `run_crawl` bỏ điều ki�
 
 - Ứng viên cho một BibTeX entry là các dòng `references` **cùng `arxiv_id`** **[Đề]**.
   Mỗi entry có tối đa một Reference đúng.
-- `references` chỉ chứa Reference có arXiv ID, đã gộp trùng theo `ref_arxiv_id`;
+- `references` chỉ chứa Reference có arXiv ID, đã gộp trùng theo `ref_arxiv_id` (từ Danh sách
+  trích dẫn S2, `CitationList`);
   `ref_submission_date` luôn `null` cho tới khi có metadata arXiv xác minh **[Đã chốt]**.
 - M3 có thể dùng `hierarchy` làm feature **[Đề]**.
 

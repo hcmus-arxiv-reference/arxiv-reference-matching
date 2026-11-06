@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 from urllib.parse import quote, urlencode
 
-from src.common.corpus import reference_rows  # Compatibility re-export.
+from src.common.references import reference_rows  # Compatibility re-export.
 from .http_client import HttpClient, HttpStatusError
 from .storage import require_id
 

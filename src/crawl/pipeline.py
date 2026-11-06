@@ -2,19 +2,23 @@
 from __future__ import annotations
 
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+from typing import Iterator, Sequence
 
 from filelock import FileLock
 from src.common.config import ArxivRange
+from src.common.corpus import PublicationState
 from .discovery import ArxivDiscovery
 from .corpus import CorpusReader
 from .export import PublicationBundle, export_publications
 from .manifest import Manifest, TaskRecord
-from .semantic_scholar import SemanticScholarClient, reference_rows
+from src.common.references import CitationList
+from .semantic_scholar import SemanticScholarClient
 from .source import ArxivSourceDownloader
 from .storage import require_id
 from src.common.json_io import write_json
@@ -29,6 +33,12 @@ class CrawlPipeline:
     the main thread downloads that Publication's sources. Only the S2 network
     call runs in the worker; cache checks, Manifest and cache writes stay on
     the main thread, and a failed S2 request never marks a Publication done.
+
+    Locks: ``exclusive()`` holds ``.pipeline.lock`` for a whole run (one Runner
+    per data directory). ``corpus_lock()`` holds ``.crawl.lock`` while caches,
+    the Manifest or tables change; it is one reentrant instance, so callers may
+    nest it around ``crawl_ids``/``export``. The Manifest is reloaded from disk
+    when either lock is first acquired, never inside a nested acquisition.
     """
     engine = "main"
     def __init__(self, discovery: ArxivDiscovery, sources: ArxivSourceDownloader,
@@ -36,8 +46,51 @@ class CrawlPipeline:
         self.discovery, self.sources, self.references = discovery, sources, references
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        with FileLock(str(self.data_dir / ".crawl.lock"), timeout=0):
-            self.manifest = Manifest(self.data_dir / "manifests" / "crawl.jsonl")
+        # One instance per path: two FileLock objects on the same file in one
+        # process would block each other instead of nesting.
+        self._pipeline_lock = FileLock(str(self.data_dir / ".pipeline.lock"), timeout=0)
+        self._corpus_lock = FileLock(str(self.data_dir / ".crawl.lock"), timeout=0)
+        self._corpus_depth = 0
+        # IDs already sent in a Discovery batch by this Engine; see _prefetch_window.
+        self._batched: set[str] = set()
+        self.manifest: Manifest | None = None
+        # Loading may repair a torn final line, so it happens under the lock.
+        with self.corpus_lock():
+            pass
+
+    @contextmanager
+    def exclusive(self) -> Iterator[None]:
+        """Hold the run lock; fail at once if another run uses this data directory."""
+        with self._pipeline_lock:
+            with self.corpus_lock():  # reload under the write lock, then release it
+                pass
+            yield
+
+    @contextmanager
+    def corpus_lock(self) -> Iterator[None]:
+        """Hold the corpus write lock; reload the Manifest on the outermost entry."""
+        with self._corpus_lock:
+            self._corpus_depth += 1
+            try:
+                if self._corpus_depth == 1:
+                    path = self.manifest.path if self.manifest else self.data_dir / "manifests" / "crawl.jsonl"
+                    self.manifest = Manifest(path)
+                yield
+            finally:
+                self._corpus_depth -= 1
+
+    def status(self, arxiv_id: str) -> PublicationState:
+        """Verified state of one Publication; reads files and the Manifest only."""
+        return self.corpus.status(arxiv_id)
+
+    def issues(self, arxiv_id: str) -> list[dict]:
+        """Unfinished tasks of one Publication, without URLs, headers or payloads."""
+        return [
+            {"kind": record.kind, "version": record.version, "status": record.status,
+             "http_status": record.http_status, "error_reason": record.error_reason}
+            for record in self.manifest.records_for(arxiv_id)
+            if record.status not in {"success", "non_tex"}
+        ]
 
     def _metadata_path(self, arxiv_id: str) -> Path:
         return self.corpus.metadata_path(arxiv_id)
@@ -88,9 +141,35 @@ class CrawlPipeline:
 
     @property
     def prefetch_size(self) -> int:
-        """IDs per prefetch call; the Runner uses it to schedule batches."""
+        """IDs per Discovery batch; 1 when the discovery object has no batches."""
         size = getattr(self.discovery, "batch_size", 0)
         return size if isinstance(size, int) and size > 0 else 1
+
+    def _metadata_verified(self, identifier) -> bool:
+        try:
+            self.corpus.load_publication(identifier)
+            return True
+        except (OSError, ValueError, KeyError, TypeError):
+            return False
+
+    def _prefetch_window(self, ids, upcoming) -> None:
+        """Batch-discover ``ids`` plus the next IDs the caller will crawl.
+
+        A batch starts only when one of ``ids`` was never batched and lacks
+        verified metadata, and is filled positionally from ``upcoming`` up to
+        ``prefetch_size``. Batch results stay in memory until each Publication
+        is crawled, so "already batched" is remembered here; otherwise every
+        later ID would look missing and trigger a one-ID request. Walking a
+        fresh Range one ID at a time therefore costs about ``ceil(n / size)``
+        batch requests; a resumed Range whose metadata is cached costs none.
+        An ID whose discovery fails is forgotten, so the next pass batches it again.
+        """
+        if all(i in self._batched or self._metadata_verified(i) for i in ids):
+            return
+        extra = [i for i in upcoming if i not in ids][:max(0, self.prefetch_size - len(ids))]
+        window = [*ids, *extra]
+        self.prefetch(window)
+        self._batched.update(window)
 
     def prefetch(self, identifiers) -> None:
         """Batch-discover Publications whose metadata cache is not verified."""
@@ -120,29 +199,34 @@ class CrawlPipeline:
         return pool.submit(self._fetch_references, arxiv_id)
 
     def _fetch_references(self, arxiv_id):
-        rows = self.references.references(arxiv_id)
-        reference_rows(arxiv_id, rows)
-        return rows
+        return CitationList.from_raw(arxiv_id, self.references.references(arxiv_id))
 
-    def crawl_ids(self, ids: list[str], *, refresh: bool = False) -> dict[str, int]:
-        """Cache metadata until refresh=True; validate source files on every run."""
+    def crawl_ids(self, ids: list[str], *, refresh: bool = False,
+                  upcoming: Sequence[str] = ()) -> dict[str, int]:
+        """Cache metadata until refresh=True; validate source files on every run.
+
+        ``upcoming`` lists IDs the caller will crawl next, in order. The Engine
+        may discover them early in the same batch; it never downloads their
+        sources here. ``refresh=True`` ignores ``upcoming``.
+        """
         ids = list(dict.fromkeys(require_id(i) for i in ids))
-        with FileLock(str(self.data_dir / ".crawl.lock"), timeout=0):
-            self.manifest = Manifest(self.manifest.path)
-            return self._crawl(ids, refresh=refresh)
+        upcoming = [require_id(i) for i in upcoming]
+        with self.corpus_lock():
+            return self._crawl(ids, refresh=refresh, upcoming=upcoming)
 
-    def _crawl(self, ids, *, refresh):
+    def _crawl(self, ids, *, refresh, upcoming=()):
         stats = {"success": 0, "non_tex": 0, "unavailable": 0, "errors": 0, "skipped": 0,
                  "references_success": 0}
         if refresh and hasattr(self.discovery, "prefetch"):
             self.discovery.prefetch(ids)
         elif not refresh:
-            self.prefetch(ids)
+            self._prefetch_window(ids, upcoming)
         with ThreadPoolExecutor(max_workers=1) as pool:
             for arxiv_id in ids:
                 try:
                     publication = self._discover_publication(arxiv_id, refresh=refresh)
                 except Exception as error:
+                    self._batched.discard(arxiv_id)
                     self._failure(arxiv_id, None, "discovery", error)
                     stats["errors"] += 1
                     continue
@@ -161,10 +245,10 @@ class CrawlPipeline:
                 if refs is None:
                     continue
                 try:
-                    rows = refs.result()
-                    if rows is not None:
+                    citations = refs.result()
+                    if citations is not None:
                         path = self._references_path(arxiv_id)
-                        write_json(path, {"format": 1, "arxiv_id": arxiv_id, "rows": rows})
+                        write_json(path, {"format": 1, "arxiv_id": arxiv_id, "rows": list(citations.raw)})
                         self._record(arxiv_id, None, "references", "success", local_path=str(path),
                                      checksum=hashlib.sha256(path.read_bytes()).hexdigest())
                     stats["references_success"] += 1
@@ -177,6 +261,11 @@ class CrawlPipeline:
         return self.crawl_ids(list(arxiv_range.ids()), refresh=refresh)
 
     def export(self, ids: list[str], *, require_references: bool = True) -> tuple[list[PublicationBundle], dict[str, Path]]:
-        """Export the requested batch while the caller holds the corpus lock."""
-        return export_publications(self.corpus, self.sources.root, ids,
-                                   require_references=require_references)
+        """Export the requested batch under the corpus lock.
+
+        Callers that must keep the lock after export (for example to upload the
+        same tables) wrap this call in ``corpus_lock()``.
+        """
+        with self.corpus_lock():
+            return export_publications(self.corpus, self.sources.root, ids,
+                                       require_references=require_references)

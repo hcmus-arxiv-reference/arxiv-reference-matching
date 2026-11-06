@@ -108,6 +108,20 @@ def test_benchmark_counts_both_layouts(cache, tmp_path):
     assert benchmark.count_done(standalone) == 1
 
 
+def test_arxiv_count_is_before_deduplication_like_validator(cache):
+    # Two raw rows for one arXiv paper: 2 raw rows with an arXiv ID, 1 Reference.
+    path = cache / 'references' / '2508-02872.json'
+    payload = json.loads(path.read_text())
+    payload['rows'] = [{'citedPaper': {'externalIds': {'ArXiv': '1706.03762v1'}}},
+                       {'citedPaper': {'externalIds': {'ArXiv': '1706.03762v2'}}},
+                       {'citedPaper': {'externalIds': {}}}]
+    path.write_text(json.dumps(payload))
+    row = {r['id']: r for r in make_stats.collect(cache, [DONE])}[DONE]
+    assert (row['n_refs'], row['n_refs_with_arxiv_id'], row['n_references']) == (3, 2, 1)
+    summary = make_stats.summarize([row], 1)
+    assert summary['avg_refs_with_arxiv_id_per_paper'] == 2 and summary['avg_references_per_paper'] == 1
+
+
 def test_receipts_without_size_fields_stay_out_of_the_comparison(cache):
     receipt = cache / 'raw' / '2508-02872' / 'v2' / 'source.json'
     payload = json.loads(receipt.read_text())
