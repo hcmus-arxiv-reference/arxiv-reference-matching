@@ -9,6 +9,17 @@ same Source fetch Stage, into a separate work directory:
     python -m scripts.measure_sizes --corpus data/crawl-smoke \\
         --work data/size-sample --sample 300 --out stats/size-sample
 
+The sample can also be measured on another machine (Colab) that does not have
+the corpus: write a small plan where the corpus is, then run from the plan.
+
+    python -m scripts.measure_sizes --corpus data/crawl-smoke --sample 300 \\
+        --plan-out stats/size-plan.json
+    python -m scripts.measure_sizes --plan size-plan.json --work /content/size-sample \\
+        --out /content/size-out
+
+The plan holds, per sampled Publication, its Version count and the corpus
+receipt's file list with sha256: IDs and checksums only, no source text.
+
 Three numbers per Version, kept apart so compression is not mistaken for
 filtering:
     downloaded_bytes  bytes received from arXiv (usually gzip)
@@ -53,15 +64,30 @@ def versions_of(corpus: Path, arxiv_id: str) -> int:
     return payload["publication"]["versions"]
 
 
-def measure_version(downloader, corpus: Path, arxiv_id: str, version: int) -> dict:
+def make_plan(corpus: Path, sample: int, seed: int) -> dict:
+    """Seeded random sample of complete Publications with what the measurement needs."""
+    population = complete_ids(corpus)
+    sampled = sorted(random.Random(seed).sample(population, min(sample, len(population))))
+    publications = []
+    for arxiv_id in sampled:
+        versions = versions_of(corpus, arxiv_id)
+        files = {}
+        for version in range(1, versions + 1):
+            receipt = corpus / "raw" / publication_key(arxiv_id) / f"v{version}" / "source.json"
+            files[str(version)] = json.loads(receipt.read_text())["files"] if receipt.exists() else None
+        publications.append({"arxiv_id": arxiv_id, "versions": versions, "corpus_files": files})
+    return {"format": 1, "seed": seed, "population_complete_publications": len(population),
+            "publications": publications}
+
+
+def measure_version(downloader, corpus_files: dict | None, arxiv_id: str, version: int) -> dict:
+    """Download one Version into the work directory and compare it with the corpus copy."""
     result = downloader.download(arxiv_id, version)
     row = dict.fromkeys(COLUMNS)
     row.update(arxiv_id=arxiv_id, version=version, status=result.status)
     if result.status not in {"success", "non_tex"}:
         return row
     receipt = json.loads((result.path / "source.json").read_text())
-    original = corpus / "raw" / publication_key(arxiv_id) / f"v{version}" / "source.json"
-    corpus_files = json.loads(original.read_text())["files"] if original.exists() else None
     row.update(downloaded_bytes=receipt.get("downloaded_bytes"),
                content_bytes=receipt.get("content_bytes"),
                kept_bytes=sum((result.path / n).stat().st_size for n in receipt["files"]),
@@ -111,37 +137,63 @@ def summarize(rows: list[dict], sampled: list[str], population: int) -> dict:
     }
 
 
+def run_plan(plan: dict, downloader, out: Path) -> dict:
+    """Measure every Version of the plan; write versions.csv and summary.json to ``out``."""
+    if plan.get("format") != 1:
+        raise ValueError("Unknown size plan format")
+    out.mkdir(parents=True, exist_ok=True)
+    publications = plan["publications"]
+    rows = []
+    for index, item in enumerate(publications, 1):
+        arxiv_id = item["arxiv_id"]
+        for version in range(1, item["versions"] + 1):
+            try:
+                rows.append(measure_version(downloader, item["corpus_files"].get(str(version)),
+                                            arxiv_id, version))
+            except Exception as error:  # keep going; the Version is reported as not measured
+                rows.append({**dict.fromkeys(COLUMNS), "arxiv_id": arxiv_id, "version": version,
+                             "status": f"error:{type(error).__name__}"})
+        print(json.dumps({"done": index, "of": len(publications), "id": arxiv_id}), flush=True)
+    with (out / "versions.csv").open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+    summary = {"seed": plan["seed"],
+               **summarize(rows, [p["arxiv_id"] for p in publications],
+                           plan["population_complete_publications"])}
+    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    return summary
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--corpus", type=Path, required=True, help="thư mục dữ liệu đã crawl (chỉ đọc)")
-    ap.add_argument("--work", type=Path, required=True, help="thư mục tải lại mẫu, khác --corpus")
+    ap.add_argument("--corpus", type=Path, help="thư mục dữ liệu đã crawl (chỉ đọc)")
+    ap.add_argument("--plan", type=Path, help="file kế hoạch đã tạo bằng --plan-out (thay cho --corpus)")
+    ap.add_argument("--plan-out", type=Path, help="chỉ ghi file kế hoạch rồi dừng, không tải gì")
+    ap.add_argument("--work", type=Path, help="thư mục tải lại mẫu, khác --corpus")
     ap.add_argument("--sample", type=int, default=300)
     ap.add_argument("--seed", type=int, default=20261105)
     ap.add_argument("--out", type=Path, default=Path("stats/size-sample"))
     args = ap.parse_args(argv)
-    if args.work.resolve() == args.corpus.resolve():
+    if (args.corpus is None) == (args.plan is None):
+        ap.error("give exactly one of --corpus or --plan")
+    if args.plan is not None:
+        plan = json.loads(args.plan.read_text())
+    else:
+        plan = make_plan(args.corpus, args.sample, args.seed)
+    if args.plan_out is not None:
+        args.plan_out.parent.mkdir(parents=True, exist_ok=True)
+        args.plan_out.write_text(json.dumps(plan) + "\n")
+        print(json.dumps({"plan": str(args.plan_out), "publications": len(plan["publications"]),
+                          "versions": sum(p["versions"] for p in plan["publications"])}))
+        return 0
+    if args.work is None:
+        ap.error("--work is required to measure")
+    if args.corpus is not None and args.work.resolve() == args.corpus.resolve():
         ap.error("--work must differ from --corpus")
-    population = complete_ids(args.corpus)
-    sampled = sorted(random.Random(args.seed).sample(population, min(args.sample, len(population))))
-    client = HttpClient(get_settings().user_agent(), min_interval=3.1)
-    downloader = ArxivSourceDownloader(client, args.work / "raw")
-    args.out.mkdir(parents=True, exist_ok=True)
-    rows = []
-    for index, arxiv_id in enumerate(sampled, 1):
-        for version in range(1, versions_of(args.corpus, arxiv_id) + 1):
-            try:
-                rows.append(measure_version(downloader, args.corpus, arxiv_id, version))
-            except Exception as error:  # keep going; the Version is reported as not measured
-                rows.append({**dict.fromkeys(COLUMNS), "arxiv_id": arxiv_id, "version": version,
-                             "status": f"error:{type(error).__name__}"})
-        print(json.dumps({"done": index, "of": len(sampled), "id": arxiv_id}), flush=True)
-    with (args.out / "versions.csv").open("w", newline="") as stream:
-        writer = csv.DictWriter(stream, COLUMNS)
-        writer.writeheader()
-        writer.writerows(rows)
-    summary = {"seed": args.seed, **summarize(rows, sampled, len(population))}
-    (args.out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-    print(json.dumps(summary, indent=2))
+    downloader = ArxivSourceDownloader(HttpClient(get_settings().user_agent(), min_interval=3.1),
+                                       args.work / "raw")
+    print(json.dumps(run_plan(plan, downloader, args.out), indent=2))
     return 0
 
 
