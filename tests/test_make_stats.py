@@ -75,7 +75,10 @@ def test_cli_writes_summary_and_csv(cache, tmp_path):
     assert summary['paper_success_rate'] == 0.25
     assert (summary['versions_total'], summary['versions_with_tex'], summary['versions_non_tex'],
             summary['versions_unavailable']) == (4, 2, 1, 1)
-    assert summary['avg_bytes_before_per_paper'] is None
+    # DONE: v1 plain TeX (23 bytes kept), v2 PDF (8 bytes, nothing kept).
+    assert summary['avg_bytes_before_per_paper'] == 31 and summary['avg_bytes_after_per_paper'] == 23
+    assert summary['avg_bytes_downloaded_per_paper'] == 31 and summary['papers_with_size_before'] == 1
+    assert summary['size_reduction_pct'] == 25.81
     assert summary['papers_with_ref_metadata'] == 2
     with (out / 'papers.csv').open() as f:
         assert [r['id'] for r in csv.DictReader(f)] == [DONE, MISSING, S2_FAIL, NEVER]
@@ -117,3 +120,12 @@ def test_arxiv_count_is_before_deduplication_like_validator(cache):
     assert (row['n_refs'], row['n_refs_with_arxiv_id'], row['n_references']) == (3, 2, 1)
     summary = make_stats.summarize([row], 1)
     assert summary['avg_refs_with_arxiv_id_per_paper'] == 2 and summary['avg_references_per_paper'] == 1
+def test_receipts_without_size_fields_stay_out_of_the_comparison(cache):
+    receipt = cache / 'raw' / '2508-02872' / 'v2' / 'source.json'
+    payload = json.loads(receipt.read_text())
+    del payload['content_bytes']
+    receipt.write_text(json.dumps(payload))
+    rows = {r['id']: r for r in make_stats.collect(cache, [DONE])}
+    assert rows[DONE]['bytes_before'] is None and rows[DONE]['bytes_after'] == 23
+    summary = make_stats.summarize(list(rows.values()))
+    assert summary['papers_with_size_before'] == 0 and summary['size_reduction_pct'] is None

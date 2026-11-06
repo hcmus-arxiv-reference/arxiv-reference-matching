@@ -85,6 +85,29 @@ def extract_source(payload: bytes, destination: Path) -> tuple[list[str], list[s
     return sorted(tex), sorted(bib)
 
 
+def content_bytes(payload: bytes) -> int:
+    """Bytes of the source content before selecting ``.tex/.bib`` (image removal).
+
+    Compression is undone first, so this is comparable with the bytes kept:
+    a tar (gzip or plain) counts its regular files, a ZIP its members, a lone
+    gzip file its decompressed size; PDF or plain TeX count the payload itself.
+    The bytes downloaded are ``len(payload)`` and are reported separately.
+    Call only on a payload that ``extract_source`` accepted.
+    """
+    if payload.startswith(b"\x1f\x8b"):
+        with gzip.GzipFile(fileobj=io.BytesIO(payload)) as stream:
+            payload = stream.read(MAX_EXTRACT_BYTES + 1)
+    try:
+        with tarfile.open(fileobj=io.BytesIO(payload), mode="r:") as archive:
+            return sum(m.size for m in archive if m.isfile())
+    except tarfile.ReadError:
+        pass
+    if zipfile.is_zipfile(io.BytesIO(payload)):
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            return sum(i.file_size for i in archive.infolist() if not i.is_dir())
+    return len(payload)
+
+
 class ArxivSourceDownloader:
     """Download Versions resumably; HTTP progress goes to manifests/http-events.jsonl.
 
@@ -133,6 +156,9 @@ class ArxivSourceDownloader:
                 "format": 1, "arxiv_id": arxiv_id, "version": version,
                 "status": status, "checksum": checksum,
                 "files": {n: _digest(temporary / n) for n in tex + bib},
+                # Size evaluation (M1 report): network bytes vs. content before selection.
+                "downloaded_bytes": len(response.body),
+                "content_bytes": content_bytes(response.body),
             })
             if backup.exists():
                 # A prior process stopped after moving the old cache aside.
