@@ -56,7 +56,8 @@ def test_receipt_records_three_sizes_and_stays_verified(tmp_path):
 def test_measure_version_compares_kept_files_with_the_corpus(tmp_path):
     payload = tar_gz({'main.tex': TEX, 'fig.png': PNG})
     corpus = tmp_path / 'corpus'
-    downloader(corpus, payload).download('2508.02872', 1)
+    result = downloader(corpus, payload).download('2508.02872', 1)
+    corpus = json.loads((result.path / 'source.json').read_text())['files']
     row = measure_sizes.measure_version(downloader(tmp_path, payload, 'work'), corpus, '2508.02872', 1)
     assert row['same_as_corpus'] is True and row['kept_bytes'] == len(TEX)
     assert row['content_bytes'] == len(TEX) + len(PNG)
@@ -81,3 +82,15 @@ def test_summary_compares_before_and_after_on_the_same_publications():
     assert summary['avg_bytes_after_per_paper']['mean'] == 40
     assert summary['size_reduction_pct'] == 80.0
     assert summary['download_to_content_ratio'] == 0.5
+
+
+def test_plan_runs_without_the_corpus(tmp_path):
+    payload = tar_gz({'main.tex': TEX, 'fig.png': PNG})
+    files = json.loads((downloader(tmp_path, payload, 'corpus').download('2508.02872', 1).path
+                        / 'source.json').read_text())['files']
+    plan = {'format': 1, 'seed': 7, 'population_complete_publications': 1,
+            'publications': [{'arxiv_id': '2508.02872', 'versions': 1, 'corpus_files': {'1': files}}]}
+    plan = json.loads(json.dumps(plan))  # as read back from the plan file
+    summary = measure_sizes.run_plan(plan, downloader(tmp_path, payload, 'work'), tmp_path / 'out')
+    assert summary['measured_publications'] == 1 and summary['versions_differing_from_corpus'] == 0
+    assert summary['seed'] == 7 and (tmp_path / 'out' / 'versions.csv').exists()
