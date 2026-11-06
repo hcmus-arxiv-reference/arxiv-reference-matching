@@ -120,6 +120,8 @@ def test_arxiv_count_is_before_deduplication_like_validator(cache):
     assert (row['n_refs'], row['n_refs_with_arxiv_id'], row['n_references']) == (3, 2, 1)
     summary = make_stats.summarize([row], 1)
     assert summary['avg_refs_with_arxiv_id_per_paper'] == 2 and summary['avg_references_per_paper'] == 1
+
+
 def test_receipts_without_size_fields_stay_out_of_the_comparison(cache):
     receipt = cache / 'raw' / '2508-02872' / 'v2' / 'source.json'
     payload = json.loads(receipt.read_text())

@@ -40,7 +40,7 @@ from src.crawl.storage import key
 CSV_COLUMNS = [
     "id", "status", "n_versions", "versions_with_tex", "versions_non_tex",
     "versions_unavailable", "bytes_downloaded", "bytes_before", "bytes_after",
-    "n_refs", "n_refs_with_arxiv_id",
+    "n_refs", "n_refs_with_arxiv_id", "n_references",
 ]
 SOURCE_OK = {"success", "non_tex"}
 
