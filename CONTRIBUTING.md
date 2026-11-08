@@ -37,7 +37,8 @@ thô, `tables/<member>/` cho bảng. Cần được mời vào organization trê
   git fetch origin
   git switch -c feat/m2-<gói> origin/main
   ```
-  Tên gói: `structure` (Liễu), `leaves` (Nghiêm), `bibtex` (Hải), `export` (Minh).
+  Tên gói: `structure` (Liễu), `leaves` (Nghiêm), `bibtex` (Hải), `types` và `export` (Minh).
+  Ai được sửa file nào, cách xử lý xung đột và CI đỏ: `docs/m2-cong-viec.md` mục 8.
   Việc nhỏ ngoài gói: `fix/<mô tả>`, `docs/<mô tả>`.
 - Không push thẳng lên `main`. Mọi thay đổi vào `main` đi qua PR.
 - Cập nhật nhánh với `main` ít nhất mỗi ngày làm việc:

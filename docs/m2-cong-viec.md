@@ -7,7 +7,7 @@ Tài liệu đi kèm:
 - Đề: [Parsing](https://hcmus-cs-ta.github.io/lab-book/intro-ds/statement/parsing/)
 - Kiểu dữ liệu ở các điểm giao, bất biến, ví dụ chạy qua cả pipeline: [`m2-interfaces.md`](m2-interfaces.md)
 - Hợp đồng dữ liệu giữa các milestone (C1–C9): [`data-contract.md`](data-contract.md)
-- Cách dùng Git/GitHub, mở PR, lấy dữ liệu: [`CONTRIBUTING.md`](../CONTRIBUTING.md)
+- Cách dùng Git/GitHub, mở PR, lấy dữ liệu: [`CONTRIBUTING.md`](../CONTRIBUTING.md); riêng M2: mục 8 của tài liệu này
 - Thuật ngữ (Publication, Version, Element, BibTeX entry, …): [`CONTEXT.md`](../CONTEXT.md)
 
 ## 1. M2 phải làm gì (tóm tắt đề)
@@ -266,3 +266,122 @@ Cả nhóm chốt cùng lúc review `types.py`:
 3. `align` nhiều dòng là một hay nhiều `formula`?
 4. Quy tắc gộp trường BibTeX khi hai bản có giá trị khác nhau.
 5. Tên các trường trong `types.py`.
+
+## 8. Quy trình GitHub cho M2
+
+Quy tắc chung (cài đặt, quy ước commit, mẫu PR) ở [`CONTRIBUTING.md`](../CONTRIBUTING.md). Mục
+này là phần riêng của M2: mỗi người làm trên nhánh nào, sửa file nào, và xử lý các tình huống hay gặp.
+
+### 8.1 Nhánh và file của từng người
+
+Mỗi người chỉ sửa file của gói mình. Hai người không sửa cùng một file thì gần như không có xung đột.
+
+| Người | Nhánh | File được sửa |
+|---|---|---|
+| Liễu | `feat/m2-structure` | `src/parse/source.py`, `src/parse/structure.py`, `tests/test_parse_source.py`, `tests/test_parse_structure.py` |
+| Nghiêm | `feat/m2-leaves` | `src/parse/leaves.py`, `src/parse/sentences.py`, `tests/test_parse_leaves.py` |
+| Hải | `feat/m2-bibtex` | `src/parse/normalize.py`, `src/parse/bibtex.py`, `tests/test_parse_normalize.py`, `tests/test_parse_bibtex.py` |
+| Minh | `feat/m2-types` (trước), `feat/m2-export` | `src/parse/types.py`, `src/parse/export.py`, `src/parse/pipeline.py`, `scripts/parse_range.py`, `tests/test_parse_export.py` |
+
+- **Golden:** mỗi case một thư mục `tests/fixtures/m2/<case>/`. Người viết case nào chỉ sửa thư mục đó.
+- **File dùng chung:** `src/parse/__init__.py`, `requirements.txt`, `README.md`. Muốn sửa thì sửa
+  ít nhất có thể, ghi rõ trong PR. Minh gom phần README của M2 ở cuối.
+- **Không ai sửa** `src/common/schema.py`. `src/parse/types.py` chỉ Minh sửa, sau 10/11 phải qua PR riêng.
+- Nhánh dài nên tách thành nhiều PR nhỏ: `feat/m2-leaves-sentences`, `feat/m2-leaves-lists`, …
+
+### 8.2 Từ đầu đến lúc merge
+
+Lệnh dưới đây chạy như nhau trên macOS, Linux và Windows PowerShell.
+
+**Bước 1: lấy `main` mới nhất và tạo nhánh**
+```sh
+git switch main
+git pull origin main
+git switch -c feat/m2-leaves          # đổi thành nhánh của bạn
+```
+Không tạo nhánh từ nhánh crawler cũ (`feat/Minh-crawler`, `Hai_crawler`, …). Các nhánh đó tách từ
+16/10 và đi sau `main` hơn 90 commit.
+
+**Bước 2: commit đầu tiên và PR nháp**
+```sh
+git add tests/fixtures/m2/hard-sentences/
+git commit -m "test(parse): add hard-sentences golden case"
+git push -u origin feat/m2-leaves
+gh pr create --draft --base main --fill   # hoặc bấm "Compare & pull request" trên GitHub
+```
+Mở PR nháp ngay từ commit đầu, để nhóm trưởng thấy hướng làm sớm. Trong mô tả PR ghi
+`Refs #<số issue của gói>`.
+
+**Bước 3: làm tiếp, commit nhỏ, push thường xuyên**
+```sh
+.venv/bin/python -m pytest -q             # Windows: .venv\Scripts\python.exe -m pytest -q
+git add src/parse/sentences.py tests/test_parse_leaves.py
+git commit -m "feat(parse): split sentences outside math and URLs"
+git push
+```
+Dùng `git add <file>`, **không** dùng `git add .` hoặc `git add -A`, để tránh commit nhầm `data/`
+hay `.env`.
+
+**Bước 4: chuyển sang Ready**
+Khi CI xanh và mô tả PR đã điền đủ mẫu: bấm **Ready for review**, gắn Bảo làm reviewer.
+
+**Bước 5: sửa theo review**
+Sửa bằng commit mới rồi `git push`. Không `git push --force` lên nhánh đang được review. Trả lời
+từng comment: "Đã sửa ở `<commit>`" hoặc giải thích vì sao giữ nguyên.
+
+**Bước 6: sau khi merge**
+```sh
+git switch main
+git pull origin main
+git branch -d feat/m2-leaves
+```
+PR tiếp theo của gói tạo nhánh mới từ `main` (lặp lại Bước 1). PR cuối cùng của gói ghi
+`Closes #<số issue>` để issue tự đóng khi merge.
+
+### 8.3 Trước khi `types.py` được merge (09–10/11)
+
+- Minh mở PR `feat/m2-types` sớm nhất có thể. Liễu, Nghiêm, Hải review bằng comment trên PR đó.
+- Trong lúc chờ, mọi người viết **golden case và bộ test** (input `.tex`, output mong đợi). Phần
+  này không cần `types.py`.
+- Không copy `types.py` từ nhánh của Minh sang nhánh của mình. Chờ merge vào `main` rồi cập nhật
+  nhánh (mục 8.4).
+
+### 8.4 Cập nhật nhánh với `main` mỗi ngày
+
+```sh
+git fetch origin
+git merge origin/main
+.venv/bin/python -m pytest -q
+git push
+```
+Làm việc này **mỗi ngày làm việc** và **ngay sau khi PR của người khác được merge**, nhất là PR
+`types.py`. Càng để lâu, xung đột càng lớn.
+
+### 8.5 Xử lý xung đột khi merge
+
+1. `git merge origin/main` báo `CONFLICT`. Chạy `git status` để xem file nào xung đột.
+2. Mở từng file, tìm các đoạn giữa `<<<<<<<` và `>>>>>>>`. Giữ phần đúng, xóa các dòng đánh dấu.
+3. Xung đột ở file **của người khác** (theo bảng 8.1): lấy nguyên bản của `main`
+   (`git checkout --theirs <file>`), vì bạn không nên sửa file đó.
+4. `git add <file>` cho từng file đã sửa, chạy lại test, rồi `git commit` và `git push`.
+5. Không chắc giữ phần nào: dừng lại bằng `git merge --abort` và hỏi trong nhóm.
+
+### 8.6 CI đỏ
+
+1. Mở PR → tab **Checks** → bấm vào job đỏ để xem test nào lỗi.
+2. Chạy đúng test đó ở máy mình: `.venv/bin/python -m pytest -q tests/test_parse_leaves.py`.
+3. Lỗi ở test của gói khác sau khi merge `main`: có thể bạn vô tình đổi hành vi chung. Báo người
+   phụ trách gói đó trong PR, không tự sửa test của họ.
+4. CI lỗi trên Python 3.12 nhưng máy bạn xanh: kiểm tra cú pháp chỉ có ở bản Python mới hơn.
+
+### 8.7 Sự cố hay gặp
+
+| Sự cố | Cách xử lý |
+|---|---|
+| Lỡ commit trên `main` ở máy mình (chưa push) | `git switch -c feat/m2-<gói>` để mang commit sang nhánh mới, rồi `git switch main` và `git reset --hard origin/main` |
+| Lỡ `git add` file trong `data/` hoặc `.parquet` (chưa commit) | `git restore --staged <file>` |
+| Lỡ commit file dữ liệu (chưa push) | `git rm --cached <file>`, rồi `git commit --amend` |
+| Lỡ push token hoặc `.env` | **Thu hồi token ngay** trên trang Hugging Face/Semantic Scholar, tạo token mới, rồi báo nhóm trưởng. Xóa khỏi file thôi chưa đủ, vì token vẫn còn trong lịch sử git |
+| Push bị từ chối (`rejected ... fetch first`) | `git pull` (hoặc `git fetch` + `git merge origin/<nhánh>`), sửa xung đột nếu có, rồi push lại |
+| Nhánh đi sau `main` quá xa, xung đột nhiều | tạo nhánh mới từ `main`, chép phần code của gói mình sang, mở PR mới, đóng PR cũ |
+| Không chắc lệnh có làm mất code không | dừng lại, hỏi trong nhóm trước khi chạy `reset --hard`, `push --force`, `rebase` |
