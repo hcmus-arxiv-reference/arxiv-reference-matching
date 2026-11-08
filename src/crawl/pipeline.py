@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import time
 from typing import Iterator, Sequence
 
 from filelock import FileLock
@@ -22,6 +23,7 @@ from .semantic_scholar import SemanticScholarClient
 from .source import ArxivSourceDownloader
 from .storage import require_id
 from src.common.json_io import write_json
+from src.common.metrics import append_jsonl
 
 
 class CrawlPipeline:
@@ -39,6 +41,12 @@ class CrawlPipeline:
     the Manifest or tables change; it is one reentrant instance, so callers may
     nest it around ``crawl_ids``/``export``. The Manifest is reloaded from disk
     when either lock is first acquired, never inside a nested acquisition.
+
+    Timing: every Publication visited by ``crawl_ids`` appends one line to
+    ``manifests/timings.jsonl`` (wall seconds for that Publication and the part
+    spent in Discovery, including the batch it triggered). The file is a
+    measurement log for the M1 report, not part of the Manifest; a Publication
+    interrupted and crawled again has one line per visit.
     """
     engine = "main"
     def __init__(self, discovery: ArxivDiscovery, sources: ArxivSourceDownloader,
@@ -51,6 +59,8 @@ class CrawlPipeline:
         self._pipeline_lock = FileLock(str(self.data_dir / ".pipeline.lock"), timeout=0)
         self._corpus_lock = FileLock(str(self.data_dir / ".crawl.lock"), timeout=0)
         self._corpus_depth = 0
+        self.timings_path = self.data_dir / "manifests" / "timings.jsonl"
+        self.clock = time.monotonic
         # IDs already sent in a Discovery batch by this Engine; see _prefetch_window.
         self._batched: set[str] = set()
         self.manifest: Manifest | None = None
@@ -217,45 +227,70 @@ class CrawlPipeline:
     def _crawl(self, ids, *, refresh, upcoming=()):
         stats = {"success": 0, "non_tex": 0, "unavailable": 0, "errors": 0, "skipped": 0,
                  "references_success": 0}
+        batch_started = self.clock()
         if refresh and hasattr(self.discovery, "prefetch"):
             self.discovery.prefetch(ids)
         elif not refresh:
             self._prefetch_window(ids, upcoming)
+        # The batch serves several IDs but is charged to the first one, the
+        # Publication that triggered it, so per-Publication times sum to wall time.
+        batch_seconds = self.clock() - batch_started
         with ThreadPoolExecutor(max_workers=1) as pool:
-            for arxiv_id in ids:
+            for index, arxiv_id in enumerate(ids):
+                charged = batch_seconds if index == 0 else 0.0
+                timing = {"arxiv_id": arxiv_id,
+                          "started_at": datetime.now(timezone.utc).isoformat(),
+                          "discovery_seconds": charged, "batch_discovery_seconds": charged}
+                started = self.clock()
                 try:
-                    publication = self._discover_publication(arxiv_id, refresh=refresh)
-                except Exception as error:
-                    self._batched.discard(arxiv_id)
-                    self._failure(arxiv_id, None, "discovery", error)
-                    stats["errors"] += 1
-                    continue
-                # One S2 task overlaps this Publication's serial arXiv downloads.
-                refs = self._submit_references(pool, arxiv_id, refresh)
-                for version in range(1, publication.versions + 1):
-                    try:
-                        result = self.sources.download(arxiv_id, version)
-                        self._record(arxiv_id, version, "source", result.status,
-                                     attempted=not result.cached, http_status=result.http_status,
-                                     local_path=str(result.path), checksum=result.checksum)
-                        stats["skipped" if result.cached else result.status] += 1
-                    except Exception as error:
-                        self._failure(arxiv_id, version, "source", error)
-                        stats["errors"] += 1
-                if refs is None:
-                    continue
-                try:
-                    citations = refs.result()
-                    if citations is not None:
-                        path = self._references_path(arxiv_id)
-                        write_json(path, {"format": 1, "arxiv_id": arxiv_id, "rows": list(citations.raw)})
-                        self._record(arxiv_id, None, "references", "success", local_path=str(path),
-                                     checksum=hashlib.sha256(path.read_bytes()).hexdigest())
-                    stats["references_success"] += 1
-                except Exception as error:
-                    self._failure(arxiv_id, None, "references", error)
-                    stats["errors"] += 1
+                    self._crawl_publication(pool, arxiv_id, refresh, stats, timing)
+                finally:
+                    timing["seconds"] = charged + self.clock() - started
+                    self._log_timing(timing)
         return stats
+
+    def _crawl_publication(self, pool, arxiv_id, refresh, stats, timing):
+        """Discovery, Source fetch and References of one Publication; updates ``stats``."""
+        started = self.clock()
+        try:
+            publication = self._discover_publication(arxiv_id, refresh=refresh)
+        except Exception as error:
+            self._batched.discard(arxiv_id)
+            self._failure(arxiv_id, None, "discovery", error)
+            stats["errors"] += 1
+            return
+        finally:
+            timing["discovery_seconds"] += self.clock() - started
+        # One S2 task overlaps this Publication's serial arXiv downloads.
+        refs = self._submit_references(pool, arxiv_id, refresh)
+        for version in range(1, publication.versions + 1):
+            try:
+                result = self.sources.download(arxiv_id, version)
+                self._record(arxiv_id, version, "source", result.status,
+                             attempted=not result.cached, http_status=result.http_status,
+                             local_path=str(result.path), checksum=result.checksum)
+                stats["skipped" if result.cached else result.status] += 1
+            except Exception as error:
+                self._failure(arxiv_id, version, "source", error)
+                stats["errors"] += 1
+        if refs is None:
+            return
+        try:
+            citations = refs.result()
+            if citations is not None:
+                path = self._references_path(arxiv_id)
+                write_json(path, {"format": 1, "arxiv_id": arxiv_id, "rows": list(citations.raw)})
+                self._record(arxiv_id, None, "references", "success", local_path=str(path),
+                             checksum=hashlib.sha256(path.read_bytes()).hexdigest())
+            stats["references_success"] += 1
+        except Exception as error:
+            self._failure(arxiv_id, None, "references", error)
+            stats["errors"] += 1
+
+    def _log_timing(self, timing):
+        """Append one visit of one Publication to ``manifests/timings.jsonl``."""
+        append_jsonl(self.timings_path, {k: round(v, 3) if isinstance(v, float) else v
+                                         for k, v in timing.items()})
 
     def crawl_range(self, arxiv_range: ArxivRange, *, refresh: bool = False) -> dict[str, int]:
         return self.crawl_ids(list(arxiv_range.ids()), refresh=refresh)
