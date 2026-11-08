@@ -87,12 +87,6 @@ không trực tiếp parse `\bibitem` từ LaTeX.
    `(arxiv_id, ref_arxiv_id)`. Không lấy ngày xuất bản S2 thay ngày nộp arXiv;
    `ref_submission_date` chưa xác minh vẫn để null.
 
-Lệnh local tự chạy lần lượt arXiv, S2 rồi ghép:
-
-```powershell
-.\.venv\Scripts\python.exe -X utf8 -u -m scripts.crawl_local
-```
-
 Các thư mục `data/local-sequential/arxiv/`, `s2/`, `merged/` lưu checkpoint
 và output riêng. File lock ngăn hai writer dùng chung thư mục. Bảng riêng
 của từng dịch vụ thể hiện tiến độ dịch vụ đó; chỉ bảng ghép cuối dùng để
@@ -137,29 +131,4 @@ Hai bảng đã xác minh dùng cho summary ở `data/benchmark-ngochai06/tables
 điều kiện hoàn chỉnh; các nhóm thiếu metadata, thiếu Version và thiếu S2 có
 thể chồng nhau, không cộng trực tiếp.
 
-### 3. Thời gian đo trên local — mẫu 10 ID
 
-Lượt đo riêng ngày **03/11/2026** chạy `2412.08848–2412.08857` trên cache trống,
-bằng `scripts/benchmark_sample.py`. Đây là số đo mẫu 10 bài, không phải thời
-gian của toàn Range.
-
-- Lấy ID/metadata: **3,106 giây**, **2 request**, không retry.
-- Tải và xử lý source: **223,221 giây**, **15 request**, không retry;
-  đủ 15/15 Version, gồm một non-TeX.
-- S2: **50,110 giây**, **24 request**, **14 retry**, có **15 phản hồi HTTP 429**;
-  9/10 bài thành công, bài `2412.08852` còn thiếu references.
-- Export: **0,448 giây**; xuất 9 dòng papers và 101 dòng references.
-- Tổng wall time: **278,020 giây**, khoảng **4 phút 38 giây**.
-- RAM đỉnh **103,320 MiB**, trung bình mẫu **67,872 MiB**; disk output
-  đỉnh/cuối **1,468 MiB**, lấy mẫu mỗi giây trên Windows local CPU.
-
-Thời gian Stage gồm chờ rate limit/backoff trong lời gọi đó. Tổng Stage khác
-wall time do runner và ghi checkpoint còn overhead. Khoảng 130 giây đầu có
-một tiến trình thu thập test offline chạy riêng rồi được dừng, nên lượt mẫu
-chưa phải phép đo trong môi trường cô lập. Bằng chứng nằm ở
-[ngochai06-sample10.json](ngochai06-sample10.json) và
-`data/sample10-20261103-103748/samples.csv`.
-
-Lượt 5.000 ID tích lũy qua nhiều lần chạy/resume chưa có log đo liên tục đầy
-đủ để chốt tổng thời gian và thời gian từng bước. Không cộng thời gian nghỉ
-theo cấu hình hoặc nhân thời gian mẫu 10 bài để suy ra số đo toàn Range.
