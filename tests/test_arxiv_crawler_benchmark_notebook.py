@@ -43,8 +43,10 @@ class ArxivCrawlerBenchmarkNotebookTests(unittest.TestCase):
             "STATUS_OUTPUT_PATH": self.output_root / "status.json",
             "DONE_OUTPUT_PATH": self.output_root / "done.json",
             "SKIPPED_OUTPUT_PATH": self.output_root / "skipped_ids.json",
+            "PAPERS_STATS_OUTPUT_PATH": self.output_root / "papers_stats.json",
             "SUMMARY_OUTPUT_PATH": self.output_root / "summary.json",
             "BENCHMARK_OUTPUT_PATH": self.output_root / "benchmark.json",
+            "BENCHMARK_SAMPLES_OUTPUT_PATH": self.output_root / "benchmark_samples.json",
             "CLAIM_OUTPUT_PATH": self.output_root / "benchmark.claim.json",
             "RUN_OUTPUT_PATH": self.output_root / "run.json",
         })
@@ -115,8 +117,10 @@ class ArxivCrawlerBenchmarkNotebookTests(unittest.TestCase):
         expected_jsons = sorted([
             "benchmark.claim.json",
             "benchmark.json",
+            "benchmark_samples.json",
             "done.json",
             "metadata.json",
+            "papers_stats.json",
             "run.json",
             "skipped_ids.json",
             "status.json",
