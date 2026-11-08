@@ -1,4 +1,5 @@
 
+import argparse
 import json
 import re
 import time
@@ -8,18 +9,19 @@ from xml.etree import ElementTree as ET
 
 import requests
 
-START = "2409.18594"
-END = "2410.03024"
+START = "2410.08025"
+END = "2410.13024"
 BATCH_SIZE = 50
-OUTPUT = Path("data/arxiv_metadata.json")
+SRC_DIR = Path(__file__).resolve().parent
+OUTPUT = SRC_DIR / "data" / f"arxiv_metadata_{START}_{END}.json"
 API_URL = "https://export.arxiv.org/api/query"
 
 # Webshare rotating endpoint: https://www.webshare.io/blog/what-are-rotating-proxies
-PROXY_ENABLED = True  # Set True after filling in your Webshare proxy credentials.
+PROXY_ENABLED = False  # Set True after filling in your Webshare proxy credentials.
 WEBSHARE_HOST = "p.webshare.io"
 WEBSHARE_PORT = 80
 WEBSHARE_USERNAME = "enhvxeqy-rotate"  # Proxy username, not API key; accepts the -rotate suffix.
-WEBSHARE_PASSWORD = "vfl95aimirwr"
+WEBSHARE_PASSWORD = "ngohoangminhngohoangminh123"
 
 NS = {
     "atom": "http://www.w3.org/2005/Atom",
@@ -57,8 +59,9 @@ def request_xml(ids):
 
     proxies = get_request_proxies()
 
-    for attempt in range(5):
-        wait = 3.2 - (time.monotonic() - last_request)
+    max_attempts = 10
+    for attempt in range(max_attempts):
+        wait = 3.5 - (time.monotonic() - last_request)
         if wait > 0:
             time.sleep(wait)
 
@@ -82,9 +85,9 @@ def request_xml(ids):
                 seconds = (
                     float(retry_after)
                     if retry_after and retry_after.isdigit()
-                    else 5 * (2 ** attempt)
+                    else min(120, 10 * (2 ** attempt))
                 )
-                print(f"HTTP {response.status_code}, retry in {seconds}s")
+                print(f"HTTP {response.status_code}, retry in {seconds}s", flush=True)
                 time.sleep(seconds)
                 continue
 
@@ -94,9 +97,9 @@ def request_xml(ids):
         except (requests.RequestException, ET.ParseError) as exc:
             # Proxy exceptions can contain the URL with its username/password.
             error = type(exc).__name__ if proxies else str(exc)
-            print(f"Attempt {attempt + 1}/5 failed: {error}")
-            if attempt < 4:
-                time.sleep(5 * (2 ** attempt))
+            print(f"Attempt {attempt + 1}/{max_attempts} failed: {error}", flush=True)
+            if attempt < max_attempts - 1:
+                time.sleep(min(120, 5 * (2 ** attempt)))
 
     raise RuntimeError("arXiv API failed repeatedly")
 
@@ -158,17 +161,24 @@ def fetch_papers(ids):
     return result
 
 
-def find_last_september_id():
-    """Find highest valid arXiv ID in September 2024."""
-    if START not in fetch_papers([START]):
-        raise RuntimeError(f"Starting ID {START} not found")
+def normalize_arxiv_id(raw_id):
+    """Normalize YYMM.N to YYMM.NNNNN (5 digits)."""
+    prefix, num = raw_id.strip().split(".")
+    return f"{prefix}.{int(num):05d}"
 
-    low = int(START.split(".")[1])
+
+def find_last_month_id(start_id):
+    """Find highest valid arXiv ID in the month of start_id."""
+    if start_id not in fetch_papers([start_id]):
+        raise RuntimeError(f"Starting ID {start_id} not found")
+
+    prefix, start_num = start_id.split(".")
+    low = int(start_num)
     high = 99999
 
     while low < high:
         mid = (low + high + 1) // 2
-        candidate = f"2409.{mid:05d}"
+        candidate = f"{prefix}.{mid:05d}"
 
         if candidate in fetch_papers([candidate]):
             low = mid
@@ -178,66 +188,87 @@ def find_last_september_id():
     return low
 
 
-def save_json(data):
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+def save_json(data, output_path=OUTPUT):
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    temp = OUTPUT.with_suffix(".tmp")
+    temp = output_path.with_suffix(".tmp")
 
     with open(temp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-    temp.replace(OUTPUT)
+    temp.replace(output_path)
 
 
 def main():
-    if OUTPUT.exists():
-        with open(OUTPUT, encoding="utf-8") as f:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--start", default=START)
+    parser.add_argument("--end", default=END)
+    parser.add_argument("--output", type=Path, default=None)
+    args = parser.parse_args()
+
+    start_id = normalize_arxiv_id(args.start)
+    end_id = normalize_arxiv_id(args.end)
+    output_path = (
+        args.output
+        if args.output is not None
+        else SRC_DIR / "data" / f"arxiv_metadata_{start_id}_{end_id}.json"
+    )
+
+    if output_path.exists():
+        with open(output_path, encoding="utf-8") as f:
             data = json.load(f)
 
         if (
-            data["range"]["start"] != START
-            or data["range"]["end"] != END
+            data["range"]["start"] != start_id
+            or data["range"]["end"] != end_id
         ):
             raise RuntimeError("Checkpoint range mismatch")
 
-        print("Resuming from checkpoint...")
+        print(f"Resuming from checkpoint: {output_path}")
 
     else:
-        last_sep = find_last_september_id()
+        start_prefix, start_num_str = start_id.split(".")
+        end_prefix, end_num_str = end_id.split(".")
+        start_num = int(start_num_str)
+        end_num = int(end_num_str)
 
-        ids = (
-            [
-                f"2409.{i:05d}"
-                for i in range(
-                    int(START.split(".")[1]),
-                    last_sep + 1
-                )
+        range_info = {
+            "start": start_id,
+            "end": end_id,
+        }
+
+        if start_prefix == end_prefix:
+            ids = [
+                f"{start_prefix}.{i:05d}"
+                for i in range(start_num, end_num + 1)
             ]
-            +
-            [
-                f"2410.{i:05d}"
-                for i in range(
-                    1,
-                    int(END.split(".")[1]) + 1
-                )
-            ]
-        )
+        else:
+            last_first_month = find_last_month_id(start_id)
+            range_info["last_first_month_id"] = f"{start_prefix}.{last_first_month:05d}"
+            ids = (
+                [
+                    f"{start_prefix}.{i:05d}"
+                    for i in range(start_num, last_first_month + 1)
+                ]
+                +
+                [
+                    f"{end_prefix}.{i:05d}"
+                    for i in range(1, end_num + 1)
+                ]
+            )
+
+        range_info["total_ids"] = len(ids)
+        range_info["total_papers"] = 0
 
         data = {
-            "range": {
-                "start": START,
-                "end": END,
-                "last_september_id": f"2409.{last_sep:05d}",
-                "total_ids": len(ids),
-                "total_papers": 0
-            },
+            "range": range_info,
             "ids": ids,
             "papers": [],
             "processed_ids": [],
             "missing_ids": []
         }
 
-        save_json(data)
+        save_json(data, output_path)
 
     papers = {
         p["arxiv_id"]: p
@@ -281,16 +312,17 @@ def main():
             if pid not in papers
         ]
 
-        save_json(data)
+        save_json(data, output_path)
 
         print(
-            f"Processed {len(processed)}/{len(data['ids'])} | "
-            f"Found {len(papers)} papers"
+            f"[{start_id}..{end_id}] Processed {len(processed)}/{len(data['ids'])} | "
+            f"Found {len(papers)} papers",
+            flush=True
         )
 
     print(f"\nCompleted: {len(papers)} papers")
     print(f"Missing IDs: {len(data['missing_ids'])}")
-    print(f"Saved: {OUTPUT.resolve()}")
+    print(f"Saved: {output_path.resolve()}")
 
 
 if __name__ == "__main__":
