@@ -87,15 +87,20 @@ Chi tiết: [pipeline crawl](docs/crawl-pipeline.md).
 `done_papers_*` của `src/benchmark.py` đếm Publication `done` theo `src.make_stats` trên
 layout `src/crawl/`, và đếm `*/done.json` trên layout standalone. `make_stats` không kiểm
 checksum; số đã xác minh lấy từ `scripts.validate_crawl` hoặc `scripts.report_m1`.
+Engine ghi mỗi lần thăm một Publication vào `manifests/timings.jsonl` (wall time của
+Publication, phần dành cho Discovery); `make_stats` cộng lại thành cột `seconds`,
+`discovery_seconds` và các số `avg_seconds_per_paper`, `discovery_seconds_total`.
 
-Tự kiểm thử trên Colab CPU (testbed của đề): mở
+Benchmark trên Colab CPU (testbed của đề): mở
 [`notebooks/colab_m1_selftest.ipynb`](notebooks/colab_m1_selftest.ipynb) bằng
 <https://colab.research.google.com/github/hcmus-arxiv-reference/arxiv-reference-matching/blob/main/notebooks/colab_m1_selftest.ipynb>.
-Notebook clone `REF` (mặc định `main`, có thể là SHA), chạy pytest, crawl cold vào
-`/content/` qua `src.benchmark`, resume với mạng bị chặn kèm assertion, rồi `make_stats`,
-validator, đếm HTTP 429 và thời gian chờ. Mỗi lượt có `RUN_ID` riêng, được nén thành một
-`.tar.gz` kèm sha256 và chép lên Drive; phiên mới đặt `RESTORE_ARCHIVE` để khôi phục và
-resume lại. `CONTACT_EMAIL`, `S2_API_KEY` đặt trong Colab Secrets.
+`ID_MODE="range"` crawl cả Range của `MEMBER`; `member`/`explicit` để tự kiểm thử trên vài ID.
+Notebook clone `REF` (benchmark chính thức dùng SHA hoặc tag đã chốt), chạy pytest, crawl vào
+`/content/` qua `src.benchmark` theo từng đoạn `SEGMENT_MINUTES`. Giữa hai đoạn, cả lượt chạy
+được nén thành một `.tar.gz` kèm sha256 và thay checkpoint trên Drive; phiên Colab mới đặt
+`RESTORE_ARCHIVE` để khôi phục và crawl tiếp. Khi xong: chạy lại với mạng bị chặn kèm assertion,
+`make_stats`, `merge_benchmarks`, validator, đếm HTTP 429 và thời gian chờ. `CONTACT_EMAIL`,
+`S2_API_KEY` (và `HF_TOKEN`, `HF_REPO_ID` nếu upload) đặt trong Colab Secrets.
 
 Định nghĩa trường và quy trình so sánh giữa các thành viên:
 [docs/benchmark](docs/benchmark/README.md).
