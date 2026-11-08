@@ -7,10 +7,9 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
-from unittest.mock import patch
-from urllib.error import HTTPError
+from unittest.mock import MagicMock, patch
 
-import arxiv
+import requests
 
 
 class ArxivCrawlerBenchmarkNotebookTests(unittest.TestCase):
@@ -174,12 +173,15 @@ class ArxivCrawlerBenchmarkNotebookTests(unittest.TestCase):
 
         def fetch(vid):
             attempts[vid] += 1
-            if vid == "2409.18594v1" and attempts[vid] == 1:
-                raise HTTPError("https://export.arxiv.org/src/x", 429, "Too Many Requests", {}, None)
-            if vid == "2409.18595v1" and attempts[vid] == 1:
-                raise arxiv.HTTPError("https://export.arxiv.org/api/query", 0, 503)
-            if vid == "2409.18596v1":
-                raise HTTPError("https://export.arxiv.org/src/x", 404, "Not Found", {}, None)
+            status = None
+            if attempts[vid] == 1:
+                status = {ids[0]: 429, ids[1]: 503}.get(vid)
+            if vid == ids[2]:
+                status = 404
+            if status is not None:
+                response = requests.Response()
+                response.status_code = status
+                raise requests.exceptions.HTTPError(response=response)
             return gzip.compress(b"\\documentclass{article}\nHello")
 
         self.mock_source(fetch)
@@ -191,6 +193,147 @@ class ArxivCrawlerBenchmarkNotebookTests(unittest.TestCase):
         self.assertEqual(http_stats["http_429"], 1)
         self.assertEqual(http_stats["http_5xx"], 1)
         self.assertEqual(http_stats["errors_by_type"], {"429": 1, "503": 1, "404": 1})
+        self.assertFalse(self.temp_dir.exists())
+
+    def test_transport_errors_retry_after_the_current_pass(self):
+        ids = [f"2409.{number}v1" for number in range(18594, 18599)]
+        self.configure(ids)
+        error_types = [
+            requests.exceptions.ChunkedEncodingError,
+            requests.exceptions.ConnectTimeout,
+            requests.exceptions.ReadTimeout,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ContentDecodingError,
+        ]
+        errors = dict(zip(ids, error_types))
+        calls = []
+
+        def fetch(vid):
+            calls.append(vid)
+            if calls.count(vid) == 1:
+                raise errors[vid]("interrupted response")
+            return gzip.compress(b"\\documentclass{article}\nHello")
+
+        self.mock_source(fetch)
+        results = self.namespace["crawl_sources"]()
+
+        self.assertEqual(calls, ids + ids)
+        http_stats = results["benchmark"]["http"]
+        self.assertEqual(http_stats["requests"], 10)
+        self.assertEqual(http_stats["retries"], 5)
+        self.assertEqual(http_stats["retry_rounds"], 1)
+        self.assertEqual(http_stats["http_429"], 0)
+        self.assertEqual(http_stats["http_5xx"], 0)
+        self.assertEqual(http_stats["errors_by_type"], {error.__name__: 1 for error in error_types})
+        self.assertEqual(results["summary"]["versions_failed"], 0)
+        self.assertEqual(results["summary"]["papers_done"], len(ids))
+        metadata = json.loads((self.output_root / "metadata.json").read_text())
+        self.assertEqual([row["state"] for row in metadata], ["fail"] * 5 + ["success"] * 5)
+
+    def test_transport_retry_limit_preserves_the_final_error(self):
+        ids = ["2409.18594v1"]
+        self.configure(ids)
+        self.namespace["MAX_RETRY_ROUNDS"] = 2
+
+        def fetch(vid):
+            raise requests.exceptions.ChunkedEncodingError("interrupted response")
+
+        self.mock_source(fetch)
+        results = self.namespace["crawl_sources"]()
+
+        http_stats = results["benchmark"]["http"]
+        self.assertEqual(http_stats["requests"], 3)
+        self.assertEqual(http_stats["retries"], 2)
+        self.assertEqual(http_stats["retry_rounds"], 2)
+        self.assertEqual(http_stats["errors_by_type"], {"ChunkedEncodingError": 3})
+        self.assertEqual(results["summary"]["versions_failed"], 1)
+        status = json.loads((self.output_root / "status.json").read_text())
+        self.assertEqual(status[ids[0]]["error"], "ChunkedEncodingError")
+        self.assertIn("còn 1 Version lỗi có thể thử lại", self.log.getvalue())
+        self.assertFalse(self.temp_dir.exists())
+
+    def test_retry_after_and_capped_backoff_across_multiple_rounds(self):
+        ids = ["2409.18594v1"]
+        self.configure(ids)
+        self.namespace["RETRY_ROUND_DELAY"] = 2
+        self.namespace["MAX_RETRY_DELAY"] = 3
+        attempts = 0
+
+        def fetch(vid):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                response = requests.Response()
+                response.status_code = 429
+                response.headers["Retry-After"] = "7"
+                raise requests.exceptions.HTTPError(response=response)
+            if attempts < 4:
+                raise requests.exceptions.ChunkedEncodingError("interrupted response")
+            return gzip.compress(b"\\documentclass{article}\nHello")
+
+        self.mock_source(fetch)
+        results = self.namespace["crawl_sources"]()
+
+        self.assertEqual([call.args[0] for call in self.sleep.call_args_list], [7.0, 3, 3])
+        http_stats = results["benchmark"]["http"]
+        self.assertEqual(http_stats["retry_rounds"], 3)
+        self.assertEqual(http_stats["backoff_seconds"], 13)
+        self.assertEqual(http_stats["http_429"], 1)
+        self.assertEqual(http_stats["http_5xx"], 0)
+        self.assertEqual(results["summary"]["versions_failed"], 0)
+
+    def test_permanent_http_and_local_write_errors_are_not_retried(self):
+        ids = ["2409.18594v1", "2409.18595v1", "2409.18596v1"]
+        self.configure(ids)
+
+        def fetch(vid):
+            if vid == ids[0]:
+                raise OSError(28, "No space left on device")
+            response = requests.Response()
+            response.status_code = 403 if vid == ids[1] else 404
+            raise requests.exceptions.HTTPError(response=response)
+
+        self.mock_source(fetch)
+        results = self.namespace["crawl_sources"]()
+
+        http_stats = results["benchmark"]["http"]
+        self.assertEqual(http_stats["requests"], 3)
+        self.assertEqual(http_stats["retries"], 0)
+        self.assertEqual(http_stats["retry_rounds"], 0)
+        self.assertEqual(http_stats["errors_by_type"], {"OSError": 1, "403": 1, "404": 1})
+        self.sleep.assert_not_called()
+
+    def test_partial_stream_is_removed_before_retry_download(self):
+        ids = ["2409.18594v1"]
+        self.configure(ids)
+        archive_path = self.temp_dir / f"{ids[0]}.tar.gz"
+        payload = gzip.compress(b"\\documentclass{article}\nHello")
+
+        def interrupted_stream():
+            yield b"partial archive"
+            self.assertTrue(archive_path.exists())
+            raise requests.exceptions.ChunkedEncodingError("interrupted response")
+
+        broken_response = MagicMock()
+        broken_response.__enter__.return_value = broken_response
+        broken_response.iter_content.return_value = interrupted_stream()
+        good_response = MagicMock()
+        good_response.__enter__.return_value = good_response
+        good_response.status_code = 200
+        good_response.iter_content.return_value = [payload]
+        responses = iter([broken_response, good_response])
+
+        def get_response(*args, **kwargs):
+            self.assertFalse(archive_path.exists())
+            return next(responses)
+
+        with patch.object(self.namespace["HTTP_SESSION"], "get", side_effect=get_response) as get:
+            results = self.namespace["crawl_sources"]()
+
+        self.assertEqual(get.call_count, 2)
+        self.assertEqual(results["benchmark"]["http"]["retries"], 1)
+        self.assertEqual(results["summary"]["versions_with_tex"], 1)
+        self.assertEqual(results["summary"]["versions_failed"], 0)
         self.assertFalse(self.temp_dir.exists())
 
     def test_tar_path_traversal_and_corrupt_gzip_are_marked_error(self):
