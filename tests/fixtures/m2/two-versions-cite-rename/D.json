@@ -1,0 +1,35 @@
+{
+  "arxiv_id": "2508.02872",
+  "entries": [
+    {
+      "arxiv_id": "2508.02872",
+      "citation_key": "Smith2020",
+      "entry_type": "article",
+      "title": "Title",
+      "authors": ["J. Smith"],
+      "year": 2020,
+      "doi": "10.1234/example",
+      "journal": "Journal of Examples",
+      "url": null
+    }
+  ],
+  "key_map": {
+    "1": {"smith20": "Smith2020"},
+    "2": {"Smith2020": "Smith2020"}
+  },
+  "raw_years": {},
+  "stats": {
+    "entry_before": 2,
+    "entry_after": 1,
+    "from_bib": 1,
+    "from_bibitem": 1,
+    "unresolved": 0,
+    "unresolved_keys": [],
+    "field_conflicts": 0,
+    "conflicts": [],
+    "invalid_years": [],
+    "issues": [],
+    "versions_without_bibliography": 0
+  },
+  "bibtex_version": "1"
+}
