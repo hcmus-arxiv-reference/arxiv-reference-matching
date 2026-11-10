@@ -152,7 +152,9 @@ Ngoại lệ: chế độ `references=False` của `run_crawl` bỏ điều ki�
   Mỗi entry có tối đa một Reference đúng.
 - `references` chỉ chứa Reference có arXiv ID, đã gộp trùng theo `ref_arxiv_id` (từ Danh sách
   trích dẫn S2, `CitationList`);
-  `ref_submission_date` luôn `null` cho tới khi có metadata arXiv xác minh **[Đã chốt]**.
+  `ref_submission_date` là `publicationDate` của Semantic Scholar, `null` khi S2 không có
+  ngày ISO hợp lệ **[Đã chốt 10/11/2026, giảng viên cho phép]**. Đây là ngày xuất bản theo
+  S2, có thể khác ngày nộp v1 trên arXiv.
 - M3 có thể dùng `hierarchy` làm feature **[Đề]**.
 
 ## 5. H3: M3 và dataset cuối

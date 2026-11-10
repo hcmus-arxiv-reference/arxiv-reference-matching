@@ -15,7 +15,7 @@ Tài liệu này dành cho agent lập trình làm việc **thay mặt Nguyễn 
 - `src/crawl/` là Engine duy nhất trên `main` (ADR 0001). Bản standalone của Liễu ở tag `lieu-standalone-final`; nhánh thành viên giữ làm case study, không merge.
 - Đề Matching chỉ rõ **6 bảng**: `papers`, `references`, `elements`, `hierarchy`, `bibtex`, `predictions`. Hai bảng Crawling: `papers(arxiv_id, title, authors, submission_date, revised_dates, venue)` và `references(arxiv_id, ref_arxiv_id, ref_title, ref_authors, ref_submission_date, ref_s2_id)`.
 - `papers.authors`, `papers.revised_dates`, `references.ref_authors` là list of strings (`pyarrow.list_(pyarrow.string())`).
-- Không ánh xạ `publicationDate` của Semantic Scholar thành `ref_submission_date`; ngày nộp cần metadata arXiv xác minh hoặc giữ null.
+- `ref_submission_date` lấy từ `publicationDate` của Semantic Scholar (giảng viên cho phép ngày 10/11/2026); giá trị thiếu hoặc không phải ngày ISO thì giữ null. Không tra thêm ngày v1 trên arXiv.
 - Hugging Face (dataset private): file thô ở `raw/<member>/<publication key>/v<n>/`, bảng ở `tables/<member>/<tên bảng>.parquet`. `upload_dir` chỉ ghi dưới `raw/<MEMBER_NAME>/`; bảng dùng `upload_table`.
 - Không yêu cầu người dùng gửi token trong chat; không ghi token hoặc cấu hình riêng vào tài liệu.
 - Đường dẫn repo chứa dấu `:` nên virtualenv phải đặt ngoài repo.

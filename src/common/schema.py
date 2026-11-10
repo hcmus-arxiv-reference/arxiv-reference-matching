@@ -234,7 +234,7 @@ _DATE_COLUMNS = {
 }
 
 
-def _is_iso_date(value: str) -> bool:
+def is_iso_date(value: str) -> bool:
     """Kiểm tra toàn bộ chuỗi và ngày thực, không chấp nhận hậu tố rác."""
     if re.fullmatch(DATE_PATTERN, value) is None:
         return False
@@ -300,7 +300,7 @@ def validate(table: pa.Table, name: str) -> list[str]:
         if pa.types.is_list(column.type):
             column = pc.list_flatten(column)
         invalid = [value for value in pc.unique(column).to_pylist()
-                   if value is not None and not _is_iso_date(value)]
+                   if value is not None and not is_iso_date(value)]
         if invalid:
             errors.append(f"[{name}] cột {col!r}: ngày ISO không hợp lệ, ví dụ {invalid[:3]}")
 
