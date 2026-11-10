@@ -13,6 +13,7 @@ import subprocess
 from types import SimpleNamespace
 
 from src.common.schema import read_table
+from src.make_stats import load_timings
 from src.crawl.manifest import TaskRecord
 from src.crawl.corpus import CorpusReader
 from src.crawl.storage import key
@@ -42,8 +43,41 @@ def describe(values):
             "max": max(values) if values else None}
 
 
-def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None):
-    """Validate local evidence and return an aggregate, publication-safe snapshot."""
+def benchmark_block(benchmark, timings, identifiers):
+    """Performance numbers from a merged benchmark and ``manifests/timings.jsonl``.
+
+    ``benchmark`` is ``benchmark_total.json`` of ``src.merge_benchmarks`` (MB = 2**20
+    bytes, as ``src.benchmark`` writes them); ``timings`` maps arxiv_id to summed
+    (seconds, discovery_seconds) over every visit. Unknown values stay null.
+    """
+    if benchmark is None:
+        return {"testbed": "not measured on Colab", "total_wall_seconds": None,
+                "mean_seconds_per_publication": None, "discovery_seconds": None,
+                "peak_rss_bytes": None, "mean_rss_bytes": None, "peak_disk_bytes": None}
+    to_bytes = lambda mb: None if mb is None else round(mb * 2**20)
+    seconds = [timings[i][0] for i in identifiers if i in timings]
+    return {"testbed": benchmark.get("testbed", "Google Colab CPU"),
+            "segments": benchmark["segments"],
+            "total_wall_seconds": benchmark["total_wall_seconds"],
+            "wall_seconds_per_assigned_publication": benchmark["total_wall_seconds"] / len(identifiers),
+            "publications_timed": len(seconds),
+            "seconds_per_publication": describe(seconds),
+            "mean_seconds_per_publication": statistics.mean(seconds) if seconds else None,
+            "discovery_seconds": (sum(timings[i][1] for i in identifiers if i in timings)
+                                  if seconds else None),
+            "peak_rss_bytes": to_bytes(benchmark.get("peak_rss_mb")),
+            "mean_rss_bytes": to_bytes(benchmark.get("avg_rss_mb")),
+            "peak_disk_bytes": to_bytes(benchmark.get("peak_disk_mb")),
+            "final_disk_bytes": to_bytes(benchmark.get("final_disk_mb"))}
+
+
+def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None, benchmark=None,
+             crawl_note=None):
+    """Validate local evidence and return an aggregate, publication-safe snapshot.
+
+    ``benchmark`` (merged ``benchmark_total.json``) fills the performance block;
+    without it the block stays null. ``crawl_note`` describes how the corpus was made.
+    """
     cache = Path(cache)
     identifiers = list(identifiers)
     if len(identifiers) != len(set(identifiers)) or not identifiers:
@@ -67,6 +101,9 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None):
                      expected_versions=0, success=0, non_tex=0, unavailable=0,
                      download_error=0, not_attempted=0)
     versions_hist, retained_sizes, complete_sizes, ref_counts = Counter(), [], [], []
+    # Before/after compared on the same complete Publications: those whose every
+    # Version receipt records downloaded_bytes and content_bytes (PR #27 onward).
+    sized_before, sized_downloaded, sized_after = [], [], []
     raw_refs = arxiv_refs = unique_refs = empty_refs = legacy_refs = 0
     failures, unexpected_files = [], []
     input_hashes = {"manifests/crawl.jsonl": hashlib.sha256(body).hexdigest()}
@@ -85,6 +122,7 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None):
         rel = f"metadata/{key(identifier)}.json"
         input_hashes[rel] = digest(cache / rel)
         verified = size = 0
+        before = downloaded = 0     # None once a Version lacks the size fields
         for item in pub_state.versions:
             version, source, rec = item.version, item.source, item.task
             directory = corpus.files.version_path(identifier, version)
@@ -92,6 +130,12 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None):
                 status = source.status
                 verified += 1
                 size += sum((directory / name).stat().st_size for name in (*source.tex_files,*source.bib_files))
+                receipt = json.loads((directory / 'source.json').read_text(encoding='utf-8'))
+                if before is not None and 'content_bytes' in receipt and 'downloaded_bytes' in receipt:
+                    before += receipt['content_bytes']
+                    downloaded += receipt['downloaded_bytes']
+                else:
+                    before = downloaded = None
                 input_hashes[str((directory/'source.json').relative_to(cache))] = digest(directory/'source.json')
             else:
                 status = ("unavailable" if rec and rec.status == "unavailable" else
@@ -121,6 +165,10 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None):
         if has_refs and verified == publication.versions:
             counts["complete"] += 1
             complete_sizes.append(size)
+            if before is not None:
+                sized_before.append(before)
+                sized_downloaded.append(downloaded)
+                sized_after.append(size)
     disk = {}
     for category in ("raw", "metadata", "references", "tables"):
         disk[category] = sum(p.stat().st_size for p in (cache/category).rglob('*') if p.is_file())
@@ -143,13 +191,19 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None):
             tables[name] = {"valid": False, "error_type": type(exc).__name__}
     launch_path = cache/'manifests/range-launch.json'
     launch = json.loads(launch_path.read_text()) if launch_path.exists() else {}
-    result = {"format": 1, "member": member, "scope": "Bao only; other members not audited",
+    timings = {}
+    timings_path = cache / 'manifests/timings.jsonl'
+    if timings_path.exists():
+        timings = load_timings(timings_path)
+        input_hashes['manifests/timings.jsonl'] = digest(timings_path)
+    before_stats = describe(sized_before)
+    result = {"format": 1, "member": member, "scope": f"Range {member} only; other Ranges have their own snapshot",
         "snapshot_at": datetime.now(timezone.utc).isoformat(),
         "source_commit": subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
         "range": {"first": identifiers[0], "last": identifiers[-1]}, "counts": dict(counts),
         "crawl": {"engine": state.get('engine'), "last_worker_commit": launch.get('code_commit'),
                   "finished_at": state.get('updated_at'), "status": state.get('status'),
-                  "note": "Corpus accumulated across several runs/commits; not a single benchmark."},
+                  "note": crawl_note or "Corpus accumulated across several runs/commits; not a single benchmark."},
         "versions_distribution": [{"versions":n,"publications":v} for n,v in sorted(versions_hist.items())],
         "references": {"all_records":raw_refs,"with_arxiv_before_dedup":arxiv_refs,
             "unique_arxiv_pairs":unique_refs,"legacy_arxiv_pairs":legacy_refs,
@@ -157,16 +211,21 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None):
             "histogram":distribution(ref_counts,[0,1,10,25,50,100,200,500,1000])},
         "storage": {"active_output_bytes":disk, "retained_tex_bib_bytes":sum(retained_sizes),
             "complete_publication_retained_bytes":describe(complete_sizes),
-            "before_extraction_bytes":None,"size_reduction_fraction":None,
-            "note":"Before-extraction sizes were not recorded for the integrated corpus. Disk is a current logical-size snapshot, not historical peak."},
+            # Mean per complete Publication, before removing figures/non-.tex/.bib files.
+            "before_extraction_bytes":before_stats["mean"],
+            "complete_publication_before_bytes":before_stats,
+            "complete_publication_downloaded_bytes":describe(sized_downloaded),
+            "publications_with_before_size":len(sized_before),
+            "size_reduction_fraction":(1 - sum(sized_after) / sum(sized_before)) if sum(sized_before) else None,
+            "note":("Before/after compared on complete Publications whose receipts record sizes; "
+                    "before = bytes after decompression, before keeping .tex/.bib. "
+                    "Disk is a current logical-size snapshot, not historical peak.")},
         "checks": {"tables":tables,"unexpected_raw_files":unexpected_files,"metadata_issues":dict(metadata_issues)},
         "failures":failures,
         "provenance": {"verified_input_files":len(input_hashes),
             "aggregate_input_hash":hashlib.sha256(json.dumps(input_hashes,sort_keys=True).encode()).hexdigest(),
             "manifest_sha256":input_hashes['manifests/crawl.jsonl']},
-        "benchmark": {"testbed":"not measured on Colab", "total_wall_seconds":None,
-                      "mean_seconds_per_publication":None,"discovery_seconds":None,
-                      "peak_rss_bytes":None,"mean_rss_bytes":None,"peak_disk_bytes":None}}
+        "benchmark": benchmark_block(benchmark, timings, identifiers)}
     if trial:
         evidence=json.loads(Path(trial).read_text())
         result['retry_trial']={k:evidence[k] for k in ('status','updated_at','elapsed_seconds','requested',
