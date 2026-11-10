@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import re
 
-from src.common.schema import from_records, require_id
+from src.common.schema import from_records, is_iso_date, require_id
 
 
 def _cited(raw: dict) -> dict:
@@ -24,10 +24,17 @@ def _arxiv_id(raw: dict) -> str | None:
     return (_cited(raw).get("externalIds") or {}).get("ArXiv") or None
 
 
+def _publication_date(paper: dict) -> str | None:
+    value = paper.get("publicationDate")
+    return value if isinstance(value, str) and is_iso_date(value) else None
+
+
 def reference_rows(arxiv_id: str, raw_rows: list[dict]) -> list[dict]:
     """Map raw S2 rows to ``references`` rows.
 
-    Deduplicate arXiv-keyed candidates; never treat publicationDate as submission.
+    Deduplicate arXiv-keyed candidates. ``ref_submission_date`` is the S2
+    ``publicationDate`` (allowed by the instructor, 2026-11-10); a missing or
+    non-ISO value stays null instead of failing the export.
     """
     require_id(arxiv_id)
     rows = {}
@@ -40,7 +47,7 @@ def reference_rows(arxiv_id: str, raw_rows: list[dict]) -> list[dict]:
         row = {"arxiv_id": arxiv_id, "ref_arxiv_id": ref_id,
                "ref_title": paper.get("title"),
                "ref_authors": [a["name"] for a in (paper.get("authors") or []) if a.get("name")],
-               "ref_submission_date": None, "ref_s2_id": paper.get("paperId")}
+               "ref_submission_date": _publication_date(paper), "ref_s2_id": paper.get("paperId")}
         if ref_id in rows:
             # Preserve first supplied nonempty values, fill missing values only.
             row = {k: rows[ref_id][k] or v for k, v in row.items()}

@@ -154,12 +154,20 @@ def test_s2_rejects_nonadvancing_page():
         SemanticScholarClient(client).references("2508.02872")
 
 
-def test_s2_mapping_keeps_submission_unknown_and_deduplicates():
+def test_s2_mapping_uses_publication_date_and_deduplicates():
     raw = [{"citedPaper": {"externalIds": {"ArXiv": "hep-th/9901001v2"},
             "authors": [{"name": "Alice"}], "publicationDate": "1999-01-01", "title": "Title"}}]
     rows = reference_rows("2508.02872", raw + raw + [{"citedPaper": None}])
     assert len(rows) == 1 and rows[0]["ref_arxiv_id"] == "hep-th/9901001"
-    assert rows[0]["ref_submission_date"] is None and rows[0]["ref_authors"] == ["Alice"]
+    assert rows[0]["ref_submission_date"] == "1999-01-01" and rows[0]["ref_authors"] == ["Alice"]
+
+
+def test_s2_mapping_keeps_missing_or_invalid_publication_date_null():
+    rows = reference_rows("2508.02872", [
+        {"citedPaper": {"externalIds": {"ArXiv": "2401.00001"}, "publicationDate": None}},
+        {"citedPaper": {"externalIds": {"ArXiv": "2401.00002"}, "publicationDate": "2024"}},
+        {"citedPaper": {"externalIds": {"ArXiv": "2401.00003"}}}])
+    assert [r["ref_submission_date"] for r in rows] == [None, None, None]
 
 
 def test_pipeline_continues_versions_then_resumes_and_exports(tmp_path):

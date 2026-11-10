@@ -131,9 +131,10 @@ HTTP server hoặc endpoint nhận token.
   không ngăn thử các Version còn lại. 404/410 là `unavailable`; lỗi mạng là
   `error`. Publication có Version thiếu hoặc lỗi chưa được upload.
 - S2 theo `next` đến hết, không cắt ở 1.000 reference; cache toàn bộ response.
-  Chỉ xuất ứng viên có arXiv ID và khử trùng lặp theo cặp ID. Không ánh xạ
-  `publicationDate` sang `ref_submission_date`; trường ngày nộp chưa xác minh
-  giữ null. Chưa triển khai enrichment ngày nộp của references.
+  Chỉ xuất ứng viên có arXiv ID và khử trùng lặp theo cặp ID.
+  `ref_submission_date` lấy từ `publicationDate` của S2 (giảng viên cho phép
+  ngày 10/11/2026); giá trị thiếu hoặc không phải ngày ISO thì giữ null. Cache
+  S2 đã lưu trường này, nên chỉ cần Export lại, không crawl lại.
 - Upload chỉ lấy danh sách file đã xác minh. Dataset phải private; chỉ ghi
   trong `raw/<MEMBER_NAME>/...` và `tables/<MEMBER_NAME>/...`.
 - Bảng trên Hub được đọc ở commit cố định, validate rồi merge: chỉ thay các
