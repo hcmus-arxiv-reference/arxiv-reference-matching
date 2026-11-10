@@ -104,6 +104,8 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None, benchm
     # Before/after compared on the same complete Publications: those whose every
     # Version receipt records downloaded_bytes and content_bytes (PR #27 onward).
     sized_before, sized_downloaded, sized_after = [], [], []
+    # Same Publications, one value per Version: (before, downloaded, after).
+    sized_versions, complete_version_sizes = [], []
     raw_refs = arxiv_refs = unique_refs = empty_refs = legacy_refs = 0
     failures, unexpected_files = [], []
     input_hashes = {"manifests/crawl.jsonl": hashlib.sha256(body).hexdigest()}
@@ -123,14 +125,17 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None, benchm
         input_hashes[rel] = digest(cache / rel)
         verified = size = 0
         before = downloaded = 0     # None once a Version lacks the size fields
+        version_sizes = []          # (before, downloaded, after) per verified Version
         for item in pub_state.versions:
             version, source, rec = item.version, item.source, item.task
             directory = corpus.files.version_path(identifier, version)
             if item.verified:
                 status = source.status
                 verified += 1
-                size += sum((directory / name).stat().st_size for name in (*source.tex_files,*source.bib_files))
+                kept = sum((directory / name).stat().st_size for name in (*source.tex_files,*source.bib_files))
+                size += kept
                 receipt = json.loads((directory / 'source.json').read_text(encoding='utf-8'))
+                version_sizes.append((receipt.get('content_bytes'), receipt.get('downloaded_bytes'), kept))
                 if before is not None and 'content_bytes' in receipt and 'downloaded_bytes' in receipt:
                     before += receipt['content_bytes']
                     downloaded += receipt['downloaded_bytes']
@@ -165,10 +170,12 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None, benchm
         if has_refs and verified == publication.versions:
             counts["complete"] += 1
             complete_sizes.append(size)
+            complete_version_sizes.extend(after for _, _, after in version_sizes)
             if before is not None:
                 sized_before.append(before)
                 sized_downloaded.append(downloaded)
                 sized_after.append(size)
+                sized_versions.extend(version_sizes)
     disk = {}
     for category in ("raw", "metadata", "references", "tables"):
         disk[category] = sum(p.stat().st_size for p in (cache/category).rglob('*') if p.is_file())
@@ -216,6 +223,11 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None, benchm
             "complete_publication_before_bytes":before_stats,
             "complete_publication_downloaded_bytes":describe(sized_downloaded),
             "publications_with_before_size":len(sized_before),
+            # The same byte totals per Version: every Version of the Publications above.
+            "complete_version_retained_bytes":describe(complete_version_sizes),
+            "sized_version_before_bytes":describe([v[0] for v in sized_versions]),
+            "sized_version_downloaded_bytes":describe([v[1] for v in sized_versions]),
+            "sized_version_after_bytes":describe([v[2] for v in sized_versions]),
             "size_reduction_fraction":(1 - sum(sized_after) / sum(sized_before)) if sum(sized_before) else None,
             "note":("Before/after compared on complete Publications whose receipts record sizes; "
                     "before = bytes after decompression, before keeping .tex/.bib. "

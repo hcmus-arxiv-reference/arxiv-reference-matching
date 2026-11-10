@@ -67,6 +67,7 @@ def test_receipts_without_size_fields_keep_before_unknown(tmp_path):
     storage=snapshot(tmp_path,ids)['storage']
     assert storage['publications_with_before_size']==1          # only 02873 is measurable
     assert storage['complete_publication_before_bytes']['n']==1
+    assert storage["sized_version_before_bytes"]["n"]==1   # the Version of 02873 only
 
 
 def test_benchmark_block_uses_merged_totals_and_timings(tmp_path):
@@ -93,3 +94,25 @@ def test_cli_reports_the_given_ids_and_member(tmp_path):
     assert result['member']=='minh' and result['counts']['assigned']==2
     assert result['range']=={'first':'2508.02872','last':'2508.02873'}
     assert result['crawl']['note']=='Colab run X' and result['benchmark']['segments']==1
+
+
+def test_version_sizes_cover_the_same_versions_as_publication_sizes(tmp_path):
+    """Per-Version means divide the same byte totals by the number of Versions."""
+    discovery, refs = Mock(), Mock()
+    discovery.discover.side_effect=lambda pid:Publication(
+        pid,'T',['A'],'2025-08-04',['2025-08-05'] if pid.endswith('2') else [],None,
+        2 if pid.endswith('2') else 1)
+    refs.references.return_value=[]
+    body=b'\\documentclass{article}'
+    http=HttpClient('offline',min_interval=0,transport=lambda *_:HttpResponse(200,{},body))
+    pipeline=CrawlPipeline(discovery,ArxivSourceDownloader(http,tmp_path/'raw'),tmp_path,refs)
+    ids=['2508.02872','2508.02873']
+    pipeline.crawl_ids(ids)
+    pipeline.export(ids)
+    storage=snapshot(tmp_path,ids)['storage']
+    assert storage['complete_publication_before_bytes']['n']==2
+    assert storage['complete_publication_before_bytes']['sum']==3*len(body)
+    for field in ('sized_version_before_bytes','sized_version_downloaded_bytes','sized_version_after_bytes'):
+        assert storage[field]['n']==3 and storage[field]['mean']==len(body)
+    assert storage['complete_version_retained_bytes']['n']==3
+    assert storage['complete_version_retained_bytes']['sum']==storage['complete_publication_retained_bytes']['sum']
