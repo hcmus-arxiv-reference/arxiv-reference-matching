@@ -10,27 +10,37 @@ bằng pipeline học máy.
 - [Milestone 3: Matching](https://hcmus-cs-ta.github.io/lab-book/intro-ds/statement/matching/)
 
 Nhóm trưởng: [NTBao-coder](https://github.com/NTBao-coder). Thành viên:
-[ngochai06](https://github.com/ngochai06), [nhminh107](https://github.com/nhminh107),
-[langtucod0n](https://github.com/langtucod0n).
+[hohuunghiem](https://github.com/hohuunghiem), [ngochai06](https://github.com/ngochai06),
+[nhminh107](https://github.com/nhminh107), [langtucod0n](https://github.com/langtucod0n).
+Range của từng người: [`configs/ranges.toml`](configs/ranges.toml).
 
-## Trạng thái (2026-11-02)
+Báo cáo (Jupyter Book):
+<https://hcmus-arxiv-reference.github.io/Jupyter-Notebook-report-for-mile1/>.
+
+## Trạng thái (2026-11-10)
 
 - **M1 – Crawling:** `src/crawl/` là Engine duy nhất trên `main`
-  ([ADR 0001](docs/adr/0001-src-crawl-la-khung-duy-nhat.md)). Discovery theo lô
-  (`BatchedDiscovery`) và tải references song song với source là đóng góp của Liễu
-  (`langtucod0n`), nay là cách cài đặt mặc định của `CrawlPipeline`; mọi lệnh crawl
-  (`src.milestone1_crawler`, `scripts.crawl_range`, `scripts.crawl`) đều dùng chúng. Range của Bảo (`2508.02872`–`2508.07871`):
-  lần kiểm tra 25/10 có 4.941/5.000 Publication hoàn chỉnh; 59 Publication còn
-  thiếu, phần lớn do arXiv trả HTTP 404 ([lượt thử](docs/m1-standalone-trial.md)).
-  Range của các thành viên khác chưa gộp.
+  ([ADR 0001](docs/adr/0001-src-crawl-la-khung-duy-nhat.md)); mọi lệnh crawl
+  (`src.milestone1_crawler`, `scripts.crawl_range`, `scripts.crawl`) đều chạy `CrawlPipeline`.
+  Discovery theo lô (`BatchedDiscovery`) và tải references song song với source là
+  đóng góp của Liễu (`langtucod0n`), nay là cách cài đặt mặc định.
+  - Range của Bảo (`2508.02872`–`2508.07871`): snapshot 25/10 có 4.941/5.000
+    Publication hoàn chỉnh; 59 Publication còn thiếu, phần lớn do arXiv trả HTTP 404
+    ([lượt thử](docs/m1-standalone-trial.md)).
+  - Benchmark chính thức: mỗi thành viên chạy notebook Colab trên Range của mình ở tag
+    `m1-bench-v2`, hạn 17/11/2026. Kết quả được chép vào repo báo cáo.
 - **M2 – Parsing:** mới có lớp gom source của một Version
   ([mô tả](docs/milestone2-source.md)) và kiểu cột M2 trong `src/common/schema.py`.
-  Chưa có parser cây phân cấp hay BibTeX.
+  Chưa có parser cây phân cấp hay BibTeX. Phân công và interface:
+  [m2-cong-viec](docs/m2-cong-viec.md), [m2-interfaces](docs/m2-interfaces.md).
 - **M3 – Matching:** chưa bắt đầu.
-- Kế hoạch merge đang thực hiện và các việc còn mở:
-  [handoff 2026-11-01](docs/handoff/2026-11-01-merge-lieu.md).
+- Tag đã chốt: `m1-crawl-v1` (Engine M1), `m1-bench-v2` (code benchmark Colab;
+  `m1-bench-v1` đã thay thế).
 
 ## Cài đặt và kiểm thử
+
+Cần **Python 3.12 trở lên** (CI kiểm thử trên 3.12 và 3.13). Dependency nằm trong
+`requirements.txt`: `pyarrow`, `python-dotenv`, `huggingface_hub`, `filelock`, `psutil`, `pytest`.
 
 ```sh
 python3 -m venv .venv
@@ -38,7 +48,7 @@ python3 -m venv .venv
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q
 ```
 
-Nếu đường dẫn repo chứa dấu `:` (như `HK1_26:27`), Python không tạo được
+Nếu đường dẫn repo chứa dấu `:` (ví dụ `HK1_26:27`), Python không tạo được
 virtualenv tại đó. Tạo ở đường dẫn khác, ví dụ `python3 -m venv /tmp/arxiv-venv`,
 rồi thay `.venv/bin/python` bằng `/tmp/arxiv-venv/bin/python`.
 
