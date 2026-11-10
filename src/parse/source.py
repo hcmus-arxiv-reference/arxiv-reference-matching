@@ -15,11 +15,14 @@ import re
 
 from src.common.corpus import verified_source
 
-ASSEMBLER_VERSION = "1"
+ASSEMBLER_VERSION = "2"
 _VERBATIM = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"}
 _DEFINITIONS = {"newcommand", "renewcommand", "providecommand", "DeclareRobustCommand",
                 "DeclareMathOperator", "newenvironment", "renewenvironment"}
 _FLOW = re.compile(r"\\(?:input|include|documentclass|endinput|includeonly)\b")
+_UNSUPPORTED_CONTROL = {"catcode", "csname", "scantokens", "import", "subimport",
+                        "InputIfFileExists", "IfFileExists"}
+_DYNAMIC_FLOW = re.compile(r"\\(?:" + "|".join(sorted(_UNSUPPORTED_CONTROL)) + r")\b")
 
 
 @dataclass(frozen=True)
@@ -74,6 +77,7 @@ class _Scan:
     issues: list[Issue]
     stop: int
     ends_document: bool = False
+    begins_document: bool = False
 
 
 def _control(text: str, start: int) -> tuple[str, int]:
@@ -158,6 +162,8 @@ def _scan(text: str, file: str) -> _Scan:
                 if name == "end" and environment == "document" and active:
                     result.stop, result.ends_document = end, True
                     break
+                if name == "begin" and environment == "document" and active:
+                    result.begins_document = True
                 cursor = end; continue
             if name in _DEFINITIONS or name in {"def", "gdef", "edef", "xdef"}:
                 if cursor < len(text) and text[cursor] == "*":
@@ -207,7 +213,7 @@ def _scan(text: str, file: str) -> _Scan:
                     else:
                         cursor += 1
                 continue
-            if name.startswith("if"):
+            if name.startswith("if") and name != "iff":
                 value = {"iftrue": True, "iffalse": False}.get(name)
                 if active and value is None:
                     issue("unsupported_conditional", start, f"\\{name}: neither branch is expanded")
@@ -224,8 +230,13 @@ def _scan(text: str, file: str) -> _Scan:
                 conditions.pop(); continue
             if not active:
                 continue
-            if name in {"catcode", "csname", "scantokens", "import", "subimport",
-                        "InputIfFileExists", "IfFileExists", "AtBeginDocument", "AtEndDocument"}:
+            if name in {"AtBeginDocument", "AtEndDocument"}:
+                body, cursor = _group(text, cursor)
+                # Hooks run later; never expand their inputs at registration time.
+                if _FLOW.search(body) or _DYNAMIC_FLOW.search(body):
+                    issue("unsupported_control", start, f"\\{name} can change the compilation path")
+                continue
+            if name in _UNSUPPORTED_CONTROL:
                 issue("unsupported_control", start, f"\\{name} can change the compilation path")
             if name == "endinput":
                 tail = text[cursor:].split("\n", 1)[0].split("%", 1)[0]
@@ -318,12 +329,23 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
             problem("invalid_root", root_file, "Explicit root must be an inventoried TeX file with documentclass")
             return result
         selected = root_file
-    elif len(candidates) != 1:
+    else:
+        complete = [name for name in candidates
+                    if scans[name].begins_document and scans[name].ends_document]
+        # A competing root may put its document body in an included file.
+        templates_only = all(
+            not scans[name].begins_document and not scans[name].ends_document
+            and not scans[name].issues
+            and not any(c.name in {"input", "include"} for c in scans[name].commands)
+            for name in candidates if name not in complete
+        )
+        if len(candidates) > 1 and len(complete) == 1 and templates_only:
+            candidates = complete
+        selected = candidates[0] if len(candidates) == 1 else None
+    if selected is None:
         problem("ambiguous_root" if candidates else "missing_root", "",
                 f"Expected one root; candidates: {candidates}")
         return result
-    else:
-        selected = candidates[0]
     result.root = selected
     working = (base / selected).parent
     include_only: set[str] | None = None
@@ -357,6 +379,8 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
             if any(p.is_symlink() for p in (path, *path.parents)):
                 raise ValueError("Symlink in include path")
             relative = path.resolve().relative_to(base).as_posix()
+            if path.is_file() and relative not in texts:
+                raise ValueError(f"Input is not an inventoried TeX file: {argument}")
             if relative in texts and relative not in candidates:
                 candidates.append(relative)
         if not candidates:
@@ -409,7 +433,11 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
                     if stopped:
                         return True
             except (ValueError, FileNotFoundError) as error:
-                problem("include_error", name, str(error), line=line)
+                if isinstance(error, FileNotFoundError) and Path(command.argument).suffix.lower() == ".bbl":
+                    entry["status"] = "missing_bbl"
+                    problem("missing_bbl", name, str(error), "warning", line=line)
+                else:
+                    problem("include_error", name, str(error), line=line)
                 emit(name, command.start, command.end)
             position = command.end
         emit(name, position, scan.stop)
