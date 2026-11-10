@@ -93,6 +93,7 @@ def test_public_cli_resumes_existing_cache_without_network(tmp_path, monkeypatch
     assert (tmp_path/'raw/2508-02872/v1/source.json').read_bytes() == before
     report = json.loads((tmp_path/'manifests/range-run.json').read_text())
     assert report['visited_this_pass'] == 0 and report['counts']['complete'] == 1
+    assert report['engine'] == 'main'   # the CLI runs CrawlPipeline, not the legacy alias
 
 
 def test_s2_failure_is_pending_and_retry_keeps_source(tmp_path):

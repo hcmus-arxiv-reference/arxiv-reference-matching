@@ -16,10 +16,6 @@ from src.crawl.source import ArxivSourceDownloader
 from src.crawl.storage import require_id
 
 
-
-from src.crawl.lieu_pipeline import LieuPipeline
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--id", action="append", dest="ids")
@@ -57,7 +53,8 @@ def main(argv=None):
     arxiv = HttpClient(settings.user_agent(), min_interval=3.1)
     s2 = HttpClient(settings.user_agent(), min_interval=1.1 if settings.s2_api_key else 3.1,
                     headers={"x-api-key": settings.s2_api_key} if settings.s2_api_key else {})
-    pipeline = LieuPipeline(BatchedDiscovery(arxiv, args.discover_batch),
+    # Engine on main (ADR 0001); range-run.json and the M1 report record engine="main".
+    pipeline = CrawlPipeline(BatchedDiscovery(arxiv, args.discover_batch),
         ArxivSourceDownloader(arxiv, settings.data_dir / "raw"), settings.data_dir,
         SemanticScholarClient(s2))
 

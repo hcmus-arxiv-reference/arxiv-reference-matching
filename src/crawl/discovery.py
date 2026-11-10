@@ -90,7 +90,9 @@ class BatchedDiscovery(ArxivDiscovery):
     entries fall back to individual queries; a missing batch result is never
     sufficient evidence that a Publication does not exist. All arXiv requests,
     including revision lookups/source downloads, share one client and the
-    process-wide rate limiter. batch_size=0 disables batching.
+    process-wide rate limiter. batch_size=0 disables batching. Each batch sets
+    ``max_results`` to its size: without it the API caps the reply at 10 entries
+    and the remaining IDs silently fall back to one request each.
     """
 
     def __init__(self, client: HttpClient, batch_size: int = 50) -> None:
@@ -108,7 +110,9 @@ class BatchedDiscovery(ArxivDiscovery):
         for start in range(0, len(ids), self.batch_size):
             chunk = ids[start:start + self.batch_size]
             try:
-                response = self.client.get(f"{self.endpoint}?{urlencode({'id_list': ','.join(chunk)})}")
+                # arXiv returns 10 entries unless max_results is set, even for id_list.
+                query = urlencode({"id_list": ",".join(chunk), "max_results": len(chunk)})
+                response = self.client.get(f"{self.endpoint}?{query}")
                 if response.status != 200:
                     raise HttpStatusError(response.status, "arXiv batch metadata")
                 root = ET.fromstring(response.body)

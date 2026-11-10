@@ -110,7 +110,7 @@ def test_public_cli_passes_cross_month_ids_to_runner(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, 'member_ids', lambda name: member_ids(name, path))
     monkeypatch.setattr(cli, 'HttpClient', Mock())
     pipeline = Mock()
-    monkeypatch.setattr(cli, 'LieuPipeline', Mock(return_value=pipeline))
+    monkeypatch.setattr(cli, 'CrawlPipeline', Mock(return_value=pipeline))
     monkeypatch.setattr(cli.signal, 'signal', lambda *args: None)
     run = Mock(return_value={'status': 'complete'})
     monkeypatch.setattr(runner, 'run_range', run)

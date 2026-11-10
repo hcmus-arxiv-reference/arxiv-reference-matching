@@ -26,7 +26,9 @@ Dung lượng (ba số, so trên cùng tập Publication):
     bytes_after       tổng .tex/.bib đã giữ
 Hai số đầu lấy từ `source.json`; Version tải trước khi có hai trường này cho null,
 và Publication có một Version như vậy bị loại khỏi phép so trước/sau.
-Thời gian và RAM lấy từ harness `src.benchmark`, không có trong Manifest.
+Thời gian xử lý từng Publication và thời gian Discovery lấy từ `manifests/timings.jsonl`
+(Engine ghi mỗi lần thăm một Publication; bị ngắt rồi chạy lại thì cộng các lần thăm).
+Wall time cả lượt, RAM và disk lấy từ harness `src.benchmark`, không có trong Manifest.
 """
 import argparse
 import csv
@@ -40,7 +42,7 @@ from src.crawl.storage import key
 CSV_COLUMNS = [
     "id", "status", "n_versions", "versions_with_tex", "versions_non_tex",
     "versions_unavailable", "bytes_downloaded", "bytes_before", "bytes_after",
-    "n_refs", "n_refs_with_arxiv_id", "n_references",
+    "n_refs", "n_refs_with_arxiv_id", "n_references", "seconds", "discovery_seconds",
 ]
 SOURCE_OK = {"success", "non_tex"}
 
@@ -72,6 +74,21 @@ def load_manifest(path):
             raise ValueError(f"Corrupt manifest line {index + 1}") from None
         records[(rec["arxiv_id"], rec.get("version"), rec.get("kind", "source"))] = rec
     return records
+
+
+def load_timings(path):
+    """Tổng (seconds, discovery_seconds) theo arxiv_id; bỏ dòng cuối nếu đang ghi dở."""
+    totals = {}
+    if not path.exists():
+        return totals
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        seconds, discovery = totals.get(rec["arxiv_id"], (0.0, 0.0))
+        totals[rec["arxiv_id"]] = (seconds + rec["seconds"], discovery + rec["discovery_seconds"])
+    return totals
 
 
 def _read_json(path):
@@ -146,9 +163,16 @@ def collect(data_dir, ids=None):
     """Dòng thống kê cho `ids`, hoặc mọi Publication đã có bản ghi discovery."""
     data_dir = Path(data_dir)
     records = load_manifest(data_dir / "manifests" / "crawl.jsonl")
+    timings = load_timings(data_dir / "manifests" / "timings.jsonl")
     if ids is None:
         ids = sorted({k[0] for k in records if k[2] == "discovery"})
-    return [publication_row(data_dir, records, i) for i in dict.fromkeys(ids)]
+    rows = []
+    for arxiv_id in dict.fromkeys(ids):
+        row = publication_row(data_dir, records, arxiv_id)
+        if arxiv_id in timings:
+            row["seconds"], row["discovery_seconds"] = (round(v, 3) for v in timings[arxiv_id])
+        rows.append(row)
+    return rows
 
 
 def count_done(data_dir):
@@ -175,6 +199,8 @@ def summarize(rows, requested=None):
     with_refs = [r for r in rows if r["n_refs"] is not None]
     # Before/after are compared on the same Publications only.
     sized = [r for r in done if r["bytes_before"] is not None]
+    timed = [r for r in rows if r.get("seconds") is not None]
+    seconds = [r["seconds"] for r in timed]
     before_total = sum(r["bytes_before"] for r in sized)
     return {
         "papers_requested": requested,
@@ -196,6 +222,14 @@ def summarize(rows, requested=None):
         "avg_references_per_paper": avg([r.get("n_references") for r in with_refs]),
         "papers_with_ref_metadata": len(with_refs),
         "ref_metadata_rate": ratio(len(with_refs), len(discovered)),
+        # Timing from manifests/timings.jsonl, over every visited Publication (any status).
+        "papers_timed": len(timed),
+        "total_seconds_timed": round(sum(seconds), 1) if timed else None,
+        "avg_seconds_per_paper": avg(seconds),
+        "median_seconds_per_paper": round(statistics.median(seconds), 3) if timed else None,
+        "max_seconds_per_paper": max(seconds, default=None),
+        "discovery_seconds_total": (round(sum(r["discovery_seconds"] for r in timed), 1)
+                                    if timed else None),
     }
 
 
