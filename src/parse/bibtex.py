@@ -19,7 +19,7 @@ from src.common.schema import require_id
 from .normalize import _group_end, _space_end, normalize
 
 try:
-    from .types import BibResult, BibSource
+    from parse.types import BibResult, BibSource
 except ModuleNotFoundError as error:
     if error.name != f"{__package__}.types":
         raise

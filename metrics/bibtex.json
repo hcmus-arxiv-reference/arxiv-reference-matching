@@ -139,7 +139,7 @@
     "shared_types_available": true,
     "shared_types_sha256": "078e9c1f33e15a2c3105a58cbcade8538bcd3c79bc8675e253dfea5d9ed7b8a9"
   },
-  "commit": "5837ab9719fee8964dea24179934a08861a5322c",
+  "commit": "af96a9901abe664af4a1f9422a872c084f112045",
   "duplicates_removed": 256369,
   "entry_after": 155529,
   "entry_before": 411898,
@@ -322,10 +322,10 @@
   },
   "timing": {
     "label": "bibtex sample",
-    "merge_seconds": 59.630628,
+    "merge_seconds": 59.141992,
     "peak_rss_mb": null,
-    "repeat_merge_seconds": 63.602662,
-    "seconds": 132.37361490000148
+    "repeat_merge_seconds": 66.021963,
+    "seconds": 132.79647060000025
   },
   "unresolved": 1273,
   "unresolved_by_reason": {
