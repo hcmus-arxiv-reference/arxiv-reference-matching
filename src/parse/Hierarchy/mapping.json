@@ -1,0 +1,123 @@
+{
+  "description": "Ánh xạ nền tảng từ lệnh và môi trường LaTeX sang các loại Element trong schema hiện tại. Đây là cấu hình cho Parser, chưa phải bộ phân tích cú pháp.",
+  "sources": [
+    "parsing.md",
+    "src/common/schema.py",
+    "docs/data-contract.md",
+    "docs/m2-cong-viec.md"
+  ],
+  "groups": {
+    "root": ["document"],
+    "heading": ["chapter", "section", "subsection", "subsubsection", "paragraph"],
+    "container": ["itemize", "item"],
+    "leaf": ["sentence", "formula", "figure"]
+  },
+  "commands": {
+    "\\chapter": {"kind": "chapter", "level": 1, "content": "title"},
+    "\\chapter*": {"kind": "chapter", "level": 1, "content": "title"},
+    "\\section": {"kind": "section", "level": 2, "content": "title"},
+    "\\section*": {"kind": "section", "level": 2, "content": "title"},
+    "\\subsection": {"kind": "subsection", "level": 3, "content": "title"},
+    "\\subsection*": {"kind": "subsection", "level": 3, "content": "title"},
+    "\\subsubsection": {"kind": "subsubsection", "level": 4, "content": "title"},
+    "\\subsubsection*": {"kind": "subsubsection", "level": 4, "content": "title"},
+    "\\paragraph": {"kind": "paragraph", "level": 5, "content": "title"},
+    "\\paragraph*": {"kind": "paragraph", "level": 5, "content": "title"},
+    "\\item": {"kind": "item", "content": "", "children": "parsed_body", "parent_kind": "itemize"}
+  },
+  "environments": {
+    "document": {"kind": "document", "content": "", "children": "parsed_body"},
+    "itemize": {"kind": "itemize", "content": "", "children": "items"},
+    "equation": {"kind": "formula", "atomic": true, "content": "whole_environment"},
+    "equation*": {"kind": "formula", "atomic": true, "content": "whole_environment"},
+    "displaymath": {"kind": "formula", "atomic": true, "content": "whole_environment"},
+    "align": {"kind": "formula", "content": "whole_environment", "segmentation": "pending"},
+    "align*": {"kind": "formula", "content": "whole_environment", "segmentation": "pending"},
+    "gather": {"kind": "formula", "content": "whole_environment", "segmentation": "pending"},
+    "gather*": {"kind": "formula", "content": "whole_environment", "segmentation": "pending"},
+    "multline": {"kind": "formula", "content": "whole_environment", "segmentation": "pending"},
+    "multline*": {"kind": "formula", "content": "whole_environment", "segmentation": "pending"},
+    "eqnarray": {"kind": "formula", "content": "whole_environment", "segmentation": "pending"},
+    "eqnarray*": {"kind": "formula", "content": "whole_environment", "segmentation": "pending"},
+    "figure": {"kind": "figure", "atomic": true, "content": "whole_environment"},
+    "figure*": {"kind": "figure", "atomic": true, "content": "whole_environment"},
+    "table": {"kind": "figure", "atomic": true, "content": "whole_environment"},
+    "table*": {"kind": "figure", "atomic": true, "content": "whole_environment"}
+  },
+  "math_delimiters": {
+    "block": [
+      {"open": "$$", "close": "$$", "kind": "formula", "atomic": true},
+      {"open": "\\[", "close": "\\]", "kind": "formula", "atomic": true}
+    ],
+    "inline": [
+      {"open": "$", "close": "$", "action": "preserve_in_sentence"},
+      {"open": "\\(", "close": "\\)", "action": "preserve_in_sentence"}
+    ]
+  },
+  "sentence": {
+    "kind": "sentence",
+    "source": "body_prose_outside_math_and_atomic_elements",
+    "requires_latex_tag": false,
+    "boundary_candidate": ".",
+    "protected_regions": ["inline_math", "block_math", "latex_commands_and_arguments", "urls", "decimal_numbers", "abbreviations"],
+    "abbreviations": ["i.e.", "e.g.", "et al."],
+    "abbreviation_match": "case_insensitive_literal",
+    "pattern_engine": "python_re",
+    "protected_patterns": [
+      {
+        "name": "figure_reference",
+        "pattern": "(?i)\\bfigs?\\.(?=[\\s~]*(?:\\d|\\\\(?:ref|autoref|cref)\\b))",
+        "note": "Bảo vệ dấu chấm trong Fig./Figs. trước số hình hoặc lệnh tham chiếu, kể cả khoảng trắng, xuống dòng, khoảng trắng không ngắt và dấu ~. Không nuốt dấu chấm kết thúc câu sau số hình."
+      }
+    ],
+    "note": "Dấu chấm chỉ là ứng viên kết thúc câu; không tách bên trong các vùng được bảo vệ. Mỗi câu trong item là con của item."
+  },
+  "heading_rules": {
+    "parent": "nearest_preceding_heading_with_lower_level_or_document",
+    "level_is_relative_rank": true,
+    "starred_creates_same_kind": true,
+    "title_argument": "required_braced_argument",
+    "optional_short_title": "not_used_as_content",
+    "note": "Không tạo heading giả cho cấp bị thiếu; cấp số chỉ biểu thị thứ bậc tương đối."
+  },
+  "exclusions": {
+    "environments": ["thebibliography"],
+    "commands": ["\\bibliography", "\\bibliographystyle", "\\printbibliography", "\\addbibresource"],
+    "heading_titles": ["References", "Bibliography", "Tài liệu tham khảo"],
+    "heading_title_match": "trimmed_case_insensitive_exact",
+    "heading_scope": "heading_and_descendants"
+  },
+  "required_inclusions": {
+    "heading_titles": ["Acknowledgements", "Acknowledgments", "Appendix", "Appendices", "Lời cảm ơn", "Phụ lục"],
+    "include_starred": true,
+    "note": "Giữ nguyên kind và cấp của lệnh heading gốc; tên mục không tự tạo một kind mới."
+  },
+  "normalization_targets": {
+    "inline_math": "$...$",
+    "block_math": "\\begin{equation}...\\end{equation}",
+    "note": "Định dạng đích dành cho bước chuẩn hóa, không thay thế nội dung toán bằng dấu ba chấm."
+  },
+  "pending_decisions": [
+    {
+      "tags": ["enumerate", "description"],
+      "reason": "Kế hoạch M2 đề xuất dùng chung kind itemize, nhưng vẫn liệt kê việc này trong các quyết định chung cần chốt."
+    },
+    {
+      "tags": ["abstract"],
+      "reason": "Vị trí Abstract trong cây chưa được chốt trong tài liệu kế hoạch M2."
+    },
+    {
+      "decision": "multiline_formula_segmentation",
+      "tags": ["align", "align*", "gather", "gather*", "multline", "multline*", "eqnarray", "eqnarray*"],
+      "reason": "Đã ánh xạ các môi trường này sang kind formula; chỉ còn chờ chốt cách tách thành một hay nhiều phần tử. Bước tách câu phải bảo vệ toàn bộ môi trường toán, kể cả khi chưa chốt cách tách formula."
+    },
+    {
+      "tags": ["\\part", "\\part*", "\\subparagraph", "\\subparagraph*"],
+      "reason": "Schema hiện chưa có kind tương ứng; không tự thêm hoặc gộp kind."
+    }
+  ],
+  "unknown_tags": {
+    "action": "preserve_and_report",
+    "note": "Không tự coi tag lạ là sentence, không xóa nội dung và không xử lý như văn xuôi trước khi xác định vai trò."
+  }
+}
