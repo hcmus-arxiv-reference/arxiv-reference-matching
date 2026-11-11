@@ -1,4 +1,4 @@
-# Golden của Source + bản thiết kế kiểm thử Structure
+# Golden của Source, Structure và BibSource
 
 Các chuỗi LaTeX ở đây do người viết test tạo, không lấy từ corpus.
 Mỗi `source.json` chứa `files` (đường dẫn → nội dung fixture) và `expected`
@@ -22,11 +22,17 @@ Assembler dừng ngay sau `\end{document}`; newline sau lệnh này không thu�
 `.bib`, và một bibitem: `\bibitem{one} A. Author. Title. 2020.` (giữ newline
 gốc khi chuyển thành artifact đầy đủ). Các case khác không có trích dẫn.
 
-**Trạng thái 10/11/2026:** bốn golden chạy được cho lớp **Source**. Kỳ vọng
-Structure trên bảng là bản bàn giao để review, chưa phải `B.v1.json`/`B'.v1.json`
-đã qua validator. `types.py` chưa có trên main tại commit `12ffdd9`; người dùng
-chọn làm Source và golden trước, chờ hợp đồng chung được merge rồi mới làm
-Structure. Không coi test Source xanh là đã đạt golden của cả gói M2.2.
+Mỗi case có hai đáp án viết trước parser. `B.v1.json` chứa cây và các vùng
+bị loại. `B'.v1.json` chứa dữ liệu trích dẫn của cùng Version. ID của bốn
+case chỉ dùng để phân biệt fixture. Span đếm ký tự trong `expected.text`
+theo khoảng [start, end). Các mẫu giữ newline cuối đoạn văn. Trong case
+verbatim, comment được thay bằng khoảng trắng cùng độ dài. Trong case phụ
+lục, lệnh chuyển chế độ `\appendix` được ghi riêng ở `dropped`; Proof vẫn
+là section của document.
+
+Kiểm tra đầu vào và đáp án với
+`python -m pytest -q tests/test_parse_source.py tests/test_parse_structure.py -k golden`.
+Mốc 16/11 sẽ so kết quả thực tế của `build_structure()` với hai đáp án.
 
 Nguồn yêu cầu: [m2-interfaces](../../../docs/m2-interfaces.md),
 [issue #30](https://github.com/hcmus-arxiv-reference/arxiv-reference-matching/issues/30).
