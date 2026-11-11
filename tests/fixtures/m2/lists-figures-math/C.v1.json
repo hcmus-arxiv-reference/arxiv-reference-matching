@@ -1,0 +1,289 @@
+{
+  "arxiv_id": "2501.00001",
+  "version": 1,
+  "root": {
+    "kind": "document",
+    "title_raw": "",
+    "starred": false,
+    "span": [
+      69,
+      1139
+    ],
+    "children": [
+      {
+        "kind": "section",
+        "title_raw": "Examples",
+        "starred": false,
+        "span": [
+          87,
+          1123
+        ],
+        "children": [
+          {
+            "kind": "sentence",
+            "raw": "We use $x=3.14$ in this example.",
+            "span": [
+              107,
+              139
+            ]
+          },
+          {
+            "kind": "sentence",
+            "raw": "The value stays fixed.",
+            "span": [
+              140,
+              162
+            ]
+          },
+          {
+            "kind": "itemize",
+            "span": [
+              164,
+              417
+            ],
+            "children": [
+              {
+                "kind": "item",
+                "span": [
+                  182,
+                  235
+                ],
+                "children": [
+                  {
+                    "kind": "sentence",
+                    "raw": "First outer item.",
+                    "span": [
+                      188,
+                      205
+                    ]
+                  },
+                  {
+                    "kind": "sentence",
+                    "raw": "It contains two sentences.",
+                    "span": [
+                      206,
+                      232
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "item",
+                "span": [
+                  235,
+                  404
+                ],
+                "children": [
+                  {
+                    "kind": "sentence",
+                    "raw": "Second outer item.",
+                    "span": [
+                      241,
+                      259
+                    ]
+                  },
+                  {
+                    "kind": "itemize",
+                    "span": [
+                      264,
+                      403
+                    ],
+                    "children": [
+                      {
+                        "kind": "item",
+                        "span": [
+                          286,
+                          331
+                        ],
+                        "children": [
+                          {
+                            "kind": "sentence",
+                            "raw": "First inner item with \\(y=2.5\\).",
+                            "span": [
+                              292,
+                              324
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "kind": "item",
+                        "span": [
+                          331,
+                          390
+                        ],
+                        "children": [
+                          {
+                            "kind": "sentence",
+                            "raw": "Second inner item.",
+                            "span": [
+                              337,
+                              355
+                            ]
+                          },
+                          {
+                            "kind": "sentence",
+                            "raw": "It contains another sentence.",
+                            "span": [
+                              356,
+                              385
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "itemize",
+            "span": [
+              419,
+              507
+            ],
+            "children": [
+              {
+                "kind": "item",
+                "span": [
+                  439,
+                  465
+                ],
+                "children": [
+                  {
+                    "kind": "sentence",
+                    "raw": "Prepare the data.",
+                    "span": [
+                      445,
+                      462
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "item",
+                "span": [
+                  465,
+                  492
+                ],
+                "children": [
+                  {
+                    "kind": "sentence",
+                    "raw": "Evaluate the method.",
+                    "span": [
+                      471,
+                      491
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "itemize",
+            "span": [
+              509,
+              615
+            ],
+            "children": [
+              {
+                "kind": "item",
+                "span": [
+                  531,
+                  568
+                ],
+                "children": [
+                  {
+                    "kind": "sentence",
+                    "raw": "A sequence of values.",
+                    "span": [
+                      544,
+                      565
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "item",
+                "span": [
+                  568,
+                  598
+                ],
+                "children": [
+                  {
+                    "kind": "sentence",
+                    "raw": "A single score.",
+                    "span": [
+                      582,
+                      597
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "figure",
+            "raw": "\\begin{figure}\n  \\centering\n  \\includegraphics{example-image}\n  \\caption{A sample figure. Its caption stays inside the figure.}\n  \\label{fig:sample}\n\\end{figure}",
+            "span": [
+              617,
+              778
+            ]
+          },
+          {
+            "kind": "figure",
+            "raw": "\\begin{table}\n  \\centering\n  \\begin{tabular}{cc}\n    Method & Score \\\\\n    A & 3.14 \\\\\n  \\end{tabular}\n  \\caption{A sample table. Its caption stays inside the table.}\n\\end{table}",
+            "span": [
+              780,
+              958
+            ]
+          },
+          {
+            "kind": "formula",
+            "raw": "\\begin{equation}\n  z = x + y\n\\end{equation}",
+            "span": [
+              960,
+              1003
+            ]
+          },
+          {
+            "kind": "formula",
+            "raw": "$$\n  a = b + c\n$$",
+            "span": [
+              1005,
+              1022
+            ]
+          },
+          {
+            "kind": "formula",
+            "raw": "\\[\n  p = q + r\n\\]",
+            "span": [
+              1024,
+              1041
+            ]
+          },
+          {
+            "kind": "formula",
+            "raw": "\\begin{align*}\n  u &= v + w \\\\\n  s &= t + 1\n\\end{align*}",
+            "span": [
+              1043,
+              1099
+            ]
+          },
+          {
+            "kind": "sentence",
+            "raw": "The example ends here.",
+            "span": [
+              1101,
+              1123
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "dropped": [],
+  "issues": [],
+  "leaves_version": "1"
+}

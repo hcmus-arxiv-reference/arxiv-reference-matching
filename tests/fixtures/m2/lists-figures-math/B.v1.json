@@ -1,0 +1,128 @@
+{
+  "arxiv_id": "2501.00001",
+  "version": 1,
+  "root": {
+    "kind": "document",
+    "title_raw": "",
+    "starred": false,
+    "span": [
+      69,
+      1139
+    ],
+    "children": [
+      {
+        "kind": "section",
+        "title_raw": "Examples",
+        "starred": false,
+        "span": [
+          87,
+          1123
+        ],
+        "children": [
+          {
+            "type": "text",
+            "env": null,
+            "raw": "We use $x=3.14$ in this example. The value stays fixed.",
+            "span": [
+              107,
+              162
+            ]
+          },
+          {
+            "type": "env",
+            "env": "itemize",
+            "raw": "\\begin{itemize}\n  \\item First outer item. It contains two sentences.\n  \\item Second outer item.\n    \\begin{itemize}\n      \\item First inner item with \\(y=2.5\\).\n      \\item Second inner item. It contains another sentence.\n    \\end{itemize}\n\\end{itemize}",
+            "span": [
+              164,
+              417
+            ]
+          },
+          {
+            "type": "env",
+            "env": "enumerate",
+            "raw": "\\begin{enumerate}\n  \\item Prepare the data.\n  \\item Evaluate the method.\n\\end{enumerate}",
+            "span": [
+              419,
+              507
+            ]
+          },
+          {
+            "type": "env",
+            "env": "description",
+            "raw": "\\begin{description}\n  \\item[Input] A sequence of values.\n  \\item[Output] A single score.\n\\end{description}",
+            "span": [
+              509,
+              615
+            ]
+          },
+          {
+            "type": "env",
+            "env": "figure",
+            "raw": "\\begin{figure}\n  \\centering\n  \\includegraphics{example-image}\n  \\caption{A sample figure. Its caption stays inside the figure.}\n  \\label{fig:sample}\n\\end{figure}",
+            "span": [
+              617,
+              778
+            ]
+          },
+          {
+            "type": "env",
+            "env": "table",
+            "raw": "\\begin{table}\n  \\centering\n  \\begin{tabular}{cc}\n    Method & Score \\\\\n    A & 3.14 \\\\\n  \\end{tabular}\n  \\caption{A sample table. Its caption stays inside the table.}\n\\end{table}",
+            "span": [
+              780,
+              958
+            ]
+          },
+          {
+            "type": "env",
+            "env": "equation",
+            "raw": "\\begin{equation}\n  z = x + y\n\\end{equation}",
+            "span": [
+              960,
+              1003
+            ]
+          },
+          {
+            "type": "display_math",
+            "env": null,
+            "raw": "$$\n  a = b + c\n$$",
+            "span": [
+              1005,
+              1022
+            ]
+          },
+          {
+            "type": "display_math",
+            "env": null,
+            "raw": "\\[\n  p = q + r\n\\]",
+            "span": [
+              1024,
+              1041
+            ]
+          },
+          {
+            "type": "env",
+            "env": "align*",
+            "raw": "\\begin{align*}\n  u &= v + w \\\\\n  s &= t + 1\n\\end{align*}",
+            "span": [
+              1043,
+              1099
+            ]
+          },
+          {
+            "type": "text",
+            "env": null,
+            "raw": "The example ends here.",
+            "span": [
+              1101,
+              1123
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "dropped": [],
+  "issues": [],
+  "structure_version": "1"
+}
