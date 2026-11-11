@@ -1,0 +1,25 @@
+{
+  "status": "ready",
+  "root": "main.tex",
+  "text": "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nWe follow Smith et al.~\\cite{smith20}.\nThe loss is $L=\\|x\\|^2$ .\n\\section*{References}\n\\begin{thebibliography}{1}\n\\bibitem{smith20} J. Smith. Title. 2020.\n\\end{thebibliography}\n\\end{document}",
+  "files": [
+    "main.tex"
+  ],
+  "unused_tex_files": [],
+  "spans": [
+    {
+      "output_start": 0,
+      "output_end": 248,
+      "file": "main.tex",
+      "source_start": 0,
+      "source_end": 248,
+      "line": 1
+    }
+  ],
+  "issues": [],
+  "includes": [],
+  "checksums": {
+    "main.tex": "ff51cadac8c944e1f8bcfac7f6e7cb8f930e26fdd1a7e48551f603f01612fea8"
+  },
+  "assembler_version": "1"
+}

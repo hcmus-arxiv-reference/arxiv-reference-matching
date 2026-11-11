@@ -15,10 +15,12 @@ Source:
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+import hashlib
+import json
 import re
-from typing import Any
+from typing import Any, Sequence
 
-from src.common.schema import from_records, require_id
+from src.common.schema import from_records, make_element_id, require_id
 from src.parse.source import Issue, SourceBundle, Span
 
 TYPES_VERSION = "1"
@@ -988,6 +990,27 @@ def validate_D(
     return _finish(errors, raise_on_error)
 
 
+def compute_element_id(
+    arxiv_id: str,
+    kind: str,
+    content: str,
+    child_ids: Sequence[str] | None = None,
+) -> str:
+    """Băm cây con tất định theo hợp đồng C1: `<publication_key>#<kind>-<16 hex sha256>`.
+
+    - Lá (`sentence`, `formula`, `figure`): băm `(kind, content)`.
+    - Nút cấu trúc (`document`, `section`..., `itemize`, `item`): băm `(kind, content, list(child_ids))`.
+    """
+    require_id(arxiv_id)
+    if kind in LEAF_KINDS:
+        payload = [kind, content]
+    else:
+        payload = [kind, content, list(child_ids or ())]
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    digest16 = hashlib.sha256(encoded).hexdigest()[:16]
+    return make_element_id(arxiv_id, f"{kind}-{digest16}")
+
+
 __all__ = [
     "TYPES_VERSION",
     "SECTION_KINDS",
@@ -1013,4 +1036,5 @@ __all__ = [
     "validate_Bp",
     "validate_C",
     "validate_D",
+    "compute_element_id",
 ]

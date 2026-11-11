@@ -1,0 +1,25 @@
+{
+  "status": "ready",
+  "root": "main.tex",
+  "text": "\\documentclass{article}\n\\begin{document}\n\\section{Method}\nWe propose a method.\n\\end{document}\n",
+  "files": [
+    "main.tex"
+  ],
+  "unused_tex_files": [],
+  "spans": [
+    {
+      "output_start": 0,
+      "output_end": 94,
+      "file": "main.tex",
+      "source_start": 0,
+      "source_end": 94,
+      "line": 1
+    }
+  ],
+  "issues": [],
+  "includes": [],
+  "checksums": {
+    "main.tex": "7ec79d84ce5e0fc9702986b02fc359cb9873d5d16acaf184633b3911d92e3a5e"
+  },
+  "assembler_version": "1"
+}
