@@ -70,16 +70,76 @@ def test_main_class_and_location_preferences(tmp_path, files, main):
     assert build_file_tree(tmp_path).main_file == main
 
 
-@pytest.mark.parametrize("body", ["Plain text", r"\input{part}", r"\documentclass{standalone}"])
-def test_main_filename_has_priority_over_documentclass_and_dependencies(tmp_path, body):
+@pytest.mark.parametrize("body", ["Plain text", r"\input{part}"])
+def test_documentclass_has_priority_over_main_filename(tmp_path, body):
     write_files(tmp_path, {
         "main.tex": body,
         "article.tex": r"\documentclass{article}\input{part}\input{extra}",
         "part.tex": "Part", "extra.tex": "Extra",
     })
     result = build_file_tree(tmp_path)
-    assert result.main_file == "main.tex"
-    assert result.input_files == (("part.tex",) if body == r"\input{part}" else ())
+    assert result == FileTree("article.tex", ("part.tex", "extra.tex"))
+
+
+def test_main_filename_breaks_ties_between_documentclass_roots(tmp_path):
+    write_files(tmp_path, {
+        "main.tex": r"\documentclass{article}\input{intro}",
+        "supplementary.tex": r"\documentclass{article}\input{intro}\input{extra}",
+        "intro.tex": "Introduction", "extra.tex": "Extra",
+    })
+    assert build_file_tree(tmp_path) == FileTree("main.tex", ("intro.tex",))
+
+
+def test_main_filename_is_preferred_without_documentclass(tmp_path):
+    write_files(tmp_path, {"main.tex": "Main", "other.tex": r"\input{part}", "part.tex": "Part"})
+    assert build_file_tree(tmp_path) == FileTree("main.tex", ())
+
+
+@pytest.mark.parametrize("selection,expected", [
+    ("intro", ("intro.tex", "note.tex")),
+    ("", ("note.tex",)),
+    (" intro.tex , method ", ("intro.tex", "method.tex", "note.tex")),
+])
+def test_includeonly_filters_include_but_not_input(tmp_path, selection, expected):
+    write_files(tmp_path, {
+        "main.tex": (r"\documentclass{article}" + "\\includeonly{" + selection + "}"
+                     r"\begin{document}\include{intro}\include{method}\input{note}\end{document}"),
+        "intro.tex": "Introduction", "method.tex": "Methods", "note.tex": "Note",
+    })
+    assert build_file_tree(tmp_path) == FileTree("main.tex", expected)
+
+
+def test_includeonly_in_input_preamble_applies_before_following_includes(tmp_path):
+    write_files(tmp_path, {
+        "main.tex": (r"\documentclass{article}\includeonly{intro}\input{settings}"
+                     r"\begin{document}\include{intro}\include{method}\end{document}"),
+        "settings.tex": r"\includeonly{method}",
+        "intro.tex": r"\input{excluded_child}",
+        "excluded_child.tex": "Excluded child",
+        "method.tex": r"\input{parts/detail}",
+        "parts/detail.tex": "Detail",
+    })
+    assert build_file_tree(tmp_path) == FileTree(
+        "main.tex", ("settings.tex", "method.tex", "parts/detail.tex")
+    )
+
+
+def test_commented_includeonly_is_ignored(tmp_path):
+    write_files(tmp_path, {
+        "main.tex": (r"\documentclass{article}" "\n" r"% \includeonly{}" "\n"
+                     r"\include{intro}\include{method}"),
+        "intro.tex": "Introduction", "method.tex": "Methods",
+    })
+    assert build_file_tree(tmp_path).input_files == ("intro.tex", "method.tex")
+
+
+def test_includeonly_is_used_when_ranking_candidate_dependencies(tmp_path):
+    write_files(tmp_path, {
+        "a.tex": r"\documentclass{article}\includeonly{}\include{one}\include{two}",
+        "z.tex": r"\documentclass{article}\input{one}",
+        "one.tex": "One", "two.tex": "Two",
+    })
+    assert build_file_tree(tmp_path) == FileTree("z.tex", ("one.tex",))
 
 
 def test_root_main_filename_preferred_over_nested_main(tmp_path):

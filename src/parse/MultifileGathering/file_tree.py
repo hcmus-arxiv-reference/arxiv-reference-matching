@@ -37,37 +37,48 @@ def _document_class(text: str, offset: int) -> str | None:
 
 def _gather_inputs(main: Path, base: Path, scans: dict, files: set[Path],
                    *, recursive: bool = True) -> tuple[str, ...]:
-    """Follow existing literal inputs once each, preserving compilation order."""
+    """Follow literal inputs in source order, applying includeonly to includes."""
     inputs = []
-    visited = set()
-    pending = [main]
+    input_names = set()
+    visited = {main.resolve()}
+    include_only = None
+    pending = [(main, iter(scans[main].commands))] if main in scans else []
     while pending:
-        path = pending.pop()
-        if path.resolve() in visited:
+        path, commands = pending[-1]
+        command = next(commands, None)
+        if command is None:
+            pending.pop()
             continue
-        visited.add(path.resolve())
-        if path != main:
-            inputs.append(path.relative_to(base).as_posix())
-            if not recursive:
-                continue
-        if path not in scans:
+        if command.name == "includeonly":
+            # Macro expansion is unsupported; only apply literal filename lists.
+            if not any(character in command.argument for character in "\\#{}~$"):
+                include_only = {name.strip().removesuffix(".tex")
+                                for name in command.argument.split(",") if name.strip()}
             continue
-        children = []
-        for command in scans[path].commands:
-            if command.name not in {"input", "include"}:
+        if command.name not in {"input", "include"}:
+            continue
+        if (command.name == "include" and include_only is not None
+                and command.argument.removesuffix(".tex") not in include_only):
+            continue
+        requested = Path(command.argument)
+        if requested.is_absolute():
+            continue
+        if not requested.suffix:
+            requested = requested.with_suffix(".tex")
+        # TeX resolves against the main directory; allow nested local files too.
+        for parent in (main.parent, path.parent):
+            child = (parent / requested).resolve()
+            if not child.is_relative_to(base) or child not in files:
                 continue
-            requested = Path(command.argument)
-            if requested.is_absolute():
-                continue
-            if not requested.suffix:
-                requested = requested.with_suffix(".tex")
-            # TeX resolves against the main directory; allow nested local files too.
-            for parent in (main.parent, path.parent):
-                child = (parent / requested).resolve()
-                if child.is_relative_to(base) and child in files:
-                    children.append(child)
-                    break
-        pending.extend(reversed(children))
+            name = child.relative_to(base).as_posix()
+            if child != main and name not in input_names and (recursive or len(pending) == 1):
+                inputs.append(name)
+                input_names.add(name)
+            if child not in visited:
+                visited.add(child)
+                if child in scans:
+                    pending.append((child, iter(scans[child].commands)))
+            break
     return tuple(inputs)
 
 
@@ -76,9 +87,9 @@ def build_file_tree(
 ) -> FileTree:
     """Scan a folder recursively, return its file tree and write a JSON copy.
 
-    A single file is always the main file. Otherwise, prefer the exact filename
-    main.tex before documentclass, input, then include. Within a priority group,
-    prefer article classes over standalone
+    A single file is always the main file. Otherwise, prefer documentclass,
+    then the exact filename main.tex, then input, then include. Within a priority
+    group, main.tex wins ties before preferring article classes over standalone
     and beamer, then files in the source root, then more unique direct TeX inputs,
     then more recursive TeX dependencies. Relative filename breaks remaining ties.
     Empty folders and folders without a matching candidate produce a null main.
@@ -113,7 +124,7 @@ def build_file_tree(
     main = files[0] if len(files) == 1 else None
     candidate_inputs = {}
     if len(files) > 1:
-        for command in ("main.tex", "documentclass", "input", "include"):
+        for command in ("documentclass", "main.tex", "input", "include"):
             if command == "main.tex":
                 candidates = [path for path in scans if path.name == "main.tex"]
             else:
@@ -125,6 +136,7 @@ def build_file_tree(
                     path: _gather_inputs(path, base, scans, file_set) for path in candidates
                 }
                 main = min(candidates, key=lambda path: (
+                    path.name != "main.tex",
                     document_classes.get(path) in {"standalone", "beamer"},
                     path.parent != base,
                     -sum(Path(name).suffix.lower() == ".tex" for name in
