@@ -44,7 +44,7 @@ except ModuleNotFoundError as error:
         bibtex_version: str
 
 
-BIBTEX_VERSION = "2"
+BIBTEX_VERSION = "3"
 _DOI = re.compile(r"\b10\.\d{4,9}/[^\s{}<>\"\\]+", re.I)
 _URL = re.compile(r"https?://[^\s{}<>\"\\]+", re.I)
 _ARXIV = r"(?:\d{4}\.\d{4,5}|[a-z][a-z.\-]*/\d{7})"
@@ -52,10 +52,16 @@ _ARXIV_LINK = re.compile(rf"(?:arxiv\s*:\s*|arxiv\.org/(?:abs|pdf)/)({_ARXIV})(?
 _YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
 _BIBITEM = re.compile(r"\s*\\bibitem(?![A-Za-z@])")
 _BIBINFO = re.compile(r"\\bibinfo(?![A-Za-z@])")
-_TITLE_QUOTE = re.compile(r"``(.+?)''|“(.+?)”|\"([^\"]+)\"")
-_TITLE_STYLE = re.compile(r"\\(?:emph|textit)(?![A-Za-z@])")
+_TITLE_QUOTE = re.compile(r"``(.+?)''|“(.+?)”|(?<!\\)\"((?:\\.|[^\"\\])+?)\"")
+_TITLE_STYLE = re.compile(r"\\(?:emph|textit|textsl)(?![A-Za-z@])")
+_TITLE_DECLARATION = re.compile(r"\\(?:it|em|sl)(?![A-Za-z@])\s*")
 _COMMA_AUTHOR = re.compile(r"(?:and\s+)?([^,{}\d]+,\s*(?:[A-Z]\.\s*~?\s*)+),\s*")
-_ITALIC_VENUE = re.compile(r"\{\s*\\(?:it|em)\s+")
+_BIBITEM_TOKENS = re.compile(r"\\(?:[A-Za-z@]+|.)|\$\$|[{}$,]|\.(?=\s|$)")
+_PERIOD_WORD = re.compile(r"(?:e\.g|i\.e|[^\W\d_]+)$", re.I)
+_INITIAL = re.compile(r"(?<!\w)(?:[A-Z]|Ya|Yu|Ch|Th)\.")
+_NAME_PARTICLES = {"and", "de", "del", "den", "der", "di", "du", "et", "al", "la", "le", "van", "von"}
+_VOLUME_STYLE = re.compile(r"(?:\{\s*\\bf\s+|\\textbf\s*\{)\s*\d")
+_TRAILING_YEAR = re.compile(r"\s*[,.(]?\s*(?:19|20)\d{2}\b[\s).,]*$")
 _FIELDS = ("entry_type", "title", "authors", "year", "doi", "journal", "url")
 
 
@@ -230,16 +236,27 @@ def _bib_candidates(source: BibSource, issues: list[dict]) -> list[_Candidate]:
     return result
 
 
+def _styled_title(text: str) -> tuple[str, int] | None:
+    """Read a leading scoped LaTeX emphasis without consuming the venue."""
+    if styled := _TITLE_STYLE.match(text):
+        start = _space_end(text, styled.end())
+        if end := _group_end(text, start, "{"):
+            return text[start + 1:end - 1], end
+    if text.startswith("{"):
+        declaration = _TITLE_DECLARATION.match(text, _space_end(text, 1))
+        if declaration and (end := _group_end(text, 0, "{")):
+            return text[declaration.end():end - 1].removesuffix(r"\/"), end
+    return None
+
+
 def _title_text(title: str) -> str | None:
-    title = title.strip(" .,\"`'")
-    if title.startswith("{") and _group_end(title, 0, "{") == len(title):
-        title = title[1:-1].strip()
-    styled = _TITLE_STYLE.match(title)
-    if styled:
-        start = _space_end(title, styled.end())
-        end = _group_end(title, start, "{")
+    title = title.strip(" .,\"\x60'")
+    if styled := _styled_title(title):
+        content, end = styled
         if end == len(title):
-            title = title[start + 1:end - 1]
+            title = content.strip()
+    elif title.startswith("{") and _group_end(title, 0, "{") == len(title):
+        title = title[1:-1].strip()
     return title or None
 
 
@@ -257,6 +274,92 @@ def _bibinfo(body: str) -> dict[str, list[str]]:
     return fields
 
 
+def _bibitem_separators(text: str) -> list[int]:
+    """Find punctuation between fields, outside LaTeX arguments and math."""
+    depth = 0
+    math = ""
+    separators = []
+    for match in _BIBITEM_TOKENS.finditer(text):
+        token = match[0]
+        if token in ("$", "$$"):
+            if not math or math == token:
+                math = "" if math else token
+        elif token == "{":
+            depth += 1
+        elif token == "}":
+            depth -= 1
+        elif not depth and not math and token in (",", "."):
+            pos = match.start()
+            if token == "." and (word := _PERIOD_WORD.search(text, max(0, pos - 8), pos)):
+                if _INITIAL.fullmatch(word[0] + ".") or word[0].casefold() in {"al", "vs", "e.g", "i.e"}:
+                    continue
+            separators.append(pos)
+    return separators
+
+
+def _looks_like_names(text: str) -> bool:
+    # Fold LaTeX name accents and explicit spaces for this boundary check only.
+    text = text.replace(r"\ ", " ").replace("~", " ")
+    text = re.sub(r"\\(?:[A-Za-z@]+[ \t]?|.)", "", text)
+    text = text.replace("{", "").replace("}", "")
+    words = re.findall(r"[^\W\d_]+", text)
+    return bool(words) and not re.search(r"\d", text) and all(
+        word[0].isupper() or word.casefold() in _NAME_PARTICLES for word in words
+    )
+
+
+def _plain_bibitem_fields(body: str) -> tuple[str, list[str] | None]:
+    names = []
+    pos = 0
+    while match := _COMMA_AUTHOR.match(body, pos):
+        names.append(match[1].strip())
+        pos = match.end()
+    if names:
+        return body[pos:], names
+
+    separators = _bibitem_separators(body)
+    for pos, next_pos in zip(separators, separators[1:] + [len(body)]):
+        authors = body[:pos]
+        if not _looks_like_names(authors):
+            break
+        following = body[pos + 1:next_pos].strip()
+        if body[pos] == "," and _looks_like_names(following):
+            # Initials or a final "and" identify another author in the list.
+            # Without initials, allow surname-first lists such as "Doe, Jane".
+            if following.casefold().startswith("and ") or _INITIAL.search(following) or not _INITIAL.search(authors):
+                continue
+        return body[pos + 1:].lstrip(), _split_authors(authors)
+    return "", None
+
+
+def _plain_title(text: str) -> str:
+    if styled := _styled_title(text):
+        title, end = styled
+        suffix = text[end:].lstrip()
+        if not suffix or suffix[0] in ".,;(":
+            return title
+
+    separators = _bibitem_separators(text)
+    for pos in separators:
+        suffix = text[pos + 1:].lstrip()
+        if (styled := _styled_title(suffix)) and styled[0].strip():
+            return text[:pos]
+
+    if volume := _VOLUME_STYLE.search(text):
+        # A comma before the bold volume separates a plain title from its
+        # journal. A leading journal/volume with no title should stay empty.
+        commas = [pos for pos in separators if pos < volume.start() and text[pos] == ","]
+        return text[:commas[-1]] if commas else ""
+
+    stop = next((pos for pos in separators if text[pos] == "."), len(text))
+    return _TRAILING_YEAR.sub("", text[:stop])
+
+
+def _split_authors(text: str) -> list[str] | None:
+    names = re.split(r"\s+and\s+|\s*;\s*", text, flags=re.I)
+    return [name.strip(" ,") for name in names if name.strip(" ,")] or None
+
+
 def _bibitem_parts(body: str) -> tuple[str | None, list[str] | None]:
     if quote := _TITLE_QUOTE.search(body):
         author_text = body[:quote.start()]
@@ -264,34 +367,9 @@ def _bibitem_parts(body: str) -> tuple[str | None, list[str] | None]:
     elif len(blocks := re.split(r"\\newblock(?![A-Za-z@])", body)) > 1:
         author_text, title = blocks[:2]
     else:
-        # Some styles use a comma after every name and put the journal in
-        # an italic group. Stop the author scan before the title.
-        pos = 0
-        names = []
-        while match := _COMMA_AUTHOR.match(body, pos):
-            names.append(match[1].strip())
-            pos = match.end()
-        if names and (venue := _ITALIC_VENUE.search(body, pos)):
-            return _title_text(body[pos:venue.start()]), names
-
-        # A period after an initial does not terminate the author list.
-        split = re.search(r"(?<!\b[A-Za-z])\.\s+", body)
-        author_text = body[:split.start()] if split else ""
-        remainder = body[split.end():] if split else body
-        styled = _TITLE_STYLE.match(remainder) if split else _TITLE_STYLE.search(remainder)
-        if styled:
-            start = _space_end(remainder, styled.end())
-            end = _group_end(remainder, start, "{")
-            title = remainder[start + 1:end - 1] if end else ""
-            if not split:
-                author_text = remainder[:styled.start()]
-        elif split:
-            title = re.split(r"\.\s+|\s*\((?:19|20)\d{2}\)|\s+(?:19|20)\d{2}\b", remainder, maxsplit=1)[0]
-        else:
-            title = ""
-    names = re.split(r"\s+and\s+|\s*;\s*", author_text, flags=re.I)
-    authors = [name.strip(" ,") for name in names if name.strip(" ,")]
-    return _title_text(title), authors or None
+        remainder, authors = _plain_bibitem_fields(body)
+        return _title_text(_plain_title(remainder)), authors
+    return _title_text(title), _split_authors(author_text)
 
 
 def _bibitem_candidate(version: int, text: str) -> _Candidate | None:

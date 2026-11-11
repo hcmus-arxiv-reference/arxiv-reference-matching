@@ -175,3 +175,30 @@ def test_bibitem_explicit_fields_and_quote_precedence():
     assert rows["quoted"]["title"] == "Quoted Title"
     assert rows["plain"]["title"] == "Comma-style Title"
     assert result.stats["issues"] == [{"version": 1, "key": "short", "code": "missing_bibitem_title"}]
+
+
+@pytest.mark.parametrize(("body", "title"), [
+    (r"Fry, P. J., {\it Introduction to Analysis}, 2nd ed., Example Press, 2020.",
+     "Introduction to Analysis"),
+    (r"A. Doe, and B. Smith, \emph{A Study of Light}, J. Opt. {\bf 12}, 1 (2020).",
+     "A Study of Light"),
+    (r"Ya. A. Doe, B. Smith, and C. West, Optical analysis, J. Opt. {\bf 12}, 1 (2020).",
+     "Optical analysis"),
+    (r"A. Doe, B. Smith, and Andr{\'e}s West. Analysis of light. Preprint, {\em arXiv:2401.12345}, 2024.",
+     "Analysis of light"),
+    (r"A. Doe. Light and matter vs. fields. II. Optical effects. \emph{J. Opt.}, 2020.",
+     "Light and matter vs. fields. II. Optical effects"),
+    (r"Z.\ Doe, {\sl A study of $\tilde{A}$, light, and matter\/}. In preparation.",
+     r"A study of $\tilde{A}$, light, and matter"),
+    (r'A. M\"{u}ller and B. G\"{o}tz. Rates in $3.2$, and beyond. J. Opt. 2020.',
+     "Rates in $3.2$, and beyond"),
+    ("A. Doe, J. Opt. {\\bf 12}, 1 (2020).\n% Title only in a comment",
+     None),
+    (r"A.\ Doe, J.\ Opt.: Condens.\ Matter {\bf 12\/}, 43--48 (2020).",
+     None),
+    (r"As a concrete example, consider the function $f(x)=x^2$. It vanishes at $0$.",
+     None),
+])
+def test_bibitem_title_boundaries(body, title):
+    result = merge_bibtex(ARXIV_ID, [_source(1, items=[r"\bibitem{item} " + body])])
+    assert result.entries[0]["title"] == title
