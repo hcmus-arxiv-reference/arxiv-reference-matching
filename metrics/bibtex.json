@@ -1,0 +1,343 @@
+{
+  "bibtex_issues_by_code": {
+    "DuplicateBlockKeyBlock": 496,
+    "DuplicateFieldKeyBlock": 2,
+    "ParsingFailedBlock": 2,
+    "ambiguous_title_year": 77,
+    "canonical_key_collision": 183,
+    "missing_bib": 42,
+    "missing_bibitem_title": 148
+  },
+  "bibtex_version": "3",
+  "boundary_failures": [
+    {
+      "arxiv_id": "2412.09052",
+      "check": "validate_D",
+      "error_count": 104,
+      "example": "[D] key_map['1']['coulson2019data'] -> 'coulson2019data' không có trong entries"
+    },
+    {
+      "arxiv_id": "2412.09432",
+      "check": "validate_D",
+      "error_count": 10,
+      "example": "[D] entries[0].citation_key phải là chuỗi khác rỗng"
+    },
+    {
+      "arxiv_id": "2412.09501",
+      "check": "validate_D",
+      "error_count": 2,
+      "example": "[D] entries[0].citation_key phải là chuỗi khác rỗng"
+    },
+    {
+      "arxiv_id": "2412.09607",
+      "check": "validate_D",
+      "error_count": 110,
+      "example": "[D] key_map['1']['openai2023gpt4'] -> 'openai2023gpt4' không có trong entries"
+    },
+    {
+      "arxiv_id": "2412.09675",
+      "check": "validate_D",
+      "error_count": 3,
+      "example": "[D] key_map['1']['deBlas:2017xtg'] -> 'deBlas:2017xtg' không có trong entries"
+    },
+    {
+      "arxiv_id": "2412.09685",
+      "check": "validate_D",
+      "error_count": 254,
+      "example": "[D] key_map['1']['LiHaldane2008'] -> 'LiHaldane2008' không có trong entries"
+    },
+    {
+      "arxiv_id": "2412.10186",
+      "check": "validate_D",
+      "error_count": 37,
+      "example": "[D] key_map['2']['enisa2020ai'] -> 'enisa2020ai' không có trong entries"
+    },
+    {
+      "arxiv_id": "2412.10564",
+      "check": "validate_D",
+      "error_count": 6,
+      "example": "[D] key_map['1']['sanctions'] -> 'sanctions' không có trong entries"
+    },
+    {
+      "arxiv_id": "2412.10576",
+      "check": "validate_D",
+      "error_count": 1,
+      "example": "[D] entries[0].citation_key phải là chuỗi khác rỗng"
+    },
+    {
+      "arxiv_id": "2412.10755",
+      "check": "validate_D",
+      "error_count": 12,
+      "example": "[D] key_map['1']['Planck2018'] -> 'Planck2018' không có trong entries"
+    },
+    {
+      "arxiv_id": "2412.11014",
+      "check": "validate_D",
+      "error_count": 6,
+      "example": "[D] key_map['2']['tran2025multi'] -> 'tran2025multi' không có trong entries"
+    },
+    {
+      "arxiv_id": "2412.11126",
+      "check": "validate_D",
+      "error_count": 23,
+      "example": "[D] key_map['1']['kilbas'] -> 'kilbas' không có trong entries"
+    },
+    {
+      "arxiv_id": "2412.11218",
+      "check": "validate_D",
+      "error_count": 1,
+      "example": "[D] key_map['1']['{wang2024fully}'] -> '{wang2024fully}' không có trong entries"
+    },
+    {
+      "arxiv_id": "2412.11504",
+      "check": "validate_D",
+      "error_count": 27,
+      "example": "[D] key_map['1']['Kitaev03'] -> 'Kitaev03' không có trong entries"
+    },
+    {
+      "arxiv_id": "2412.12304",
+      "check": "validate_D",
+      "error_count": 1,
+      "example": "[D] key_map['1']['Kaufmann'] -> 'Kaufmann' không có trong entries"
+    },
+    {
+      "arxiv_id": "2412.13002",
+      "check": "validate_D",
+      "error_count": 70,
+      "example": "[D] key_map['1']['chan-SkewSymmES'] -> 'chan-SkewSymmES' không có trong entries"
+    },
+    {
+      "arxiv_id": "2412.13327",
+      "check": "validate_D",
+      "error_count": 126,
+      "example": "[D] key_map['1']['Hubbard_1963'] -> 'Hubbard_1963' không có trong entries"
+    },
+    {
+      "arxiv_id": "2412.13385",
+      "check": "validate_D",
+      "error_count": 83,
+      "example": "[D] key_map['1']['Morris:1988cz'] -> 'Morris:1988cz' không có trong entries"
+    },
+    {
+      "arxiv_id": "2412.13794",
+      "check": "validate_D",
+      "error_count": 1,
+      "example": "[D] key_map['1']['GraulichSexTrafficking'] -> 'GraulichSexTrafficking' không có trong entries"
+    }
+  ],
+  "checks": {
+    "bib_result_failed": 19,
+    "bib_result_passed": 65,
+    "bib_source_passed": 132,
+    "bibtex_schema_passed": 84,
+    "blank_citation_key_entries": 3,
+    "invalid_years": 7,
+    "multi_version_publications_processed": 34,
+    "publications_processed": 84,
+    "publications_with_blank_citation_keys": 3,
+    "repeatable_bib_results": 84,
+    "shared_types_available": true,
+    "shared_types_sha256": "078e9c1f33e15a2c3105a58cbcade8538bcd3c79bc8675e253dfea5d9ed7b8a9"
+  },
+  "commit": "5837ab9719fee8964dea24179934a08861a5322c",
+  "duplicates_removed": 256369,
+  "entry_after": 155529,
+  "entry_before": 411898,
+  "field_conflicts": 1055,
+  "from_bib": 411462,
+  "from_bibitem": 436,
+  "input_method": "Literal bibliography declarations and citation commands in assembled TeX (benchmark adapter)",
+  "invalid_metadata_publications": [],
+  "largest_bibliographies": [
+    {
+      "arxiv_id": "2412.12527",
+      "entry_after": 103344,
+      "entry_before": 312064,
+      "versions": 3
+    },
+    {
+      "arxiv_id": "2412.10121",
+      "entry_after": 44301,
+      "entry_before": 88653,
+      "versions": 2
+    },
+    {
+      "arxiv_id": "2412.10476",
+      "entry_after": 483,
+      "entry_before": 1283,
+      "versions": 3
+    },
+    {
+      "arxiv_id": "2412.10653",
+      "entry_after": 937,
+      "entry_before": 958,
+      "versions": 1
+    },
+    {
+      "arxiv_id": "2412.09991",
+      "entry_after": 551,
+      "entry_before": 582,
+      "versions": 1
+    }
+  ],
+  "publications_missing_assembled_versions": [
+    "2412.08901",
+    "2412.09110",
+    "2412.09390",
+    "2412.09560",
+    "2412.09760",
+    "2412.10180",
+    "2412.10186",
+    "2412.10676",
+    "2412.10714",
+    "2412.10853",
+    "2412.10854",
+    "2412.10868",
+    "2412.11017",
+    "2412.11059",
+    "2412.11432",
+    "2412.11635",
+    "2412.11880",
+    "2412.11960",
+    "2412.12952",
+    "2412.13509",
+    "2412.13592",
+    "2412.13808"
+  ],
+  "sample": {
+    "arxiv_ids": [
+      "2412.08901",
+      "2412.09052",
+      "2412.09065",
+      "2412.09092",
+      "2412.09108",
+      "2412.09110",
+      "2412.09203",
+      "2412.09223",
+      "2412.09306",
+      "2412.09390",
+      "2412.09417",
+      "2412.09432",
+      "2412.09493",
+      "2412.09501",
+      "2412.09560",
+      "2412.09607",
+      "2412.09615",
+      "2412.09640",
+      "2412.09675",
+      "2412.09685",
+      "2412.09687",
+      "2412.09760",
+      "2412.09870",
+      "2412.09991",
+      "2412.10018",
+      "2412.10121",
+      "2412.10155",
+      "2412.10180",
+      "2412.10186",
+      "2412.10249",
+      "2412.10423",
+      "2412.10476",
+      "2412.10564",
+      "2412.10576",
+      "2412.10589",
+      "2412.10611",
+      "2412.10639",
+      "2412.10647",
+      "2412.10653",
+      "2412.10676",
+      "2412.10714",
+      "2412.10724",
+      "2412.10753",
+      "2412.10755",
+      "2412.10853",
+      "2412.10854",
+      "2412.10868",
+      "2412.11014",
+      "2412.11017",
+      "2412.11035",
+      "2412.11041",
+      "2412.11059",
+      "2412.11101",
+      "2412.11124",
+      "2412.11125",
+      "2412.11126",
+      "2412.11218",
+      "2412.11249",
+      "2412.11425",
+      "2412.11432",
+      "2412.11504",
+      "2412.11605",
+      "2412.11635",
+      "2412.11665",
+      "2412.11758",
+      "2412.11788",
+      "2412.11810",
+      "2412.11836",
+      "2412.11880",
+      "2412.11948",
+      "2412.11956",
+      "2412.11960",
+      "2412.11961",
+      "2412.12089",
+      "2412.12134",
+      "2412.12284",
+      "2412.12304",
+      "2412.12310",
+      "2412.12527",
+      "2412.12562",
+      "2412.12606",
+      "2412.12611",
+      "2412.12634",
+      "2412.12952",
+      "2412.13002",
+      "2412.13238",
+      "2412.13255",
+      "2412.13278",
+      "2412.13327",
+      "2412.13330",
+      "2412.13385",
+      "2412.13425",
+      "2412.13460",
+      "2412.13461",
+      "2412.13509",
+      "2412.13592",
+      "2412.13690",
+      "2412.13700",
+      "2412.13794",
+      "2412.13808"
+    ],
+    "data_dir": "data/benchmark-ngochai06",
+    "seed": 42,
+    "size": 100
+  },
+  "source_issues_by_code": {
+    "ambiguous_root": 12,
+    "include_error": 3,
+    "invalid_directory": 4,
+    "invalid_syntax": 1,
+    "unclosed_conditional": 14,
+    "unsupported_conditional": 31,
+    "unsupported_control": 11
+  },
+  "timing": {
+    "label": "bibtex sample",
+    "merge_seconds": 59.630628,
+    "peak_rss_mb": null,
+    "repeat_merge_seconds": 63.602662,
+    "seconds": 132.37361490000148
+  },
+  "unresolved": 1273,
+  "unresolved_by_reason": {
+    "ambiguous": 4,
+    "missing_entry": 1269
+  },
+  "versions_by_assembly_status": {
+    "empty_non_tex": 11,
+    "error": 34,
+    "needs_review": 18,
+    "ready": 103
+  },
+  "versions_expected": 166,
+  "versions_without_bibliography": 11
+}
