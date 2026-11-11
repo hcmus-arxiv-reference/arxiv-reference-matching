@@ -114,3 +114,9 @@ def test_download_dir_preserves_nested_selector(tmp_path):
         result = hf_io.download_dir(settings(), "raw/bao/2508-02872", tmp_path)
     assert result == tmp_path / "raw/bao/2508-02872"
     assert download.call_args.kwargs["allow_patterns"] == "raw/bao/2508-02872/*"
+
+
+def test_download_dir_can_pin_a_revision(tmp_path):
+    with patch("huggingface_hub.snapshot_download") as download:
+        hf_io.download_dir(settings(), "raw/bao/2508-02872", tmp_path, revision="a" * 40)
+    assert download.call_args.kwargs["revision"] == "a" * 40
