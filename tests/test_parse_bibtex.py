@@ -17,6 +17,17 @@ def _source(version, bib="", items=(), cites=()):
     return BibSource(ARXIV_ID, version, {"refs.bib": bib} if bib else {}, [], list(items), list(cites))
 
 
+@pytest.fixture
+def shared_types():
+    try:
+        import src.parse.types as types
+    except ModuleNotFoundError as error:
+        if error.name != "src.parse.types":
+            raise
+        pytest.skip("The shared M2 types have not been merged into this checkout")
+    return types
+
+
 def test_two_versions_cite_rename_golden_and_parquet_schema():
     inputs = [BibSource(**json.loads((GOLDEN / f"B'.v{v}.json").read_text(encoding="utf-8"))) for v in (1, 2)]
     expected = json.loads((GOLDEN / "D.json").read_text(encoding="utf-8"))
@@ -24,6 +35,49 @@ def test_two_versions_cite_rename_golden_and_parquet_schema():
     assert asdict(result) == expected
     assert asdict(merge_bibtex(ARXIV_ID, list(reversed(inputs)))) == expected
     assert validate(from_records(result.entries, "bibtex"), "bibtex") == []
+
+
+def test_golden_uses_shared_bibtex_contract(shared_types):
+    inputs = [
+        shared_types.BibSource.from_dict(json.loads((GOLDEN / f"B'.v{version}.json").read_text(encoding="utf-8")))
+        for version in (1, 2)
+    ]
+    for source in inputs:
+        assert shared_types.validate_B_prime(source) == []
+    result = merge_bibtex(ARXIV_ID, inputs)
+    assert shared_types.validate_D(result, inputs) == []
+    assert result.to_dict() == json.loads((GOLDEN / "D.json").read_text(encoding="utf-8"))
+
+
+def test_year_matches_shared_contract_range(shared_types):
+    inputs = [_source(1, """
+@misc{below, year={0999}}
+@misc{first, year={1000}}
+@misc{last, year={2999}}
+@misc{above, year={3000}}
+""", cites=["below", "first", "last", "above"])]
+    assert shared_types.validate_B_prime(inputs[0]) == []
+    result = merge_bibtex(ARXIV_ID, inputs)
+    assert shared_types.validate_D(result, inputs) == []
+    assert {row["citation_key"]: row["year"] for row in result.entries} == {
+        "below": None, "first": 1000, "last": 2999, "above": None,
+    }
+    assert result.raw_years == {"below": "0999", "above": "3000"}
+    assert {item["value"] for item in result.stats["invalid_years"]} == {"0999", "3000"}
+
+
+def test_merged_valid_year_excludes_invalid_year_from_raw_years(shared_types):
+    inputs = [
+        _source(1, "@misc{old, year={forthcoming}, doi={10.1234/example}}", cites=["old"]),
+        _source(2, "@misc{new, year={2020}, doi={10.1234/example}}", cites=["new"]),
+    ]
+    for source in inputs:
+        assert shared_types.validate_B_prime(source) == []
+    result = merge_bibtex(ARXIV_ID, inputs)
+    assert shared_types.validate_D(result, inputs) == []
+    assert len(result.entries) == 1 and result.entries[0]["year"] == 2020
+    assert result.raw_years == {}
+    assert result.stats["invalid_years"] == [{"version": 1, "key": "old", "value": "forthcoming"}]
 
 
 def test_bibtex_macros_crossref_and_author_lists():

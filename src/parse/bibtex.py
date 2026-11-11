@@ -44,7 +44,7 @@ except ModuleNotFoundError as error:
         bibtex_version: str
 
 
-BIBTEX_VERSION = "1"
+BIBTEX_VERSION = "2"
 _DOI = re.compile(r"\b10\.\d{4,9}/[^\s{}<>\"\\]+", re.I)
 _URL = re.compile(r"https?://[^\s{}<>\"\\]+", re.I)
 _ARXIV = r"(?:\d{4}\.\d{4,5}|[a-z][a-z.\-]*/\d{7})"
@@ -96,7 +96,8 @@ def _arxiv_ref(fields: dict) -> str | None:
 
 def _candidate(version: int, key: str, origin: str, fields: dict) -> _Candidate:
     raw_year = _value(fields, "year")
-    year = int(raw_year) if raw_year and re.fullmatch(r"[1-9]\d{3}", raw_year) else None
+    # The shared BibResult contract accepts years from 1000 through 2999.
+    year = int(raw_year) if raw_year and re.fullmatch(r"[12]\d{3}", raw_year) else None
     authors = fields.get("author")
     if isinstance(authors, list):
         authors = [a.strip() for a in authors if a.strip()] or None
@@ -436,7 +437,8 @@ def merge_bibtex(arxiv_id: str, sources: list[BibSource]) -> BibResult:
         for entry in group:
             key_targets[(entry.version, entry.key)].add(canonical)
             if entry.raw_year is not None:
-                raw_years.setdefault(canonical, entry.raw_year)
+                if row["year"] is None:
+                    raw_years.setdefault(canonical, entry.raw_year)
                 invalid_years.append({"version": entry.version, "key": entry.key, "value": entry.raw_year})
 
     key_map, unresolved = {}, []
