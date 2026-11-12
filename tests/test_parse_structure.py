@@ -49,3 +49,67 @@ def test_structure_golden_spans(case):
         assert bib["cite_keys_used"] == ["one"]
     else:
         assert not references and not bib["bibitems_raw"] and not bib["cite_keys_used"]
+
+    from src.parse.source import SourceBundle
+    from src.parse.structure import build_structure
+    from src.parse.types import validate_B, validate_B_prime
+
+    built, bibliography = build_structure(SourceBundle(status="ready", text=source),
+                                         tree["arxiv_id"], tree["version"])
+    assert built.to_dict() == tree
+    assert bibliography.to_dict() == bib
+    validate_B(built, source)
+    validate_B_prime(bibliography)
+
+
+def test_math_nested_environments_and_bibliography(tmp_path):
+    from hashlib import sha256
+
+    from src.parse.source import assemble_source
+    from src.parse.structure import build_structure
+    from src.parse.types import validate_B, validate_B_prime
+
+    directory = tmp_path / "2508-02872" / "v1"
+    directory.mkdir(parents=True)
+    files = {"main.tex": r"""\documentclass{article}
+\addbibresource{cited.bib}
+\begin{document}
+\section[short]{Long {title}}
+\begin{figure}\begin{center}\citep[p. 2]{a,b}\end{center}\end{figure}
+$$x$$ \[y\]
+\bibliography{missing,cited}
+\end{document}""", "cited.bib": "@misc{a}", "unused.bib": "@misc{x}"}
+    hashes = {}
+    for name, value in files.items():
+        data = value.encode()
+        (directory / name).write_bytes(data)
+        hashes[name] = sha256(data).hexdigest()
+    (directory / "source.json").write_text(json.dumps({
+        "format": 1, "status": "success", "arxiv_id": "2508.02872",
+        "version": 1, "checksum": "fixture", "files": hashes,
+    }))
+    source = assemble_source(directory, require_receipt=True)
+    tree, bib = build_structure(source, "2508.02872", 1, directory)
+    section, = tree.root.children
+    assert section.title_raw == "Long {title}"
+    assert [b.type for b in section.children] == ["env", "display_math", "display_math"]
+    assert bib.cite_keys_used == ["a", "b"]
+    assert bib.bib_files == {"cited.bib": "@misc{a}"}
+    assert bib.missing_bib == ["missing.bib"]
+    validate_B(tree, source.text)
+    validate_B_prime(bib, {"cited.bib", "unused.bib"})
+
+    from scripts.measure_structure import measure_sample
+
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    directory.parent.rename(raw / directory.parent.name)
+    receipt = raw / "2508-02872" / "v1" / "source.json"
+    entry = {"version": 1, "status": "success",
+             "receipt_sha256": sha256(receipt.read_bytes()).hexdigest()}
+    plan = {"data_origin": "mock", "publications": [
+        {"arxiv_id": "2508.02872", "versions": [entry]}]}
+    result = measure_sample(plan, tmp_path)
+    assert result["ready_tex_versions"] == result["tex_versions"] == 1
+    assert result["headings_by_kind"] == {"section": 1}
+    assert result["structure_failures"] == []

@@ -124,7 +124,7 @@ def _group(text: str, index: int, opening: str = "{") -> tuple[str, int]:
     raise ValueError("Unclosed argument")
 
 
-def _scan(text: str, file: str) -> _Scan:
+def _scan(text: str, file: str, tokens: list[_Command] | None = None) -> _Scan:
     """Lex control words, skipping comments, verbatim and definition bodies."""
     result = _Scan([], [], len(text))
     cursor = 0
@@ -137,6 +137,10 @@ def _scan(text: str, file: str) -> _Scan:
         if text[cursor] == "%":
             cursor = _space(text, cursor); continue
         if text[cursor] != "\\":
+            if tokens is not None and text.startswith("$$", cursor) and all(conditions):
+                tokens.append(_Command("$$", cursor, cursor + 2))
+                cursor += 2
+                continue
             cursor += 1; continue
         start = cursor
         name, cursor = _control(text, cursor)
@@ -150,7 +154,10 @@ def _scan(text: str, file: str) -> _Scan:
                 end = text.find(text[cursor], cursor + 1)
                 if end < 0 or "\n" in text[cursor:end]:
                     raise ValueError("Unclosed inline verbatim")
-                cursor = end + 1; continue
+                cursor = end + 1
+                if tokens is not None:
+                    tokens.append(_Command("literal", start, cursor))
+                continue
             if name in {"begin", "end"}:
                 environment, end = _group(text, cursor)
                 if name == "begin" and environment in _VERBATIM:
@@ -158,7 +165,12 @@ def _scan(text: str, file: str) -> _Scan:
                     position = text.find(closing, end)
                     if position < 0:
                         raise ValueError("Unclosed verbatim/comment environment")
-                    cursor = position + len(closing); continue
+                    cursor = position + len(closing)
+                    if tokens is not None and active:
+                        tokens.append(_Command("opaque_env", start, cursor, environment))
+                    continue
+                if tokens is not None and active:
+                    tokens.append(_Command(name, start, end, environment))
                 if name == "end" and environment == "document" and active:
                     result.stop, result.ends_document = end, True
                     break
@@ -238,6 +250,8 @@ def _scan(text: str, file: str) -> _Scan:
                 continue
             if name in _UNSUPPORTED_CONTROL:
                 issue("unsupported_control", start, f"\\{name} can change the compilation path")
+            if tokens is not None:
+                tokens.append(_Command(name, start, cursor))
             if name == "endinput":
                 tail = text[cursor:].split("\n", 1)[0].split("%", 1)[0]
                 if tail.strip():

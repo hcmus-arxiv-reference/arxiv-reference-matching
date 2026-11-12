@@ -1,0 +1,20 @@
+{
+  "data_origin": "mock",
+  "elapsed_seconds": 0.115,
+  "fully_parsed_tex_publications_without_section": 0,
+  "headings_by_kind": {
+    "section": 179
+  },
+  "plan_sha256": "1a9ea3e374b30323cb1a7b90497c230db5df4f20f5f7d80040a8f9dfb1801009",
+  "publications": 100,
+  "ready_tex_fraction": 1.0,
+  "ready_tex_versions": 179,
+  "source_issue_counts": {},
+  "structure_failures": [],
+  "structure_versions_validated": 179,
+  "tex_versions": 179,
+  "versions_by_status": {
+    "empty_non_tex": 20,
+    "ready": 179
+  }
+}
