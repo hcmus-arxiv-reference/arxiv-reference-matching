@@ -287,7 +287,7 @@ def test_optional_arguments_respect_braced_closing_brackets():
     result = HierarchyEngine("2508.02872", 1).parse(r"\section[Short {]} title]{Real}\begin{proof}[Name {]} here]Body.\end{proof}")
     assert result.complete
     assert contents(result, "section") == ["Real"]
-    assert contents(result, "sentence") == ["Name {]} here Body."]
+    assert contents(result, "sentence") == ["Name ] here Body."]
 
 
 def test_excluded_reference_subtree_does_not_emit_normalization_diagnostics():
@@ -314,3 +314,364 @@ def test_unfloated_tables_are_atomic_figures():
     assert result.complete
     assert contents(result, "figure") == [r"\begin{tabular*}{\textwidth}{lr}A&B\\\end{tabular*}"]
     assert contents(result, "sentence") == ["After."]
+
+
+def test_audit_metadata_layout_and_selected_content_rules():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\title[Short]{Hidden title}\author{Hidden author}\affiliation{Hidden lab}\maketitle'
+        r'\setcounter{page}{1}\pagestyle{plain}\newpage'
+        r'\section{\textcolor{red}{Intro}}\IEEEPARstart{W}{e} keep '
+        r'\texorpdfstring{printed}{PDF alternative} and \colorbox{blue}{visible}.'
+        r'\footnote[2]{A note. Still here} Tail.\\[2pt]Last.'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'section') == ['Intro']
+    assert contents(result, 'sentence') == [
+        'We keep printed and visible.', 'A note. Still here Tail.', 'Last.'
+    ]
+
+
+def test_audit_accents_accept_tokens_groups_dotless_letters_and_utf8():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\section{Caf\'e}\"{o} and \v S and \'{\i} and \c{c} and \AA.'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'section') == ['Café']
+    assert contents(result, 'sentence') == ['ö and Š and í and ç and Å.']
+
+
+def test_declared_theorem_names_are_local_to_each_parse_and_scope():
+    engine = HierarchyEngine('2508.02872', 1)
+    result = engine.parse(
+        r'\documentclass{article}\newtheorem{thm}{Theorem}[section]'
+        r'\newtheorem{lem}[thm]{Lemma}\newtheorem*{fact}{Fact}'
+        r'\begin{document}\begin{thm}[Named]Claim.\end{thm}'
+        r'\begin{lem}Proof.\end{lem}\begin{fact}Fact.\end{fact}\end{document}'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'sentence') == ['Named Claim.', 'Proof.', 'Fact.']
+    assert not engine.parse(r'\begin{thm}Unregistered.\end{thm}').complete
+    scoped = engine.parse(r'{\newtheorem{local}{Local}\begin{local}In.\end{local}}\begin{local}Out.\end{local}')
+    assert contents(scoped, 'sentence') == ['In.']
+    assert [d['code'] for d in scoped.diagnostics] == ['unhandled_environment']
+
+
+def test_macro_parameters_defaults_structural_aliases_and_definition_order():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\documentclass{article}\newcommand{\named}[2][Default]{\textbf{#1}: #2}'
+        r'\def\be{\begin{equation}}\def\ee{\end{equation}}'
+        r'\newcommand{\sect}[1]{\section{#1}}\begin{document}'
+        r'\sect{Intro}\named{One}. \named[Other]{Two}. \be x=1\ee'
+        r'\renewcommand{\named}[1]{Changed #1}\named{Three}.\end{document}'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'section') == ['Intro']
+    assert contents(result, 'sentence') == ['Default: One.', 'Other: Two.', 'Changed Three.']
+    assert contents(result, 'formula') == [r'\begin{equation}x=1\end{equation}']
+
+
+def test_macro_scope_conditionals_and_literal_protection():
+    engine = HierarchyEngine('2508.02872', 1)
+    result = engine.parse(
+        r'\newcommand{\word}{Outer}\iffalse\renewcommand{\word}{Hidden}\fi'
+        r'\word. {\renewcommand{\word}{Inner}\word.} \word.'
+        r'\begin{verbatim}\word % unchanged\end{verbatim}'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'sentence') == ['Outer.', 'Inner.', r'\word % unchanged']
+    root = next(e for e in result.elements if e.kind == 'document')
+    assert len(result.ordered_children[root.element_id]) == 4  # repeated Outer is deduplicated
+    assert not engine.parse(r'\word.').complete
+
+
+@pytest.mark.parametrize('definition', [r'\def\bad{\bad}', r'\newcommand{\bad}{\ensuremath{\bad}}'])
+def test_recursive_macros_stop_with_a_diagnostic(definition):
+    result = HierarchyEngine('2508.02872', 1).parse(definition + r'\bad')
+    assert not result.complete
+    assert any(d['code'] == 'invalid_syntax' and ('limit' in d['message'] or '128' in d['message']) for d in result.diagnostics)
+
+
+def test_expanded_offsets_refer_to_original_utf8_source():
+    latex = r'\newcommand{\word}{A longer replacement}\word. Đầu. \unknown{Keep}'
+    result = HierarchyEngine('2508.02872', 1).parse(latex)
+    diagnostic = next(d for d in result.diagnostics if d['code'] == 'unhandled_command')
+    assert diagnostic['offset'] == latex.encode().index(b'\\unknown')
+    latex = r'\newcommand{\word}{\unknown{Inside}}Đầu. \section{\word}'
+    result = HierarchyEngine('2508.02872', 1).parse(latex)
+    assert result.diagnostics[0]['offset'] == latex.encode().rindex(b'\\word')
+
+
+def test_unsupported_macro_parameters_remain_diagnostic_and_shadow_builtin():
+    result = HierarchyEngine('2508.02872', 1).parse(r'\def\textbf#1;{Hidden}\textbf{Visible}')
+    assert not result.complete
+    assert [d['code'] for d in result.diagnostics] == ['unexpanded_definition', 'unhandled_command']
+    assert r'\textbf{Visible}' in contents(result, 'sentence')
+
+
+def test_audit_wrappers_keep_keywords_and_appendices_after_references():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\begin{frontmatter}\abstract{Summary.}\begin{IEEEkeywords}alpha, beta\end{IEEEkeywords}\end{frontmatter}'
+        r'\section{References}Hidden.\begin{appendices}\section{Details}Keep.\end{appendices}'
+        r'\begin{CCSXML}<xml>Hidden.</xml>\end{CCSXML}'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'section') == ['Abstract', 'Details']
+    assert contents(result, 'sentence') == ['Summary.', 'alpha, beta', 'Keep.']
+
+
+def test_token_length_arguments_do_not_truncate_a_figure():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\begin{table}\setlength\tabcolsep{3pt}\textbf A\end{table}After.'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'figure') == [r'\begin{table}A\end{table}']
+    assert contents(result, 'sentence') == ['After.']
+
+
+def test_macros_can_leave_references_and_conditional_preamble_is_not_guessed():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\documentclass{article}\newcommand{\append}{\appendix\section{Extra}}'
+        r'\ifdefined\missing\def\choice{Wrong one}\else\def\choice{Wrong two}\fi'
+        r'\begin{document}\section{References}Hidden.\append Kept. \choice\end{document}'
+    )
+    assert contents(result, 'section') == ['Extra']
+    assert contents(result, 'sentence') == ['Kept.', r'\choice']
+    assert [d['code'] for d in result.diagnostics] == ['unhandled_command']
+
+
+def test_unclosed_source_group_keeps_parsed_content_and_reports_location():
+    latex = 'Đầu. {Tail.'
+    result = HierarchyEngine('2508.02872', 1).parse(latex)
+    assert contents(result, 'sentence') == ['Đầu.', 'Tail.']
+    assert result.diagnostics[0]['code'] == 'invalid_syntax'
+    assert result.diagnostics[0]['offset'] == latex.encode().index(b'{')
+
+
+def test_newif_declaration_and_local_switches_select_actual_branch():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\documentclass{article}\newif\ifshow\showfalse'
+        r'\ifshow\newcommand{\word}{Hidden}\else\newcommand{\word}{Visible}\fi'
+        r'\begin{document}\word. {\showtrue\ifshow Local.\fi}'
+        r'\ifshow Hidden.\else Outer.\fi\end{document}'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'sentence') == ['Visible.', 'Local.', 'Outer.']
+
+
+def test_nested_macro_expansion_consumes_following_arguments_and_formula_end():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\newcommand{\red}{\textcolor{red}}\def\be{\begin{equation}}\def\ee{\end{equation}}'
+        r'\section{\red{Title}}Body\footnote{Before \be x=1\ee After.} End.'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'section') == ['Title']
+    assert contents(result, 'sentence') == ['Body Before', 'After. End.']
+    assert contents(result, 'formula') == [r'\begin{equation}x=1\end{equation}']
+
+
+def test_tikz_loop_variables_are_opaque_inside_atomic_figures():
+    body = r'\foreach \i/\label in {1/a,2/b} \node {$\label$};'
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\def\i#1{#1}\begin{figure}\begin{tikzpicture}' + body + r'\end{tikzpicture}\end{figure}After.'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'figure') == [r'\begin{figure}\begin{tikzpicture}' + body + r'\end{tikzpicture}\end{figure}']
+    assert contents(result, 'sentence') == ['After.']
+
+
+def test_mathpalette_callback_is_preserved_without_guessing_implicit_parameters():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\newcommand{\raise}[3]{#1#2#3}\newcommand{\special}[1]{\mathpalette{\raise{#1}}}'
+        r'\begin{equation}\special{2pt}{x}\end{equation}After.'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'formula') == [r'\begin{equation}\mathpalette{\raise{2pt}}{x}\end{equation}']
+    assert contents(result, 'sentence') == ['After.']
+
+
+def test_unknown_escaped_unicode_command_keeps_valid_utf8_diagnostic():
+    result = HierarchyEngine('2508.02872', 1).parse('Đầu. \\ Tail.')
+    assert not result.complete
+    assert result.diagnostics[0]['source'] == '\\\u00a0'
+
+
+def test_unknown_command_inside_accent_is_reported_at_original_offset():
+    latex = r"Đầu. \'{\unknown}"
+    result = HierarchyEngine('2508.02872', 1).parse(latex)
+    assert not result.complete
+    assert result.diagnostics[0]['offset'] == latex.encode().index(b'\\unknown')
+
+
+def test_macros_in_math_inside_figures_remain_opaque():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\newcommand{\callback}[3]{#1#2#3}'
+        r'\begin{figure}$\callback{x}$\end{figure}After.'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'figure') == [r'\begin{figure}$\callback{x}$\end{figure}']
+    assert contents(result, 'sentence') == ['After.']
+
+
+def test_macro_expansion_preserves_control_word_token_boundaries():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\def\symbol{\alpha}\def\tail{b}\newcommand{\parameter}[1]{\alpha#1}'
+        r'$\symbol\tail$ and $\parameter{b}$. '
+        r'\def\name{Coffee}\def\prefix{\xspace}\section{\prefix\name{} title}'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'sentence') == [r'$\alpha b$ and $\alpha b$.']
+    assert contents(result, 'section') == ['Coffee title']
+
+
+def test_xspace_respects_punctuation_and_empty_groups():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\newcommand{\name}{Model\xspace}\section{\name{} title}'
+        r'\name, \name{}! \name\textbf{works}.'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'section') == ['Model title']
+    assert contents(result, 'sentence') == ['Model, Model! Model works.']
+
+
+def test_xspace_does_not_insert_gap_in_hyphenated_or_slash_names():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\newcommand{\acd}{ACD\xspace}\section{\acd-train / \acd-val / \acd/test}'
+        r'Use \acd-train and \acd/test.'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'section') == ['ACD-train / ACD-val / ACD/test']
+    assert contents(result, 'sentence') == ['Use ACD-train and ACD/test.']
+
+
+def test_grouping_braces_normalize_consistently_without_dropping_visible_braces():
+    engine = HierarchyEngine('2508.02872', 1)
+    plain = engine.parse(r'\section{Title}Bold.')
+    grouped = engine.parse(r'\section{{Title}}\textbf{{Bold}}.')
+    assert grouped.complete, grouped.diagnostics
+    assert grouped.elements == plain.elements
+    result = engine.parse(r'\section{\{Visible\}}\textbf{{A \{set\} and $\{x\}$}}.')
+    assert result.complete, result.diagnostics
+    assert contents(result, 'section') == [r'\{Visible\}']
+    assert contents(result, 'sentence') == [r'A \{set\} and $\{x\}$.']
+
+
+@pytest.mark.parametrize('definition', [r'\newcommand{\term}{Dr. Smith}', r'\newcommand{\term}[1]{#1}'])
+def test_macro_expansion_preserves_command_sentence_protection(definition):
+    call = r'\term' if '[1]' not in definition else r'\term{Dr. Smith}'
+    result = HierarchyEngine('2508.02872', 1).parse(definition + call + ' works. Next.')
+    assert result.complete, result.diagnostics
+    assert contents(result, 'sentence') == ['Dr. Smith works.', 'Next.']
+
+
+def test_protected_macro_text_still_creates_structural_nodes():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\newcommand{\body}{\section{Intro}One. Two. $$x=1$$\begin{itemize}\item Item.\end{itemize}}'
+        r'\body Outside.'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'section') == ['Intro']
+    assert contents(result, 'sentence') == ['One. Two.', 'Item.', 'Outside.']
+    assert contents(result, 'formula') == [r'\begin{equation}x=1\end{equation}']
+    assert len(contents(result, 'item')) == 1
+
+
+@pytest.mark.parametrize('wrapper', [False, True])
+def test_malformed_suffix_keeps_valid_prefix_and_error_location(wrapper):
+    body = r'Đầu. Another complete sentence. \section{Broken'
+    source = r'\documentclass{article}\begin{document}' + body if wrapper else body
+    result = HierarchyEngine('2508.02872', 1).parse(source)
+    assert not result.complete
+    assert contents(result, 'sentence') == ['Đầu.', 'Another complete sentence.']
+    assert result.diagnostics[0]['code'] == 'invalid_syntax'
+    assert result.diagnostics[0]['offset'] >= source.encode().index(b'\\section')
+
+
+def test_nested_inline_delimiters_inside_braced_arguments_do_not_close_outer_math():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\begin{document}\(x\footnote{note \(y\)}+z\). Tail.\end{document}'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'sentence') == [r'$x\footnote{note \(y\)}+z$.', 'Tail.']
+    result = HierarchyEngine('2508.02872', 1).parse(r'$x+\text{cost $y$}$. Tail.')
+    assert result.complete, result.diagnostics
+    assert contents(result, 'sentence') == [r'$x+\text{cost $y$}$.', 'Tail.']
+
+
+def test_math_delimiter_scan_respects_groups_comments_and_escaped_braces():
+    result = HierarchyEngine('2508.02872', 1).parse('$x+{y}% ignore $\n+\\{z\\}$. Tail.')
+    assert result.complete, result.diagnostics
+    assert contents(result, 'sentence') == [r'$x+{y}+\{z\}$.', 'Tail.']
+    assert not HierarchyEngine('2508.02872', 1).parse('$x+{unclosed$').complete
+
+
+def test_unwrap_stream_extracts_block_formulas_in_source_order_and_parent():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\section{Intro}\textbf{Before $$x=1$$ After.} Tail.'
+        r'\section{Next}Final.'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'sentence') == ['Before', 'After. Tail.', 'Final.']
+    formula = next(e for e in result.elements if e.kind == 'formula')
+    assert formula.content == r'\begin{equation}x=1\end{equation}'
+    section = next(e for e in result.elements if e.kind == 'section' and e.content == 'Intro')
+    assert next(h.parent_id for h in result.hierarchy if h.element_id == formula.element_id) == section.element_id
+    nodes = {e.element_id: e for e in result.elements}
+    assert [nodes[k].kind for k in result.ordered_children[section.element_id]] == ['sentence', 'formula', 'sentence']
+
+
+def test_unwrap_stream_handles_nested_wrappers_macros_scope_and_punctuation():
+    result = HierarchyEngine('2508.02872', 1).parse(
+        r'\newcommand{\name}{Outer\xspace}\def\be{\begin{equation}}\def\ee{\end{equation}}'
+        r'\textbf{\renewcommand{\name}{Inner\xspace}\emph{\name}-train \be x=1\ee}'
+        r'\name/test.\begin{itemize}\item\textcolor{red}{Keep. inside} End.\end{itemize}'
+    )
+    assert result.complete, result.diagnostics
+    assert contents(result, 'sentence') == ['Inner-train', 'Outer/test.', 'Keep. inside End.']
+    assert contents(result, 'formula') == [r'\begin{equation}x=1\end{equation}']
+
+
+def test_unwrap_stream_keeps_utf8_offsets_after_splicing_and_comments():
+    source = 'Đầu. \\textcolor{red}{A % comment\n\\unknown{Inside}} Tail. \\unknown{After}'
+    result = HierarchyEngine('2508.02872', 1).parse(source)
+    diagnostics = [d for d in result.diagnostics if d['code'] == 'unhandled_command']
+    assert [d['offset'] for d in diagnostics] == [source.encode().index(b'\\unknown'), source.encode().rindex(b'\\unknown')]
+    assert contents(result, 'sentence') == ['Đầu.', r'A \unknown{Inside} Tail.', r'\unknown{After}']
+
+
+def test_abstract_command_body_streams_formulas_and_keeps_body_boundary():
+    result = HierarchyEngine('2508.02872', 1).parse(r'\abstract{Before $$x=1$$ After.}Tail.')
+    assert result.complete, result.diagnostics
+    assert contents(result, 'section') == ['Abstract']
+    assert contents(result, 'sentence') == ['Before', 'After.', 'Tail.']
+    assert contents(result, 'formula') == [r'\begin{equation}x=1\end{equation}']
+
+
+def test_streaming_unwrap_works_without_macro_declaration_configuration(tmp_path):
+    mapping = json.loads(DEFAULT_MAPPING.read_text())
+    del mapping['declarations']
+    path = tmp_path / 'mapping.json'
+    path.write_text(json.dumps(mapping))
+    result = HierarchyEngine('2508.02872', 1, path).parse(r'\textbf{Before $$x=1$$ After.} Tail.')
+    assert result.complete, result.diagnostics
+    assert contents(result, 'sentence') == ['Before', 'After. Tail.']
+    assert contents(result, 'formula') == [r'\begin{equation}x=1\end{equation}']
+
+
+@pytest.mark.parametrize('outer', [False, True])
+def test_tabular_column_preamble_is_not_scanned_as_standalone_math(outer):
+    table = r'\begin{tabular}{>{$}l<{$\hspace{12pt}}c}A&B\\\end{tabular}'
+    source = (r'\begin{figure}' + table + r'\end{figure}' if outer else table) + 'Tail.'
+    result = HierarchyEngine('2508.02872', 1).parse(source)
+    assert result.complete, result.diagnostics
+    assert r'{>{$}l<{$\hspace{12pt}}c}' in contents(result, 'figure')[0]
+    assert contents(result, 'sentence') == ['Tail.']
+
+
+def test_isolated_heading_token_inside_wrapper_reports_limitation_without_losing_suffix():
+    result = HierarchyEngine('2508.02872', 1).parse(r'Before. \keywords\section{Introduction}Keep. \section{Next}Tail.')
+    assert not result.complete
+    assert [d['code'] for d in result.diagnostics] == ['unhandled_command']
+    assert result.diagnostics[0]['source'] == r'\keywords\section'
+    assert contents(result, 'section') == ['Next']
+    assert contents(result, 'sentence')[-1] == 'Tail.'
+    assert any('Introduction' in s and 'Keep.' in s for s in contents(result, 'sentence'))

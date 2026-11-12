@@ -231,7 +231,8 @@ def run_benchmark(raw_dir: str | Path = DEFAULT_RAW, *, limit: int = 30,
                   output_dir: str | Path = DEFAULT_OUTPUT,
                   labels_path: str | Path = DEFAULT_LABELS,
                   mapping_path: str | Path = DEFAULT_MAPPING,
-                  preview_nodes: int = 1000, progress: bool = False) -> dict:
+                  preview_nodes: int = 1000, progress: bool = False,
+                  exclude_report: str | Path | None = None) -> dict:
     """Run sequentially with bounded memory; export each case before continuing."""
     if limit < 1 or preview_nodes < 1:
         raise ValueError("limit and preview_nodes must be positive")
@@ -241,6 +242,12 @@ def run_benchmark(raw_dir: str | Path = DEFAULT_RAW, *, limit: int = 30,
     HierarchyEngine("2508.02872", 1, mapping_path)
     started = perf_counter()
     candidates = discover_folders(raw_dir)
+    excluded = set()
+    if exclude_report is not None:
+        exclude_report = Path(exclude_report).resolve()
+        previous = json.loads(exclude_report.read_text(encoding="utf-8"))
+        excluded = {row["folder"].split("/")[0] for row in previous["results"]}
+        candidates = [row for row in candidates if row["folder"].split("/")[0] not in excluded]
     discovery_seconds = perf_counter() - started
     labels = json.loads(labels_path.read_text(encoding="utf-8")) if labels_path.is_file() else {}
     results = []
@@ -337,6 +344,8 @@ def run_benchmark(raw_dir: str | Path = DEFAULT_RAW, *, limit: int = 30,
     report = {"config": {"raw_dir": str(raw_dir), "output_dir": str(output_dir),
                          "labels_path": str(labels_path), "mapping_path": str(mapping_path),
                          "mapping_sha256": hashlib.sha256(mapping_path.read_bytes()).hexdigest(),
+                         "exclude_report": str(exclude_report) if exclude_report is not None else None,
+                         "excluded_publications": sorted(excluded),
                          "limit": limit, "preview_nodes": preview_nodes},
               "summary": summary, "results": results}
     write_json(output_dir / "report.json", report)
@@ -358,6 +367,8 @@ def main() -> None:
     parser.add_argument("--labels", type=Path, default=DEFAULT_LABELS, dest="labels_path")
     parser.add_argument("--mapping", type=Path, default=DEFAULT_MAPPING, dest="mapping_path")
     parser.add_argument("--preview-nodes", type=int, default=1000)
+    parser.add_argument("--exclude-report", type=Path,
+                        help="Exclude every Publication listed in an earlier report, across all Versions")
     args = parser.parse_args()
     report = run_benchmark(**vars(args), progress=True)
     print(json.dumps(report["summary"], ensure_ascii=False, indent=2))

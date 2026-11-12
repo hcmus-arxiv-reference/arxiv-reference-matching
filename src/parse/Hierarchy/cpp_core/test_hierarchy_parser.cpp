@@ -244,6 +244,67 @@ void mapping_is_loaded() {
     find(result, "section", "Custom");
 }
 
+void audit_declarations_and_normalization() {
+    const auto result = parse(R"(\documentclass{article}
+\newtheorem{thm}{Theorem}[section]\newif\ifshow\showtrue
+\newcommand{\name}{Model\xspace}\newcommand{\red}{\textcolor{red}}
+\def\be{\begin{equation}}\def\ee{\end{equation}}
+\begin{document}\maketitle\section{\red{\name{} title}}
+\ifshow\begin{thm}[Named]Caf\'e.\end{thm}\fi
+Body\footnote{Before \be x=1\ee After.} End.
+\begin{figure}\setlength\tabcolsep{3pt}\begin{tikzpicture}
+\foreach \i/\label in {1/a} \node {$\label$};\end{tikzpicture}\end{figure}
+\end{document})");
+    check(result.complete(), "Audit regression fixture incomplete");
+    find(result, "section", "Model title");
+    find(result, "sentence", "Named Café.");
+    find(result, "sentence", "Body Before");
+    find(result, "formula", R"(\begin{equation}x=1\end{equation})");
+    find(result, "sentence", "After. End.");
+    check(of_kind(result, "figure").size() == 1, "Drawing should remain atomic");
+    valid_edges(result);
+    check(!parse(R"(\def\loop{\loop}\loop)").complete(), "Recursive macro reported success");
+    const std::string source = R"(\def\word{Long expansion}\word. Đầu. \unknown{Keep})";
+    const auto unknown = parse(source);
+    check(unknown.diagnostics.front().offset == source.find("\\unknown"), "Expanded UTF-8 offset drift");
+}
+
+void astra_review_regressions() {
+    const auto math = parse(R"(\(x\footnote{note \(y\)}+z\). Tail.)");
+    check(math.complete(), "Nested math closed outer delimiter");
+    find(math, "sentence", "Tail.");
+    for (const auto* source : {R"(Keep. Another complete sentence. \section{Broken)",
+                              R"(\begin{document}Keep. Another complete sentence. \section{Broken)"}) {
+        const auto recovered = parse(source);
+        check(!recovered.complete(), "Malformed tail reported success");
+        find(recovered, "sentence", "Keep.");
+        find(recovered, "sentence", "Another complete sentence.");
+        valid_edges(recovered);
+    }
+    const auto macro = parse(R"(\newcommand{\foo}[1]{#1}\foo{Keep. inside} Outside.)");
+    check(macro.complete(), "Identity macro failed");
+    check(of_kind(macro, "sentence").size() == 1, "Macro argument punctuation split");
+    const auto grouped = parse(R"(\def\name{ACD\xspace}\section{{Title}}\textbf{{\name-train}}.)");
+    check(grouped.complete(), "Grouped wrapper failed");
+    find(grouped, "section", "Title");
+    find(grouped, "sentence", "ACD-train.");
+    const auto abstract = parse(R"(\abstract{Before $$x=1$$ After.} Tail.)");
+    check(abstract.complete(), "Abstract wrapper failed");
+    const auto& formula = find(abstract, "formula", R"(\begin{equation}x=1\end{equation})");
+    check(parent_of(abstract, formula.element_id) == find(abstract, "section", "Abstract").element_id,
+          "Wrapped formula has wrong parent");
+    find(abstract, "sentence", "Tail.");
+    valid_edges(abstract);
+    const auto table = parse(R"(\begin{figure}\begin{tabular}{>{$}l<{$\hspace{12pt}}c}A&B\\\end{tabular}\end{figure}Tail.)");
+    check(table.complete(), "Column preamble misread as math");
+    find(table, "sentence", "Tail.");
+    const auto token = parse(R"(\keywords\section{Intro}Keep. \section{Next}Tail.)");
+    check(!token.complete() && token.diagnostics.front().code == "unhandled_command",
+          "Isolated heading token needs a diagnostic");
+    find(token, "section", "Next");
+    find(token, "sentence", "Tail.");
+}
+
 }  // namespace
 
 int main() {
@@ -259,6 +320,8 @@ int main() {
         {"malformed_sources_are_not_successful", malformed_sources_are_not_successful},
         {"literal_conditionals", literal_conditionals}, {"empty_input_and_reset", empty_input_and_reset},
         {"mapping_is_loaded", mapping_is_loaded},
+        {"audit_declarations_and_normalization", audit_declarations_and_normalization},
+        {"astra_review_regressions", astra_review_regressions},
     };
     int failures = 0;
     for (const auto& [name, test] : tests) {

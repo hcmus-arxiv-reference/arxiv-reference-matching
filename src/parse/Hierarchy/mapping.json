@@ -1,6 +1,12 @@
 {
   "description": "Ánh xạ khai báo từ cú pháp LaTeX sang các loại Element hiện có; engine thực thi quy tắc trước khi băm nội dung. Danh sách hữu hạn này không thay thế bộ thực thi macro TeX.",
-  "sources": ["parsing.md", "src/common/schema.py", "docs/data-contract.md", "docs/m2-cong-viec.md"],
+  "sources": [
+    "parsing.md",
+    "src/common/schema.py",
+    "docs/data-contract.md",
+    "docs/m2-cong-viec.md",
+    "src/parse/Hierarchy/output/undefined_commands_all/review_queue.md (QA corpus 5000 Publication, 8486 Version)"
+  ],
   "groups": {
     "root": ["document"],
     "heading": ["chapter", "section", "subsection", "subsubsection", "paragraph"],
@@ -22,57 +28,68 @@
     "\\textbf": {
       "action": "unwrap",
       "arguments": 1,
-      "contexts": ["prose", "heading", "figure"]
+      "contexts": ["prose", "heading", "figure"],
+      "token_arguments": true
     },
     "\\textit": {
       "action": "unwrap",
       "arguments": 1,
-      "contexts": ["prose", "heading", "figure"]
+      "contexts": ["prose", "heading", "figure"],
+      "token_arguments": true
     },
     "\\emph": {
       "action": "unwrap",
       "arguments": 1,
-      "contexts": ["prose", "heading", "figure"]
+      "contexts": ["prose", "heading", "figure"],
+      "token_arguments": true
     },
     "\\textrm": {
       "action": "unwrap",
       "arguments": 1,
-      "contexts": ["prose", "heading", "figure"]
+      "contexts": ["prose", "heading", "figure"],
+      "token_arguments": true
     },
     "\\texttt": {
       "action": "unwrap",
       "arguments": 1,
-      "contexts": ["prose", "heading", "figure"]
+      "contexts": ["prose", "heading", "figure"],
+      "token_arguments": true
     },
     "\\textsf": {
       "action": "unwrap",
       "arguments": 1,
-      "contexts": ["prose", "heading", "figure"]
+      "contexts": ["prose", "heading", "figure"],
+      "token_arguments": true
     },
     "\\textnormal": {
       "action": "unwrap",
       "arguments": 1,
-      "contexts": ["prose", "heading", "figure"]
+      "contexts": ["prose", "heading", "figure"],
+      "token_arguments": true
     },
     "\\textsc": {
       "action": "unwrap",
       "arguments": 1,
-      "contexts": ["prose", "heading", "figure"]
+      "contexts": ["prose", "heading", "figure"],
+      "token_arguments": true
     },
     "\\textsl": {
       "action": "unwrap",
       "arguments": 1,
-      "contexts": ["prose", "heading", "figure"]
+      "contexts": ["prose", "heading", "figure"],
+      "token_arguments": true
     },
     "\\textup": {
       "action": "unwrap",
       "arguments": 1,
-      "contexts": ["prose", "heading", "figure"]
+      "contexts": ["prose", "heading", "figure"],
+      "token_arguments": true
     },
     "\\mbox": {
       "action": "unwrap",
       "arguments": 1,
-      "contexts": ["prose", "heading", "figure"]
+      "contexts": ["prose", "heading", "figure"],
+      "token_arguments": true
     },
     "\\centering": {
       "action": "discard",
@@ -274,7 +291,152 @@
     "\\$": {"action": "preserve", "arguments": 0},
     "\\#": {"action": "preserve", "arguments": 0},
     "\\{": {"action": "preserve", "arguments": 0},
-    "\\}": {"action": "preserve", "arguments": 0}
+    "\\}": {"action": "preserve", "arguments": 0},
+    "\\maketitle": {"action": "discard", "arguments": 0, "contexts": ["prose"]},
+    "\\IEEEpeerreviewmaketitle": {"action": "discard", "arguments": 0, "contexts": ["prose"]},
+    "\\tableofcontents": {"action": "discard", "arguments": 0, "contexts": ["prose"]},
+    "\\listoffigures": {"action": "discard", "arguments": 0, "contexts": ["prose"]},
+    "\\listoftables": {"action": "discard", "arguments": 0, "contexts": ["prose"]},
+    "\\title": {"action": "discard", "arguments": 1, "optional_arguments": 1, "contexts": ["prose"], "token_arguments": true},
+    "\\author": {"action": "discard", "arguments": 1, "optional_arguments": 1, "contexts": ["prose"], "token_arguments": true},
+    "\\date": {"action": "discard", "arguments": 1, "optional_arguments": 1, "contexts": ["prose"], "token_arguments": true},
+    "\\email": {"action": "discard", "arguments": 1, "optional_arguments": 1, "contexts": ["prose"], "token_arguments": true},
+    "\\affiliation": {"action": "discard", "arguments": 1, "optional_arguments": 1, "contexts": ["prose"], "token_arguments": true},
+    "\\address": {"action": "discard", "arguments": 1, "optional_arguments": 1, "contexts": ["prose"], "token_arguments": true},
+    "\\institute": {"action": "discard", "arguments": 1, "optional_arguments": 1, "contexts": ["prose"], "token_arguments": true},
+    "\\affil": {"action": "discard", "arguments": 1, "optional_arguments": 1, "contexts": ["prose"], "token_arguments": true},
+    "\\authorrunning": {"action": "discard", "arguments": 1, "optional_arguments": 1, "contexts": ["prose"], "token_arguments": true},
+    "\\titlerunning": {"action": "discard", "arguments": 1, "optional_arguments": 1, "contexts": ["prose"], "token_arguments": true},
+    "\\preprint": {"action": "discard", "arguments": 1, "optional_arguments": 1, "contexts": ["prose"], "token_arguments": true},
+    "\\orcid": {"action": "discard", "arguments": 1, "optional_arguments": 1, "contexts": ["prose"], "token_arguments": true},
+    "\\markboth": {"action": "discard", "arguments": 2, "contexts": ["prose"], "token_arguments": true},
+    "\\thispagestyle": {"action": "discard", "arguments": 1, "contexts": ["prose"], "token_arguments": true},
+    "\\pagestyle": {"action": "discard", "arguments": 1, "contexts": ["prose"], "token_arguments": true},
+    "\\setcounter": {"action": "discard", "arguments": 2, "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\addtocounter": {"action": "discard", "arguments": 2, "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\setlength": {"action": "discard", "arguments": 2, "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\addtolength": {"action": "discard", "arguments": 2, "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\definecolor": {"action": "discard", "arguments": 3, "optional_arguments": 1, "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\color": {"action": "discard", "arguments": 1, "optional_arguments": 1, "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\bf": {"action": "discard", "arguments": 0, "contexts": ["prose", "heading", "figure"]},
+    "\\it": {"action": "discard", "arguments": 0, "contexts": ["prose", "heading", "figure"]},
+    "\\em": {"action": "discard", "arguments": 0, "contexts": ["prose", "heading", "figure"]},
+    "\\rm": {"action": "discard", "arguments": 0, "contexts": ["prose", "heading", "figure"]},
+    "\\tt": {"action": "discard", "arguments": 0, "contexts": ["prose", "heading", "figure"]},
+    "\\sc": {"action": "discard", "arguments": 0, "contexts": ["prose", "heading", "figure"]},
+    "\\sl": {"action": "discard", "arguments": 0, "contexts": ["prose", "heading", "figure"]},
+    "\\sloppy": {"action": "discard", "arguments": 0, "contexts": ["prose", "heading", "figure"]},
+    "\\fussy": {"action": "discard", "arguments": 0, "contexts": ["prose", "heading", "figure"]},
+    "\\balance": {"action": "discard", "arguments": 0, "contexts": ["prose", "heading", "figure"]},
+    "\\onecolumn": {"action": "discard", "arguments": 0, "contexts": ["prose", "heading", "figure"]},
+    "\\onecolumngrid": {"action": "discard", "arguments": 0, "contexts": ["prose", "heading", "figure"]},
+    "\\twocolumngrid": {"action": "discard", "arguments": 0, "contexts": ["prose", "heading", "figure"]},
+    "\\makeatletter": {"action": "discard", "arguments": 0, "contexts": ["prose", "heading", "figure"]},
+    "\\makeatother": {"action": "discard", "arguments": 0, "contexts": ["prose", "heading", "figure"]},
+    "\\newpage": {"action": "replace", "arguments": 0, "optional_arguments": 1, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\clearpage": {"action": "replace", "arguments": 0, "optional_arguments": 1, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\cleardoublepage": {"action": "replace", "arguments": 0, "optional_arguments": 1, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\pagebreak": {"action": "replace", "arguments": 0, "optional_arguments": 1, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\nopagebreak": {"action": "replace", "arguments": 0, "optional_arguments": 1, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\linebreak": {"action": "replace", "arguments": 0, "optional_arguments": 1, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\nolinebreak": {"action": "replace", "arguments": 0, "optional_arguments": 1, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\newline": {"action": "replace", "arguments": 0, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\smallskip": {"action": "replace", "arguments": 0, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\medskip": {"action": "replace", "arguments": 0, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\bigskip": {"action": "replace", "arguments": 0, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\hfill": {"action": "replace", "arguments": 0, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\vfill": {"action": "replace", "arguments": 0, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\quad": {"action": "replace", "arguments": 0, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\qquad": {"action": "replace", "arguments": 0, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\enspace": {"action": "replace", "arguments": 0, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\thinspace": {"action": "replace", "arguments": 0, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\negthinspace": {"action": "replace", "arguments": 0, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\twocolumn": {"action": "unwrap", "arguments": 0, "optional_arguments": 1, "content_arguments": [], "content_optional_arguments": [0], "contexts": ["prose"]},
+    "\\underline": {"action": "unwrap", "arguments": 1, "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\textul": {"action": "unwrap", "arguments": 1, "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\textst": {"action": "unwrap", "arguments": 1, "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\textsuperscript": {"action": "unwrap", "arguments": 1, "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\textsubscript": {"action": "unwrap", "arguments": 1, "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\text": {"action": "unwrap", "arguments": 1, "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\normaltext": {"action": "unwrap", "arguments": 1, "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\textcolor": {"action": "unwrap", "arguments": 2, "optional_arguments": 1, "content_arguments": [1], "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\colorbox": {"action": "unwrap", "arguments": 2, "optional_arguments": 1, "content_arguments": [1], "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\fcolorbox": {"action": "unwrap", "arguments": 3, "optional_arguments": 1, "content_arguments": [2], "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\texorpdfstring": {"action": "unwrap", "arguments": 2, "content_arguments": [0], "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\IEEEPARstart": {"action": "unwrap", "arguments": 2, "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\footnote": {"action": "unwrap", "arguments": 1, "optional_arguments": 1, "content_prefix": " ", "content_suffix": " ", "contexts": ["prose", "heading"], "token_arguments": true},
+    "\\footnotetext": {"action": "unwrap", "arguments": 1, "optional_arguments": 1, "content_prefix": " ", "content_suffix": " ", "contexts": ["prose", "heading"], "token_arguments": true},
+    "\\thanks": {"action": "unwrap", "arguments": 1, "optional_arguments": 1, "content_prefix": " ", "content_suffix": " ", "contexts": ["prose", "heading"], "token_arguments": true},
+    "\\footnotemark": {"action": "discard", "arguments": 0, "optional_arguments": 1, "contexts": ["prose", "heading", "figure"]},
+    "\\keywords": {"action": "unwrap", "arguments": 1, "optional_arguments": 1, "content_prefix": " ", "content_suffix": " ", "contexts": ["prose"], "token_arguments": true},
+    "\\keyword": {"action": "unwrap", "arguments": 1, "optional_arguments": 1, "content_prefix": " ", "content_suffix": " ", "contexts": ["prose"], "token_arguments": true},
+    "\\subjclass": {"action": "unwrap", "arguments": 1, "optional_arguments": 1, "content_prefix": " ", "content_suffix": " ", "contexts": ["prose"], "token_arguments": true},
+    "\\ccsdesc": {"action": "unwrap", "arguments": 1, "optional_arguments": 1, "content_prefix": " ", "content_suffix": " ", "contexts": ["prose"], "token_arguments": true},
+    "\\abstract": {"action": "heading", "arguments": 1, "kind": "section", "level": 2, "content": "title", "fixed_title": "Abstract", "body_argument": 0, "contexts": ["prose"]},
+    "\\acknowledgments": {"action": "heading", "arguments": 0, "kind": "section", "level": 2, "content": "title", "fixed_title": "Acknowledgements", "contexts": ["prose"]},
+    "\\acknowledgements": {"action": "heading", "arguments": 0, "kind": "section", "level": 2, "content": "title", "fixed_title": "Acknowledgements", "contexts": ["prose"]},
+    "\\citealt": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\citealp": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\citeauthor": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\citeyear": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\citeyearpar": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\nocite": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\ensuremath": {"action": "inline_math", "arguments": 1, "contexts": ["prose", "heading", "figure"], "token_arguments": true},
+    "\\SI": {"action": "preserve", "arguments": 2, "optional_arguments": 1, "contexts": ["prose", "heading", "figure"]},
+    "\\si": {"action": "preserve", "arguments": 1, "optional_arguments": 1, "contexts": ["prose", "heading", "figure"]},
+    "\\num": {"action": "preserve", "arguments": 1, "optional_arguments": 1, "contexts": ["prose", "heading", "figure"]},
+    "\\S": {"action": "replace", "arguments": 0, "replacement": "§", "contexts": ["prose", "heading", "figure"]},
+    "\\P": {"action": "replace", "arguments": 0, "replacement": "¶", "contexts": ["prose", "heading", "figure"]},
+    "\\AA": {"action": "replace", "arguments": 0, "replacement": "Å", "contexts": ["prose", "heading", "figure"]},
+    "\\aa": {"action": "replace", "arguments": 0, "replacement": "å", "contexts": ["prose", "heading", "figure"]},
+    "\\AE": {"action": "replace", "arguments": 0, "replacement": "Æ", "contexts": ["prose", "heading", "figure"]},
+    "\\ae": {"action": "replace", "arguments": 0, "replacement": "æ", "contexts": ["prose", "heading", "figure"]},
+    "\\OE": {"action": "replace", "arguments": 0, "replacement": "Œ", "contexts": ["prose", "heading", "figure"]},
+    "\\oe": {"action": "replace", "arguments": 0, "replacement": "œ", "contexts": ["prose", "heading", "figure"]},
+    "\\O": {"action": "replace", "arguments": 0, "replacement": "Ø", "contexts": ["prose", "heading", "figure"]},
+    "\\o": {"action": "replace", "arguments": 0, "replacement": "ø", "contexts": ["prose", "heading", "figure"]},
+    "\\ss": {"action": "replace", "arguments": 0, "replacement": "ß", "contexts": ["prose", "heading", "figure"]},
+    "\\L": {"action": "replace", "arguments": 0, "replacement": "Ł", "contexts": ["prose", "heading", "figure"]},
+    "\\l": {"action": "replace", "arguments": 0, "replacement": "ł", "contexts": ["prose", "heading", "figure"]},
+    "\\i": {"action": "replace", "arguments": 0, "replacement": "ı", "contexts": ["prose", "heading", "figure"]},
+    "\\j": {"action": "replace", "arguments": 0, "replacement": "ȷ", "contexts": ["prose", "heading", "figure"]},
+    "\\textbackslash": {"action": "replace", "arguments": 0, "replacement": "\\", "contexts": ["prose", "heading", "figure"]},
+    "\\textasciitilde": {"action": "replace", "arguments": 0, "replacement": "~", "contexts": ["prose", "heading", "figure"]},
+    "\\textasciicircum": {"action": "replace", "arguments": 0, "replacement": "^", "contexts": ["prose", "heading", "figure"]},
+    "\\textendash": {"action": "replace", "arguments": 0, "replacement": "–", "contexts": ["prose", "heading", "figure"]},
+    "\\textemdash": {"action": "replace", "arguments": 0, "replacement": "—", "contexts": ["prose", "heading", "figure"]},
+    "\\textellipsis": {"action": "replace", "arguments": 0, "replacement": "…", "contexts": ["prose", "heading", "figure"]},
+    "\\ldots": {"action": "replace", "arguments": 0, "replacement": "…", "contexts": ["prose", "heading", "figure"]},
+    "\\copyright": {"action": "replace", "arguments": 0, "replacement": "©", "contexts": ["prose", "heading", "figure"]},
+    "\\textregistered": {"action": "replace", "arguments": 0, "replacement": "®", "contexts": ["prose", "heading", "figure"]},
+    "\\ ": {"action": "replace", "arguments": 0, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\\n": {"action": "replace", "arguments": 0, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\,": {"action": "replace", "arguments": 0, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\;": {"action": "replace", "arguments": 0, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\:": {"action": "replace", "arguments": 0, "replacement": " ", "contexts": ["prose", "heading", "figure"]},
+    "\\!": {"action": "replace", "arguments": 0, "replacement": "", "contexts": ["prose", "heading", "figure"]},
+    "\\/": {"action": "replace", "arguments": 0, "replacement": "", "contexts": ["prose", "heading", "figure"]},
+    "\\-": {"action": "replace", "arguments": 0, "replacement": "", "contexts": ["prose", "heading", "figure"]},
+    "\\\\": {"action": "replace", "arguments": 0, "optional_arguments": 1, "replacement": " ", "contexts": ["prose", "heading"]},
+    "\\\\*": {"action": "replace", "arguments": 0, "optional_arguments": 1, "replacement": " ", "contexts": ["prose", "heading"]},
+    "\\'": {"action": "accent", "arguments": 1, "combining_mark": "́", "contexts": ["prose", "heading", "figure"], "token_arguments": true, "characters": {"A": "Á", "C": "Ć", "E": "É", "G": "Ǵ", "I": "Í", "K": "Ḱ", "L": "Ĺ", "M": "Ḿ", "N": "Ń", "O": "Ó", "P": "Ṕ", "R": "Ŕ", "S": "Ś", "U": "Ú", "W": "Ẃ", "Y": "Ý", "Z": "Ź", "a": "á", "c": "ć", "e": "é", "g": "ǵ", "i": "í", "k": "ḱ", "l": "ĺ", "m": "ḿ", "n": "ń", "o": "ó", "p": "ṕ", "r": "ŕ", "s": "ś", "u": "ú", "w": "ẃ", "y": "ý", "z": "ź"}},
+    "\\`": {"action": "accent", "arguments": 1, "combining_mark": "̀", "contexts": ["prose", "heading", "figure"], "token_arguments": true, "characters": {"A": "À", "E": "È", "I": "Ì", "N": "Ǹ", "O": "Ò", "U": "Ù", "W": "Ẁ", "Y": "Ỳ", "a": "à", "e": "è", "i": "ì", "n": "ǹ", "o": "ò", "u": "ù", "w": "ẁ", "y": "ỳ"}},
+    "\\\"": {"action": "accent", "arguments": 1, "combining_mark": "̈", "contexts": ["prose", "heading", "figure"], "token_arguments": true, "characters": {"A": "Ä", "E": "Ë", "H": "Ḧ", "I": "Ï", "O": "Ö", "U": "Ü", "W": "Ẅ", "X": "Ẍ", "Y": "Ÿ", "a": "ä", "e": "ë", "h": "ḧ", "i": "ï", "o": "ö", "t": "ẗ", "u": "ü", "w": "ẅ", "x": "ẍ", "y": "ÿ"}},
+    "\\^": {"action": "accent", "arguments": 1, "combining_mark": "̂", "contexts": ["prose", "heading", "figure"], "token_arguments": true, "characters": {"A": "Â", "C": "Ĉ", "E": "Ê", "G": "Ĝ", "H": "Ĥ", "I": "Î", "J": "Ĵ", "O": "Ô", "S": "Ŝ", "U": "Û", "W": "Ŵ", "Y": "Ŷ", "Z": "Ẑ", "a": "â", "c": "ĉ", "e": "ê", "g": "ĝ", "h": "ĥ", "i": "î", "j": "ĵ", "o": "ô", "s": "ŝ", "u": "û", "w": "ŵ", "y": "ŷ", "z": "ẑ"}},
+    "\\~": {"action": "accent", "arguments": 1, "combining_mark": "̃", "contexts": ["prose", "heading", "figure"], "token_arguments": true, "characters": {"A": "Ã", "E": "Ẽ", "I": "Ĩ", "N": "Ñ", "O": "Õ", "U": "Ũ", "V": "Ṽ", "Y": "Ỹ", "a": "ã", "e": "ẽ", "i": "ĩ", "n": "ñ", "o": "õ", "u": "ũ", "v": "ṽ", "y": "ỹ"}},
+    "\\=": {"action": "accent", "arguments": 1, "combining_mark": "̄", "contexts": ["prose", "heading", "figure"], "token_arguments": true, "characters": {"A": "Ā", "E": "Ē", "G": "Ḡ", "I": "Ī", "O": "Ō", "U": "Ū", "Y": "Ȳ", "a": "ā", "e": "ē", "g": "ḡ", "i": "ī", "o": "ō", "u": "ū", "y": "ȳ"}},
+    "\\.": {"action": "accent", "arguments": 1, "combining_mark": "̇", "contexts": ["prose", "heading", "figure"], "token_arguments": true, "characters": {"A": "Ȧ", "B": "Ḃ", "C": "Ċ", "D": "Ḋ", "E": "Ė", "F": "Ḟ", "G": "Ġ", "H": "Ḣ", "I": "İ", "M": "Ṁ", "N": "Ṅ", "O": "Ȯ", "P": "Ṗ", "R": "Ṙ", "S": "Ṡ", "T": "Ṫ", "W": "Ẇ", "X": "Ẋ", "Y": "Ẏ", "Z": "Ż", "a": "ȧ", "b": "ḃ", "c": "ċ", "d": "ḋ", "e": "ė", "f": "ḟ", "g": "ġ", "h": "ḣ", "m": "ṁ", "n": "ṅ", "o": "ȯ", "p": "ṗ", "r": "ṙ", "s": "ṡ", "t": "ṫ", "w": "ẇ", "x": "ẋ", "y": "ẏ", "z": "ż"}},
+    "\\u": {"action": "accent", "arguments": 1, "combining_mark": "̆", "contexts": ["prose", "heading", "figure"], "token_arguments": true, "characters": {"A": "Ă", "E": "Ĕ", "G": "Ğ", "I": "Ĭ", "O": "Ŏ", "U": "Ŭ", "a": "ă", "e": "ĕ", "g": "ğ", "i": "ĭ", "o": "ŏ", "u": "ŭ"}},
+    "\\v": {"action": "accent", "arguments": 1, "combining_mark": "̌", "contexts": ["prose", "heading", "figure"], "token_arguments": true, "characters": {"A": "Ǎ", "C": "Č", "D": "Ď", "E": "Ě", "G": "Ǧ", "H": "Ȟ", "I": "Ǐ", "K": "Ǩ", "L": "Ľ", "N": "Ň", "O": "Ǒ", "R": "Ř", "S": "Š", "T": "Ť", "U": "Ǔ", "Z": "Ž", "a": "ǎ", "c": "č", "d": "ď", "e": "ě", "g": "ǧ", "h": "ȟ", "i": "ǐ", "j": "ǰ", "k": "ǩ", "l": "ľ", "n": "ň", "o": "ǒ", "r": "ř", "s": "š", "t": "ť", "u": "ǔ", "z": "ž"}},
+    "\\H": {"action": "accent", "arguments": 1, "combining_mark": "̋", "contexts": ["prose", "heading", "figure"], "token_arguments": true, "characters": {"O": "Ő", "U": "Ű", "o": "ő", "u": "ű"}},
+    "\\c": {"action": "accent", "arguments": 1, "combining_mark": "̧", "contexts": ["prose", "heading", "figure"], "token_arguments": true, "characters": {"C": "Ç", "D": "Ḑ", "E": "Ȩ", "G": "Ģ", "H": "Ḩ", "K": "Ķ", "L": "Ļ", "N": "Ņ", "R": "Ŗ", "S": "Ş", "T": "Ţ", "c": "ç", "d": "ḑ", "e": "ȩ", "g": "ģ", "h": "ḩ", "k": "ķ", "l": "ļ", "n": "ņ", "r": "ŗ", "s": "ş", "t": "ţ"}},
+    "\\k": {"action": "accent", "arguments": 1, "combining_mark": "̨", "contexts": ["prose", "heading", "figure"], "token_arguments": true, "characters": {"A": "Ą", "E": "Ę", "I": "Į", "O": "Ǫ", "U": "Ų", "a": "ą", "e": "ę", "i": "į", "o": "ǫ", "u": "ų"}},
+    "\\r": {"action": "accent", "arguments": 1, "combining_mark": "̊", "contexts": ["prose", "heading", "figure"], "token_arguments": true, "characters": {"A": "Å", "U": "Ů", "a": "å", "u": "ů", "w": "ẘ", "y": "ẙ"}},
+    "\\b": {"action": "accent", "arguments": 1, "combining_mark": "̱", "contexts": ["prose", "heading", "figure"], "token_arguments": true, "characters": {"B": "Ḇ", "D": "Ḏ", "K": "Ḵ", "L": "Ḻ", "N": "Ṉ", "R": "Ṟ", "T": "Ṯ", "Z": "Ẕ", "b": "ḇ", "d": "ḏ", "h": "ẖ", "k": "ḵ", "l": "ḻ", "n": "ṉ", "r": "ṟ", "t": "ṯ", "z": "ẕ"}},
+    "\\d": {"action": "accent", "arguments": 1, "combining_mark": "̣", "contexts": ["prose", "heading", "figure"], "token_arguments": true, "characters": {"A": "Ạ", "B": "Ḅ", "D": "Ḍ", "E": "Ẹ", "H": "Ḥ", "I": "Ị", "K": "Ḳ", "L": "Ḷ", "M": "Ṃ", "N": "Ṇ", "O": "Ọ", "R": "Ṛ", "S": "Ṣ", "T": "Ṭ", "U": "Ụ", "V": "Ṿ", "W": "Ẉ", "Y": "Ỵ", "Z": "Ẓ", "a": "ạ", "b": "ḅ", "d": "ḍ", "e": "ẹ", "h": "ḥ", "i": "ị", "k": "ḳ", "l": "ḷ", "m": "ṃ", "n": "ṇ", "o": "ọ", "r": "ṛ", "s": "ṣ", "t": "ṭ", "u": "ụ", "v": "ṿ", "w": "ẉ", "y": "ỵ", "z": "ẓ"}},
+    "\\mathpalette": {"action": "preserve", "arguments": 2, "token_arguments": true, "contexts": ["formula"]},
+    "\\mathchoice": {"action": "preserve", "arguments": 4, "contexts": ["formula"]},
+    "\\xspace": {"action": "replace", "arguments": 0, "replacement": " ", "omit_before": ",.;:!?)]}-/", "contexts": ["prose", "heading", "figure"]}
   },
   "environments": {
     "document": {"kind": "document", "content": "", "children": "parsed_body", "action": "root"},
@@ -409,7 +571,40 @@
       "argument_spec": ["required", "optional", "optional"],
       "optional_argument_content": "prepend",
       "optional_argument_indices": [0]
-    }
+    },
+    "frontmatter": {"action": "transparent", "paragraph_boundary": false},
+    "widetext": {"action": "transparent", "paragraph_boundary": false},
+    "strip": {"action": "transparent", "paragraph_boundary": false},
+    "landscape": {"action": "transparent", "paragraph_boundary": false},
+    "sloppypar": {"action": "transparent", "paragraph_boundary": false},
+    "small": {"action": "transparent", "paragraph_boundary": false},
+    "footnotesize": {"action": "transparent", "paragraph_boundary": false},
+    "scriptsize": {"action": "transparent", "paragraph_boundary": false},
+    "large": {"action": "transparent", "paragraph_boundary": false},
+    "tiny": {"action": "transparent", "paragraph_boundary": false},
+    "normalsize": {"action": "transparent", "paragraph_boundary": false},
+    "appendices": {"action": "transparent", "reset_reference_exclusion": true},
+    "appendix": {"action": "transparent", "reset_reference_exclusion": true},
+    "keywords": {"action": "transparent", "optional_arguments": 1},
+    "IEEEkeywords": {"action": "transparent", "optional_arguments": 1},
+    "CCSXML": {"action": "exclude"},
+    "enumerate*": {"action": "list", "kind": "itemize", "content": "", "children": "items", "optional_arguments": 1},
+    "compactenum": {"action": "list", "kind": "itemize", "content": "", "children": "items", "optional_arguments": 1},
+    "inparaenum": {"action": "list", "kind": "itemize", "content": "", "children": "items", "optional_arguments": 1},
+    "itemize*": {"action": "list", "kind": "itemize", "content": "", "children": "items", "optional_arguments": 1},
+    "compactitem": {"action": "list", "kind": "itemize", "content": "", "children": "items", "optional_arguments": 1},
+    "inparaitem": {"action": "list", "kind": "itemize", "content": "", "children": "items", "optional_arguments": 1},
+    "acknowledgement": {"action": "heading", "kind": "section", "level": 2, "content": "Acknowledgements", "parent": "document"},
+    "acknowledgment": {"action": "heading", "kind": "section", "level": 2, "content": "Acknowledgements", "parent": "document"},
+    "abstract*": {"action": "heading", "kind": "section", "level": 2, "content": "Abstract", "parent": "document"},
+    "sciabstract": {"action": "heading", "kind": "section", "level": 2, "content": "Abstract", "parent": "document"},
+    "IEEEproof": {"action": "transparent", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "proofsketch": {"action": "transparent", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "tikzpicture": {"action": "figure", "kind": "figure", "content": "whole_environment", "atomic": true, "optional_arguments": 1, "normalize_body": false},
+    "picture": {"action": "figure", "kind": "figure", "content": "whole_environment", "atomic": true, "optional_arguments": 1, "normalize_body": false},
+    "tikzcd": {"action": "formula", "kind": "formula", "content": "whole_environment", "atomic": true, "normalize_to": "equation", "inner_environment": "tikzcd", "optional_arguments": 1},
+    "tabularx": {"action": "figure", "kind": "figure", "content": "whole_environment", "atomic": true, "argument_spec": ["required", "optional", "required"]},
+    "longtable*": {"action": "figure", "kind": "figure", "content": "whole_environment", "atomic": true, "argument_spec": ["optional", "required"]}
   },
   "math_delimiters": {
     "block": [
@@ -457,5 +652,32 @@
     }
   ],
   "unknown_tags": {"action": "preserve_and_report", "note": "Lệnh lạ được giữ nguyên cùng đối số và báo diagnostic; môi trường lạ giữ toàn bộ source trong diagnostic, không tự coi thân là văn xuôi. Không coi kết quả có diagnostic là parse hoàn chỉnh."},
-  "limitations": ["Tên môi trường định lý chỉ được nhận diện theo danh sách tường minh; định nghĩa lại hoặc alias qua macro chưa được thực thi.", "Không thực thi macro hoặc điều kiện TeX tùy ý; lệnh và môi trường chưa hỗ trợ phải được báo diagnostic.", "Môi trường literal được giữ thành một sentence nguyên khối; thuật toán và cấu trúc tùy biến chưa có quy tắc thì báo diagnostic, không tự gán thành figure.", "Tên theorem/proof và số tự sinh không được dựng lại; giữ thân và tiêu đề tùy chọn trong cùng nhánh hiện có.", "Cite và ref giữ nguyên cú pháp; hợp nhất BibTeX và đổi khóa trích dẫn thuộc bước riêng."]
+  "declarations": {
+    "newtheorem": {
+      "action": "transparent",
+      "optional_arguments": 1,
+      "optional_argument_content": "prepend"
+    },
+    "macros": {
+      "enabled": true,
+      "max_depth": 64,
+      "max_expansions": 100000,
+      "max_expanded_bytes": 8388608,
+      "supported": [
+        "newcommand",
+        "renewcommand",
+        "providecommand",
+        "DeclareRobustCommand",
+        "def"
+      ],
+      "unsupported": "delimited parameters, edef/xdef/gdef, newenvironment, package execution and arbitrary TeX conditionals"
+    }
+  },
+  "limitations": [
+    "Đọc newtheorem/newtheorem* trong source để nhận diện tên định lý; không dựng số hoặc tên nhãn tự sinh.",
+    "Chỉ thay thế macro có tham số tuần tự #1..#9 và optional default theo giới hạn đã khai báo; không thực thi package, primitive hoặc điều kiện TeX tùy ý.",
+    "Môi trường literal được giữ thành một sentence nguyên khối; thuật toán và cấu trúc tùy biến chưa có quy tắc thì báo diagnostic, không tự gán thành figure.",
+    "Tên theorem/proof và số tự sinh không được dựng lại; giữ thân và tiêu đề tùy chọn trong cùng nhánh hiện có.",
+    "Cite và ref giữ nguyên cú pháp; hợp nhất BibTeX và đổi khóa trích dẫn thuộc bước riêng."
+  ]
 }

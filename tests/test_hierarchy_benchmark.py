@@ -45,6 +45,20 @@ def test_selection_prioritizes_tex_and_richest_version(tmp_path):
     assert [row["folder"] for row in rows] == ["2508-02872/v2", "2508-02873/v1"]
 
 
+def test_expansion_excludes_prior_publications_across_versions(tmp_path):
+    raw = tmp_path / "raw"
+    article(raw / "2508-02872/v1")
+    article(raw / "2508-02872/v2")
+    article(raw / "2508-02873/v1")
+    previous = tmp_path / "previous.json"
+    previous.write_text(json.dumps({"results": [{"folder": "2508-02872/v1"}]}))
+    report = benchmark.run_benchmark(raw, output_dir=tmp_path / "out", limit=1,
+                                     exclude_report=previous)
+    assert report["summary"]["target_reached"]
+    assert [row["folder"] for row in report["results"]] == ["2508-02873/v1"]
+    assert report["config"]["excluded_publications"] == ["2508-02872"]
+
+
 def test_real_pipeline_exports_ordered_occurrences_and_metadata(tmp_path):
     raw, out = tmp_path / "raw", tmp_path / "out"
     folder = raw / "2508-02872/v2"

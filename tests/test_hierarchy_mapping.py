@@ -147,3 +147,23 @@ def test_actions_and_unique_configuration_entries():
     assert mapping["commands"][r"\textbf"]["contexts"] == ["prose", "heading", "figure"]
     for name in ("verbatim", "lstlisting", "minted"):
         assert mapping["environments"][name]["whitespace"] == "preserve_exact_body"
+
+
+def test_audit_rules_select_visible_arguments_and_preserve_math_rows():
+    mapping = load_mapping()
+    commands = mapping['commands']
+    assert commands[r'\textcolor']['content_arguments'] == [1]
+    assert commands[r'\texorpdfstring']['content_arguments'] == [0]
+    assert commands[r'\footnote']['action'] == 'unwrap'
+    assert 'formula' not in commands[r'\\']['contexts']
+    assert 'figure' not in commands[r'\\']['contexts']
+    assert 'thm' not in mapping['environments']  # Requires a declaration, not a name guess.
+    assert 'algorithm' not in mapping['environments']
+    assert mapping['declarations']['newtheorem']['action'] == 'transparent'
+    limits = mapping['declarations']['macros']
+    assert limits['enabled']
+    assert all(limits[key] > 0 for key in ('max_depth', 'max_expansions', 'max_expanded_bytes'))
+    for rule in commands.values():
+        for key in ('content_arguments', 'content_optional_arguments'):
+            count = rule.get('optional_arguments' if key == 'content_optional_arguments' else 'arguments', 0)
+            assert all(0 <= index < count for index in rule.get(key, []))

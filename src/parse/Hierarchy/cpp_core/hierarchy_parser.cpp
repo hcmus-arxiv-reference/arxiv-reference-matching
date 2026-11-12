@@ -5,6 +5,7 @@
 #include <fstream>
 #include <functional>
 #include <iomanip>
+#include <numeric>
 #include <optional>
 #include <regex>
 #include <set>
@@ -55,8 +56,24 @@ Command command_at(const std::string& text, std::size_t start) {
         if (end < text.size() && text[end] == '*') ++end;
     } else if (end < text.size()) {
         ++end;
+        while (end < text.size() && (static_cast<unsigned char>(text[end]) & 0xc0) == 0x80) ++end;
     }
     return {text.substr(start, end - start), end};
+}
+
+bool control_word_before(const std::string& text, std::size_t end) {
+    const auto last = end;
+    while (end > 0 && (letter(text[end - 1]) || text[end - 1] == '@')) --end;
+    if (end == last) return false;
+    const auto word = end;
+    while (end > 0 && text[end - 1] == '\\') --end;
+    return (word - end) % 2 == 1;
+}
+
+void append_tokens(std::string& out, const std::string& value) {
+    // TeX expands token lists: replacing an adjacent macro must not form \alphab.
+    if (!value.empty() && (letter(value[0]) || value[0] == '@') && control_word_before(out, out.size())) out += ' ';
+    out += value;
 }
 
 std::size_t skip_space(const std::string& text, std::size_t pos) {
@@ -155,7 +172,8 @@ struct Environment {
 };
 
 Environment environment_at(const std::string& text, std::size_t body_start,
-                           const std::string& name, const std::set<std::string>& literal) {
+                           const std::string& name, const std::set<std::string>& literal,
+                           const std::function<bool(const Command&, std::size_t, std::size_t&)>& expand = {}) {
     if (literal.count(name)) {
         const std::string closing = "\\end{" + name + "}";
         const auto end = text.find(closing, body_start);
@@ -177,6 +195,8 @@ Environment environment_at(const std::string& text, std::size_t body_start,
                 pos = verb_end(text, pos);
             } else if (definitions.count(cmd.name)) {
                 pos = definition_end(text, cmd);
+            } else if (expand && expand(cmd, start, pos)) {
+                continue;
             } else if (cmd.name == "\\begin" || cmd.name == "\\end") {
                 const auto arg = group_at(text, pos);
                 pos = arg.end;
@@ -249,6 +269,16 @@ Arguments arguments_at(const std::string& source, std::size_t pos, const Json& r
     auto read = [&](bool optional) {
         const auto next = skip_space(source, out.end);
         if (optional && (next == source.size() || source[next] != '[')) return;
+        if (!optional && rule.value("token_arguments", false) && next < source.size() && source[next] != '{') {
+            auto end = source[next] == '\\' ? command_at(source, next).end : next + 1;
+            // Consume one UTF-8 code point rather than one byte for an unbraced token.
+            while (end < source.size() && (static_cast<unsigned char>(source[end]) & 0xc0) == 0x80) ++end;
+            out.required.push_back(source.substr(next, end - next));
+            out.required_offsets.push_back(next);
+            out.required_source += "{" + out.required.back() + "}";
+            out.end = end;
+            return;
+        }
         const auto group = group_at(source, next, optional ? '[' : '{');
         (optional ? out.optional : out.required).push_back(source.substr(next + 1, group.end - next - 2));
         (optional ? out.optional_offsets : out.required_offsets).push_back(next + 1);
@@ -289,10 +319,18 @@ struct Node {
     std::string id;
 };
 
+struct CounterGuard {
+    int& value;
+    int delta;
+    explicit CounterGuard(int& value, int delta = 1) : value(value), delta(delta) { value += delta; }
+    ~CounterGuard() { value -= delta; }
+};
+
 class Engine {
 public:
     Engine(const Json& mapping, const std::string& latex, const std::string& arxiv_id, int version)
-        : mapping(mapping), text(latex), arxiv_id(arxiv_id), version(version) {
+        : mapping(mapping), text(latex), arxiv_id(arxiv_id), version(version), original_size(latex.size()), origins(latex.size()), expansion_depth(latex.size(), 0) {
+        std::iota(origins.begin(), origins.end(), 0);
         for (const auto& [name, rule] : mapping.at("environments").items())
             if (rule.value("action", "") == "literal" || name == "comment") literal_names.insert(name);
     }
@@ -305,12 +343,18 @@ public:
         try {
             pos = body_start();
             parse_body(pos);
+            flush();
             if (!lists.empty()) throw std::runtime_error("Unclosed list environment");
             if (!containers.empty()) throw std::runtime_error("Unclosed container environment");
             if (!conditions.empty()) throw std::runtime_error("Unclosed conditional");
-            flush();
+            if (!scopes.empty()) { pos = scopes.back().offset; throw std::runtime_error("Unclosed group"); }
         } catch (const std::runtime_error& error) {
             issue("invalid_syntax", pos, error.what(), "");
+            // A later unsupported construct must not erase the valid prose prefix.
+            try { flush(); }
+            catch (const std::runtime_error& recovery_error) {
+                issue("invalid_syntax", pos, "Cannot recover pending prose: " + std::string(recovery_error.what()), prose);
+            }
         }
         assign_ids(0, 0);
         std::set<std::string> elements_seen;
@@ -321,7 +365,7 @@ public:
 
 private:
     const Json& mapping;
-    const std::string& text;
+    std::string text;
     const std::string& arxiv_id;
     int version;
     ParseResult result;
@@ -343,10 +387,219 @@ private:
     bool ended = false;
     std::string prose;
     std::vector<bool> protected_chars;
+    // Each expanded byte points back to its invocation in the original merged source.
+    std::size_t original_size;
+    std::vector<std::size_t> origins;
+    std::vector<int> expansion_depth;
+    struct Macro { int count; std::optional<std::string> fallback; std::string body; bool supported; };
+    std::map<std::string, Macro> macros;
+    Json declared_environments = Json::object();
+    std::map<std::string, bool> booleans;
+    struct Scope { std::map<std::string, Macro> macros; Json environments; std::map<std::string, bool> booleans; std::size_t offset; };
+    std::vector<Scope> scopes;
+    std::size_t expansions = 0;
+    int normalization_depth = 0;
+    int opaque_figures = 0;
 
     void issue(const std::string& code, std::size_t offset, const std::string& message,
                const std::string& source) {
-        result.diagnostics.push_back({code, offset, message, source});
+        result.diagnostics.push_back({code, offset < origins.size() ? origins[offset] : original_size, message, source});
+    }
+
+    void open_scope(std::size_t offset) {
+        if (scopes.size() >= 256) throw std::runtime_error("Group depth exceeds 256");
+        scopes.push_back({macros, declared_environments, booleans, offset});
+    }
+
+    void close_scope() {
+        if (scopes.empty()) throw std::runtime_error("Unmatched closing group");
+        macros = std::move(scopes.back().macros);
+        declared_environments = std::move(scopes.back().environments);
+        booleans = std::move(scopes.back().booleans);
+        scopes.pop_back();
+    }
+
+    bool boolean_command(const Command& cmd, std::size_t& pos) {
+        if (cmd.name == "\\newif") {
+            pos = skip_space(text, pos);
+            if (pos >= text.size() || text[pos] != '\\') throw std::runtime_error("Expected a newif control sequence");
+            const auto target = command_at(text, pos);
+            if (target.name.rfind("\\if", 0) != 0) throw std::runtime_error("Expected an if-prefixed control sequence");
+            pos = target.end;
+            if (active()) booleans[target.name] = false;
+            return true;
+        }
+        for (auto& [name, value] : booleans) {
+            const auto stem = "\\" + name.substr(3);
+            if (cmd.name == stem + "true" || cmd.name == stem + "false") {
+                if (active()) value = cmd.name == stem + "true";
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool declaration(const Command& cmd, std::size_t& pos, bool report) {
+        if (cmd.name == "\\newtheorem" || cmd.name == "\\newtheorem*") {
+            const auto name = group_at(text, pos);
+            pos = skip_space(text, name.end);
+            if (pos < text.size() && text[pos] == '[') pos = group_at(text, pos, '[').end;
+            pos = group_at(text, pos).end; // Printed label is generated by TeX, not a heading.
+            const auto next = skip_space(text, pos);
+            if (next < text.size() && text[next] == '[') pos = group_at(text, next, '[').end;
+            if (mapping.contains("declarations") && mapping.at("declarations").contains("newtheorem"))
+                declared_environments[name.text] = mapping.at("declarations").at("newtheorem");
+            return true;
+        }
+        if (!definitions.count(cmd.name)) return false;
+        const auto start = cmd.end - cmd.name.size();
+        const auto end = definition_end(text, cmd);
+        if (cmd.name.find("environment") != std::string::npos) {
+            pos = end;
+            if (report) issue("unexpanded_definition", start, "Custom environment definitions are not executed", text.substr(start, end - start));
+            return true;
+        }
+        auto next = skip_space(text, cmd.end);
+        std::string name;
+        if (next < text.size() && text[next] == '\\') { const auto token = command_at(text, next); name = token.name; next = token.end; }
+        else { const auto token = group_at(text, next); name = compact(token.text); next = token.end; }
+        int count = 0;
+        std::optional<std::string> fallback;
+        bool supported = cmd.name != "\\edef" && cmd.name != "\\xdef" && cmd.name != "\\gdef";
+        next = skip_space(text, next);
+        if (cmd.name == "\\def" || cmd.name == "\\edef" || cmd.name == "\\xdef" || cmd.name == "\\gdef") {
+            const auto brace = text.find('{', next);
+            const auto signature = without_comments(text.substr(next, brace - next));
+            std::string expected;
+            for (char c : signature) if (c >= '1' && c <= '9') count = std::max(count, c - '0');
+            for (int i = 1; i <= count; ++i) expected += "#" + std::to_string(i);
+            supported = supported && signature == expected;
+            next = brace;
+        } else if (next < text.size() && text[next] == '[') {
+            const auto arity = group_at(text, next, '[');
+            const auto number = compact(arity.text);
+            supported = number.size() == 1 && digit(number[0]);
+            count = supported ? number[0] - '0' : 0;
+            next = skip_space(text, arity.end);
+            if (next < text.size() && text[next] == '[') {
+                const auto value = group_at(text, next, '[');
+                fallback = value.text;
+                next = value.end;
+                supported = supported && count > 0;
+            }
+        }
+        const auto body = group_at(text, next);
+        for (std::size_t i = 0; i < body.text.size(); ++i) {
+            if (body.text[i] == '\\') { i = command_at(body.text, i).end - 1; continue; }
+            if (body.text[i] == '#' && (i + 1 == body.text.size() || body.text[i + 1] < '1' || body.text[i + 1] > '0' + count)) supported = false;
+        }
+        supported = supported && mapping.contains("declarations") && mapping.at("declarations").contains("macros") && mapping.at("declarations").at("macros").value("enabled", false);
+        const bool provide = cmd.name == "\\providecommand" || cmd.name == "\\providecommand*";
+        if (!provide || (!macros.count(name) && !mapping.at("commands").contains(name)))
+            macros[name] = {count, fallback, body.text, supported};
+        pos = end;
+        if (!supported && report) issue("unexpanded_definition", start, "Unsupported macro definition: " + name, text.substr(start, end - start));
+        return true;
+    }
+
+    std::optional<std::pair<std::string, std::size_t>> expansion(const std::string& source, const Command& cmd, int depth) {
+        const auto found = macros.find(cmd.name);
+        if (found == macros.end() || !found->second.supported) return std::nullopt;
+        const auto& limits = mapping.at("declarations").at("macros");
+        if (depth >= limits.value("max_depth", 64) || ++expansions > limits.value("max_expansions", 100000U))
+            throw std::runtime_error("Macro expansion limit reached: " + cmd.name);
+        const auto& macro = found->second;
+        Json rule = {{"arguments", macro.count - (macro.fallback ? 1 : 0)}, {"optional_arguments", macro.fallback ? 1 : 0}, {"token_arguments", true}};
+        auto args = arguments_at(source, cmd.end, rule);
+        std::vector<std::string> values;
+        if (macro.fallback) values.push_back(args.optional.empty() ? *macro.fallback : args.optional.front());
+        values.insert(values.end(), args.required.begin(), args.required.end());
+        std::string out;
+        for (std::size_t i = 0; i < macro.body.size(); ++i) {
+            if (macro.body[i] == '\\') {
+                const auto token = command_at(macro.body, i);
+                append_tokens(out, token.name); i = token.end - 1;
+            } else if (macro.body[i] == '#' && i + 1 < macro.body.size()) append_tokens(out, values.at(macro.body[++i] - '1'));
+            else append_tokens(out, macro.body.substr(i, 1));
+            if (out.size() > limits.value("max_expanded_bytes", 8388608U)) throw std::runtime_error("Expanded macro exceeds byte limit");
+        }
+        const auto start = cmd.end - cmd.name.size();
+        if (!out.empty() && (letter(out[0]) || out[0] == '@') && control_word_before(source, start)) out.insert(0, " ");
+        if (args.end < source.size() && (letter(source[args.end]) || source[args.end] == '@') && control_word_before(out, out.size())) out += ' ';
+        return std::make_pair(out, args.end);
+    }
+
+    bool expand_body(const Command& cmd, std::size_t start, std::size_t& pos) {
+        const int depth = expansion_depth.at(start);
+        const auto expanded = expansion(text, cmd, depth);
+        if (!expanded) return false;
+        const auto& [value, end] = *expanded;
+        if (text.size() - (end - start) + value.size() > mapping.at("declarations").at("macros").value("max_expanded_bytes", 8388608U))
+            throw std::runtime_error("Expanded document exceeds byte limit");
+        const auto origin = origins.at(start);
+        text.replace(start, end - start, value);
+        origins.erase(origins.begin() + start, origins.begin() + end);
+        origins.insert(origins.begin() + start, value.size(), origin);
+        expansion_depth.erase(expansion_depth.begin() + start, expansion_depth.begin() + end);
+        expansion_depth.insert(expansion_depth.begin() + start, value.size(), depth + 1);
+        pos = start;
+        return true;
+    }
+
+    void unwrap_body(const Arguments& args, const Json& rule, std::size_t start, std::size_t& pos) {
+        for (std::size_t i = 0; i < args.required.size(); ++i) {
+            if (rule.contains("content_arguments")) {
+                const auto& selected = rule.at("content_arguments");
+                if (std::find(selected.begin(), selected.end(), Json(i)) == selected.end()) continue;
+            }
+            const auto& part = args.required[i];
+            const auto& commands = mapping.at("commands");
+            if (commands.contains(part) && action_of(commands.at(part)) == "heading" &&
+                !commands.at(part).contains("fixed_title")) {
+                issue("unhandled_command", start, "Heading token without its argument inside a prose wrapper", text.substr(start, pos - start));
+                append(text.substr(start, pos - start) + " ", true);
+                return;
+            }
+        }
+        std::string value;
+        std::vector<std::size_t> value_origins;
+        std::vector<int> value_depths;
+        const auto origin = origins.at(start);
+        const auto depth = std::max(1, expansion_depth.at(start));
+        auto literal = [&](const std::string& part) {
+            value += part;
+            value_origins.insert(value_origins.end(), part.size(), origin);
+            value_depths.insert(value_depths.end(), part.size(), depth);
+        };
+        auto argument = [&](const std::string& part, std::size_t offset) {
+            // Plain groups preserve argument-local definitions and token boundaries.
+            // They also let xspace see the actual argument end, before punctuation.
+            literal("{");
+            value += part;
+            value_origins.insert(value_origins.end(), origins.begin() + offset, origins.begin() + offset + part.size());
+            for (std::size_t i = offset; i < offset + part.size(); ++i)
+                value_depths.push_back(std::max(1, expansion_depth[i]));
+            literal("}");
+        };
+        auto selected = [&](const char* key, std::size_t i, bool fallback) {
+            if (!rule.contains(key)) return fallback;
+            const auto& entries = rule.at(key);
+            return std::find(entries.begin(), entries.end(), Json(i)) != entries.end();
+        };
+        literal(rule.value("content_prefix", ""));
+        for (std::size_t i = 0; i < args.required.size(); ++i)
+            if (selected("content_arguments", i, true)) argument(args.required[i], args.required_offsets[i]);
+        for (std::size_t i = 0; i < args.optional.size(); ++i)
+            if (selected("content_optional_arguments", i, false)) argument(args.optional[i], args.optional_offsets[i]);
+        literal(rule.value("content_suffix", ""));
+        const auto limit = mapping.value("declarations", Json::object()).value("macros", Json::object()).value("max_expanded_bytes", 8388608U);
+        if (text.size() - (pos - start) + value.size() > limit) throw std::runtime_error("Unwrapped document exceeds byte limit");
+        text.replace(start, pos - start, value);
+        origins.erase(origins.begin() + start, origins.begin() + pos);
+        origins.insert(origins.begin() + start, value_origins.begin(), value_origins.end());
+        expansion_depth.erase(expansion_depth.begin() + start, expansion_depth.begin() + pos);
+        expansion_depth.insert(expansion_depth.begin() + start, value_depths.begin(), value_depths.end());
+        pos = start;
     }
 
     std::size_t parent() const {
@@ -432,27 +685,46 @@ private:
 
     std::size_t body_start() {
         bool declared = false;
-        for (std::size_t pos = 0; pos < text.size();) {
-            if (text[pos] == '%') {
-                const auto end = text.find('\n', pos);
-                pos = end == std::string::npos ? text.size() : end + 1;
-            } else if (text[pos] != '\\') {
-                ++pos;
-            } else {
-                const auto cmd = command_at(text, pos);
-                pos = cmd.end;
-                if (definitions.count(cmd.name)) pos = definition_end(text, cmd);
-                else if (cmd.name == "\\verb" || cmd.name == "\\verb*") pos = verb_end(text, pos);
-                else if (cmd.name == "\\documentclass") declared = true;
-                else if (cmd.name == "\\begin") {
-                    const auto group = group_at(text, pos);
-                    pos = group.end;
-                    if (group.text == "document") { wrapped = true; return pos; }
-                    pos = environment_at(text, pos, group.text, literal_names).end;
+        try {
+            for (std::size_t pos = 0; pos < text.size();) {
+                if (text[pos] == '%') {
+                    const auto end = text.find('\n', pos);
+                    pos = end == std::string::npos ? text.size() : end + 1;
+                } else if (text[pos] != '\\') {
+                    if (active() && text[pos] == '{') open_scope(pos);
+                    else if (active() && text[pos] == '}') close_scope();
+                    ++pos;
+                } else {
+                    const auto cmd = command_at(text, pos);
+                    pos = cmd.end;
+                    if (boolean_command(cmd, pos)) continue;
+                    if (booleans.count(cmd.name)) { conditions.push_back(booleans.at(cmd.name)); continue; }
+                    if (cmd.name == "\\iftrue" || cmd.name == "\\iffalse") { conditions.push_back(cmd.name == "\\iftrue"); continue; }
+                    if (cmd.name.rfind("\\if", 0) == 0 && cmd.name != "\\ifthenelse") { conditions.push_back(std::nullopt); continue; }
+                    if (cmd.name == "\\else" && !conditions.empty()) { if (conditions.back()) conditions.back() = !*conditions.back(); continue; }
+                    if (cmd.name == "\\fi" && !conditions.empty()) { conditions.pop_back(); continue; }
+                    if (!active()) { if (definitions.count(cmd.name)) pos = definition_end(text, cmd); continue; }
+                    if (declaration(cmd, pos, false)) continue;
+                    else if (cmd.name == "\\verb" || cmd.name == "\\verb*") pos = verb_end(text, pos);
+                    else if (cmd.name == "\\begingroup" || cmd.name == "\\bgroup") open_scope(pos - cmd.name.size());
+                    else if (cmd.name == "\\endgroup" || cmd.name == "\\egroup") close_scope();
+                    else if (cmd.name == "\\documentclass") declared = true;
+                    else if (cmd.name == "\\begin") {
+                        const auto group = group_at(text, pos);
+                        pos = group.end;
+                        if (group.text == "document") { wrapped = true; return pos; }
+                        pos = environment_at(text, pos, group.text, literal_names).end;
+                    } else pos = arguments_end(text, pos);
                 }
             }
+            if (declared) throw std::runtime_error("Missing begin{document}");
+        } catch (const std::runtime_error&) {
+            // This scan only probes for a document wrapper. Let the actual fragment
+            // parse report a malformed suffix after preserving its valid prefix.
+            if (declared) throw;
         }
-        if (declared) throw std::runtime_error("Missing begin{document}");
+        // A fragment is parsed again from byte zero; do not retain declarations from this scan.
+        macros.clear(); declared_environments = Json::object(); booleans.clear(); scopes.clear(); conditions.clear();
         return 0;
     }
 
@@ -485,14 +757,19 @@ private:
                 const auto closing = rule.at("close").get<std::string>();
                 const auto body_start = pos + opening.size();
                 auto end = body_start;
+                int brace_depth = 0;
                 while (end < source.size()) {
-                    if (source.compare(end, closing.size(), closing) == 0)
+                    if (brace_depth == 0 && source.compare(end, closing.size(), closing) == 0)
                         return MathRegion{source.substr(body_start, end - body_start), end + closing.size(), std::string(category) == "block"};
                     if (source[end] == '%') {
                         const auto newline = source.find('\n', end);
                         end = newline == std::string::npos ? source.size() : newline + 1;
                     } else if (source[end] == '\\') end = command_at(source, end).end;
-                    else ++end;
+                    else {
+                        if (source[end] == '{') ++brace_depth;
+                        else if (source[end] == '}' && brace_depth > 0) --brace_depth;
+                        ++end;
+                    }
                 }
                 throw std::runtime_error("Unclosed math delimiter: " + opening);
             }
@@ -517,9 +794,93 @@ private:
         return rule.contains("level") ? "heading" : "";
     }
 
-    std::string normalize(const std::string& source, const std::string& context, int depth = 0,
-                          bool trim = true, std::optional<std::size_t> source_offset = std::nullopt) {
+    std::string replacement_content(const Json& rule, const std::string& source, std::size_t pos) {
+        if (rule.contains("omit_before")) {
+            auto next = skip_space(source, pos);
+            while (source.compare(next, 2, "{}") == 0) next = skip_space(source, next + 2);
+            if (next == source.size() || rule.at("omit_before").get<std::string>().find(source[next]) != std::string::npos) return "";
+        }
+        return rule.at("replacement");
+    }
+
+    std::string command_content(const Arguments& args, const Json& rule, const std::string& context,
+                                int depth, std::optional<std::size_t> source_offset,
+                                const std::vector<std::size_t>* positions = nullptr) {
+        std::string out = rule.value("content_prefix", "");
+        auto selected = [&](const char* key, std::size_t i, bool default_value) {
+            if (!rule.contains(key)) return default_value;
+            const auto& indices = rule.at(key);
+            return std::find(indices.begin(), indices.end(), Json(i)) != indices.end();
+        };
+        auto content = [&](const std::string& value, std::size_t offset) {
+            std::vector<std::size_t> child_positions;
+            if (positions && !positions->empty())
+                child_positions.assign(positions->begin() + offset, positions->begin() + offset + value.size());
+            return normalize(value, context, depth + 1, false,
+                source_offset ? std::optional<std::size_t>(*source_offset + offset) : std::nullopt,
+                child_positions.empty() ? nullptr : &child_positions);
+        };
+        for (std::size_t i = 0; i < args.required.size(); ++i)
+            if (selected("content_arguments", i, true)) out += content(args.required[i], args.required_offsets[i]);
+        for (std::size_t i = 0; i < args.optional.size(); ++i)
+            if (selected("content_optional_arguments", i, false))
+                out += content(args.optional[i], args.optional_offsets[i]);
+        out += rule.value("content_suffix", "");
+        return out;
+    }
+
+    std::string accent_content(const Arguments& args, const Json& rule, const std::string& context, int depth,
+                               std::optional<std::size_t> source_offset = std::nullopt,
+                               const std::vector<std::size_t>* positions = nullptr) {
+        auto body = compact_prose(command_content(args, rule, context, depth, source_offset, positions));
+        if (body == "ı") body = "i";
+        if (body == "ȷ") body = "j";
+        std::size_t first = body.empty() ? 0 : 1;
+        while (first < body.size() && (static_cast<unsigned char>(body[first]) & 0xc0) == 0x80) ++first;
+        const auto base = body.substr(0, first);
+        if (rule.contains("characters") && rule.at("characters").contains(base))
+            return rule.at("characters").at(base).get<std::string>() + body.substr(first);
+        return base + rule.at("combining_mark").get<std::string>() + body.substr(first);
+    }
+
+    std::string normalize(std::string source, const std::string& context, int depth = 0,
+                          bool trim = true, std::optional<std::size_t> source_offset = std::nullopt,
+                          const std::vector<std::size_t>* source_positions = nullptr) {
         if (depth > 128) throw std::runtime_error("Normalization depth exceeds 128");
+        if (normalization_depth >= 128) throw std::runtime_error("Nested normalization exceeds 128");
+        CounterGuard depth_guard(normalization_depth);
+        CounterGuard figure_guard(opaque_figures, context == "figure" ? 1 : 0);
+        std::vector<std::size_t> positions;
+        if (source_positions) positions = *source_positions;
+        else if (source_offset) { positions.resize(source.size()); std::iota(positions.begin(), positions.end(), *source_offset); }
+        std::vector<int> depths(source.size(), depth);
+        auto expand_local = [&](const Command& cmd, std::size_t start, std::size_t& pos) {
+            if (opaque_figures) return false;
+            const auto expanded = expansion(source, cmd, depths.at(start));
+            if (!expanded) return false;
+            const auto& [value, end] = *expanded;
+            if (source.size() - (end - start) + value.size() > mapping.at("declarations").at("macros").value("max_expanded_bytes", 8388608U))
+                throw std::runtime_error("Expanded argument exceeds byte limit");
+            const auto next_depth = depths[start] + 1;
+            if (!positions.empty()) {
+                const auto original = positions[start];
+                positions.erase(positions.begin() + start, positions.begin() + end);
+                positions.insert(positions.begin() + start, value.size(), original);
+            }
+            source.replace(start, end - start, value);
+            depths.erase(depths.begin() + start, depths.begin() + end);
+            depths.insert(depths.begin() + start, value.size(), next_depth);
+            pos = start;
+            return true;
+        };
+        auto expand_environment = [&](const Command& cmd, std::size_t start, std::size_t& pos) {
+            const auto& rules = mapping.at("commands");
+            if (!macros.count(cmd.name) && rules.contains(cmd.name) && applies(rules.at(cmd.name), "formula") && action_of(rules.at(cmd.name)) == "preserve") {
+                pos = arguments_at(source, pos, rules.at(cmd.name)).end;
+                return true;
+            }
+            return expand_local(cmd, start, pos);
+        };
         std::string out;
         bool gap = false;
         auto emit = [&](const std::string& value, bool literal = false) {
@@ -543,6 +904,7 @@ private:
                     continue;
                 }
             }
+            if ((context == "prose" || context == "heading") && (source[pos] == '{' || source[pos] == '}')) { ++pos; continue; }
             if (source[pos] != '\\') { emit(source.substr(pos++, 1)); continue; }
             const auto start = pos;
             const auto cmd = command_at(source, pos);
@@ -552,6 +914,7 @@ private:
                 emit(source.substr(start, pos - start), true);
                 continue;
             }
+            if (expand_local(cmd, start, pos)) continue;
             if (cmd.name == "\\begin") {
                 const auto name = group_at(source, pos);
                 const auto& rules = mapping.at("environments");
@@ -562,9 +925,23 @@ private:
                         pos = environment_at(source, name.end, name.text, literal_names).end;
                         continue;
                     }
+                    if (action == "figure" && !rule.value("normalize_body", true)) {
+                        const auto env = environment_at(source, name.end, name.text, literal_names);
+                        emit(without_comments(source.substr(start, env.end - start)), true);
+                        pos = env.end;
+                        continue;
+                    }
+                    if (context == "figure" && action == "figure") {
+                        const auto args = arguments_at(source, name.end, rule);
+                        // Column preambles can contain dollar tokens in separate groups.
+                        // They are environment configuration, not standalone math.
+                        emit("\\begin{" + name.text + "}" + without_comments(args.required_source), true);
+                        pos = args.end;
+                        continue;
+                    }
                     if (context != "formula" && (action == "formula" || action == "inline_math")) {
                         const auto args = arguments_at(source, name.end, rule);
-                        const auto env = environment_at(source, args.end, name.text, literal_names);
+                        const auto env = environment_at(source, args.end, name.text, literal_names, expand_environment);
                         emit(action == "formula" ? formula_content(env.body, rule, args) : math_content(env.body, false));
                         pos = env.end;
                         continue;
@@ -581,10 +958,10 @@ private:
                 }
             }
             const auto& rules = mapping.at("commands");
-            if (!rules.contains(cmd.name) || !applies(rules.at(cmd.name), context)) {
+            if (macros.count(cmd.name) || !rules.contains(cmd.name) || !applies(rules.at(cmd.name), context)) {
                 if (source_offset && context != "formula") {
                     pos = arguments_end(source, pos);
-                    issue("unhandled_command", *source_offset + start,
+                    issue("unhandled_command", positions.at(start),
                           "Command preserved without macro expansion: " + cmd.name, source.substr(start, pos - start));
                     emit(without_comments(source.substr(start, pos - start)), true);
                 } else emit(cmd.name);
@@ -592,17 +969,18 @@ private:
             }
             const auto& rule = rules.at(cmd.name);
             const auto action = action_of(rule);
-            if (action != "discard" && action != "unwrap" && action != "preserve" && action != "paragraph_break") {
+            if (action != "discard" && action != "unwrap" && action != "preserve" && action != "paragraph_break" && action != "replace" && action != "accent" && action != "inline_math") {
                 emit(cmd.name);
                 continue;
             }
             const auto args = arguments_at(source, pos, rule);
             pos = args.end;
             if (action == "unwrap") {
-                for (std::size_t i = 0; i < args.required.size(); ++i)
-                    emit(normalize(args.required[i], context, depth + 1, false,
-                         source_offset ? std::optional<std::size_t>(*source_offset + args.required_offsets[i]) : std::nullopt), true);
-            } else if (action == "preserve") {
+                emit(command_content(args, rule, context, depth, source_offset, &positions), true);
+            } else if (action == "replace") emit(replacement_content(rule, source, pos));
+            else if (action == "accent") emit(accent_content(args, rule, context, depth, source_offset, &positions));
+            else if (action == "inline_math") emit(math_content(args.required.at(0), false));
+            else if (action == "preserve") {
                 // Citation keys, URLs and references are semantic arguments, not formatting.
                 emit(without_comments(source.substr(start, pos - start)));
             } else if (action == "paragraph_break") emit(" ");
@@ -642,13 +1020,19 @@ private:
                 }
             }
             if (text[pos] != '\\') {
-                if (active()) append(text.substr(pos, 1));
+                if (active()) {
+                    if (text[pos] == '{') open_scope(pos);
+                    else if (text[pos] == '}') close_scope();
+                    else append(text.substr(pos, 1), expansion_depth[pos] > 0);
+                }
                 ++pos;
                 continue;
             }
             const auto start = pos;
             const auto cmd = command_at(text, pos);
             pos = cmd.end;
+            if (boolean_command(cmd, pos)) continue;
+            if (booleans.count(cmd.name)) { conditions.push_back(booleans.at(cmd.name)); continue; }
             if (cmd.name == "\\iftrue" || cmd.name == "\\iffalse") {
                 conditions.push_back(cmd.name == "\\iftrue");
                 continue;
@@ -669,16 +1053,15 @@ private:
                 else if (cmd.name.rfind("\\if", 0) == 0) conditions.push_back(std::nullopt);
                 continue;
             }
-            if (definitions.count(cmd.name)) {
-                pos = definition_end(text, cmd);
-                if (!excluded_level) issue("unexpanded_definition", start, "Macro definitions are not executed", text.substr(start, pos - start));
-                continue;
-            }
+            if (declaration(cmd, pos, !excluded_level)) continue;
+            if (cmd.name == "\\begingroup" || cmd.name == "\\bgroup") { open_scope(start); continue; }
+            if (cmd.name == "\\endgroup" || cmd.name == "\\egroup") { close_scope(); continue; }
             if (cmd.name == "\\verb" || cmd.name == "\\verb*") {
                 pos = verb_end(text, pos);
                 append(text.substr(start, pos - start), true);
                 continue;
             }
+            if (expand_body(cmd, start, pos)) continue;
             if (cmd.name == "\\begin") {
                 const auto group = group_at(text, pos);
                 pos = group.end;
@@ -688,7 +1071,7 @@ private:
                     pos = environment_at(text, pos, name, literal_names).end;
                     continue;
                 }
-                if (!rules.contains(name)) {
+                if (!rules.contains(name) && !declared_environments.contains(name)) {
                     const auto env = environment_at(text, pos, name, literal_names);
                     pos = env.end;
                     if (!excluded_level) {
@@ -697,7 +1080,8 @@ private:
                     }
                     continue;
                 }
-                const auto& rule = rules.at(name);
+                // A source declaration takes precedence over a generic package name.
+                const auto rule = declared_environments.contains(name) ? declared_environments.at(name) : rules.at(name);
                 const auto action = action_of(rule);
                 if (action == "exclude") {
                     pos = environment_at(text, pos, name, literal_names).end;
@@ -706,6 +1090,7 @@ private:
                 if (action == "root") throw std::runtime_error("Nested document environment");
                 const auto args = arguments_at(text, pos, rule);
                 pos = args.end;
+                if (rule.value("reset_reference_exclusion", false)) excluded_level.reset();
                 if (excluded_level) {
                     pos = environment_at(text, pos, name, literal_names).end;
                     continue;
@@ -729,6 +1114,7 @@ private:
                         heading(rule, rule.at("content"), start);
                     }
                     containers.push_back(std::move(frame));
+                    open_scope(start);
                     if (rule.value("optional_argument_content", "") == "prepend")
                         for (std::size_t i = 0; i < args.optional.size(); ++i) {
                             if (rule.contains("optional_argument_indices")) {
@@ -739,11 +1125,22 @@ private:
                         }
                     continue;
                 }
-                const auto env = environment_at(text, pos, name, literal_names);
+                const auto env = environment_at(text, pos, name, literal_names,
+                    action != "formula" ? std::function<bool(const Command&, std::size_t, std::size_t&)>{} :
+                    [this](const Command& command, std::size_t start, std::size_t& pos) {
+                        const auto& rules = mapping.at("commands");
+                        if (!macros.count(command.name) && rules.contains(command.name) && applies(rules.at(command.name), "formula") && action_of(rules.at(command.name)) == "preserve") {
+                            pos = arguments_at(text, pos, rules.at(command.name)).end;
+                            return true;
+                        }
+                        return expand_body(command, start, pos);
+                    });
                 pos = env.end;
                 if (action == "formula") add(rule.at("kind"), formula_content(env.body, rule, args));
                 else if (action == "figure")
-                    add(rule.at("kind"), "\\begin{" + name + "}" + normalize(args.required_source + env.body, "figure") + "\\end{" + name + "}");
+                    add(rule.at("kind"), "\\begin{" + name + "}" +
+                        (rule.value("normalize_body", true) ? compact_prose(without_comments(args.required_source) + normalize(env.body, "figure", 0, false), literal_names) :
+                         compact_prose(without_comments(args.required_source + env.body), literal_names)) + "\\end{" + name + "}");
                 else if (action == "literal") add(rule.at("kind"), env.body);
                 else issue("unhandled_environment", start, "Unsupported mapping action: " + action, text.substr(start, pos - start));
                 continue;
@@ -763,17 +1160,26 @@ private:
                 if (frame.action == "list") lists.pop_back();
                 if (frame.action == "heading") headings = frame.saved_headings;
                 containers.pop_back();
+                close_scope();
                 continue;
             }
             const auto& rules = mapping.at("commands");
-            if (rules.contains(cmd.name) && applies(rules.at(cmd.name), "prose")) {
+            if (!macros.count(cmd.name) && rules.contains(cmd.name) && applies(rules.at(cmd.name), "prose")) {
                 const auto& rule = rules.at(cmd.name);
                 const auto action = action_of(rule);
                 const auto args = arguments_at(text, pos, rule, action == "heading" ? 1 : 0,
                                                action == "heading" || action == "item" ? 1 : 0);
                 pos = args.end;
                 if (excluded_level && action != "heading") continue;
-                if (action == "heading") heading(rule, args.required.at(0), start, args.required_offsets.at(0));
+                if (action == "heading") {
+                    if (rule.contains("fixed_title")) {
+                        heading(rule, rule.at("fixed_title"), start);
+                        if (rule.contains("body_argument")) {
+                            const auto i = rule.at("body_argument").get<std::size_t>();
+                            unwrap_body(args, Json{{"content_arguments", Json::array({i})}, {"content_suffix", "\\par{}"}}, start, pos);
+                        }
+                    } else heading(rule, args.required.at(0), start, args.required_offsets.at(0));
+                }
                 else if (action == "item" && !excluded_level) {
                     flush();
                     if (lists.empty()) throw std::runtime_error("Item outside list");
@@ -786,9 +1192,11 @@ private:
                             append(normalize(args.optional[i], "prose", 0, true, args.optional_offsets[i]) + " ", true);
                 } else if (action == "paragraph_break") flush();
                 else if (action == "unwrap") {
-                    for (std::size_t i = 0; i < args.required.size(); ++i)
-                        append(normalize(args.required[i], "prose", 0, false, args.required_offsets[i]), true);
-                } else if (action == "preserve") append(normalize(text.substr(start, pos - start), "prose"), true);
+                    unwrap_body(args, rule, start, pos);
+                } else if (action == "replace") append(replacement_content(rule, text, pos));
+                else if (action == "accent") append(accent_content(args, rule, "prose", 0, 0), true);
+                else if (action == "inline_math") append(math_content(args.required.at(0), false), true);
+                else if (action == "preserve") append(normalize(text.substr(start, pos - start), "prose"), true);
                 else if (action != "discard" && !excluded_level)
                     issue("unhandled_command", start, "Unsupported mapping action: " + action, text.substr(start, pos - start));
             } else if (cmd.name == "\\appendix") {

@@ -46,7 +46,8 @@ public:
     HierarchyParser(std::string arxiv_id, int version,
                     const std::filesystem::path& mapping_path);
 
-    // Accepts a merged document or a body fragment. Does not execute TeX/macros.
+    // Accepts a merged document or a body fragment. Expands bounded source-defined
+    // macros/newtheorem and literal/newif booleans; does not execute arbitrary TeX/packages.
     // Executes command/environment actions and normalization declared in mapping.
     // Unsupported constructs remain diagnostics; check complete() before dataset use.
     // Citation keys are preserved; BibTeX key rewriting is a separate stage.
