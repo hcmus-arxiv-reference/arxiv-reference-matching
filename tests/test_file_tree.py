@@ -22,6 +22,16 @@ def write_files(folder, files):
         path.write_text(text, encoding="utf-8")
 
 
+def test_quoted_and_dotted_input_names_match_merged_dependencies(tmp_path):
+    write_files(tmp_path, {
+        "main.tex": r'\documentclass{article}\input{"./0.abstract"}\input{part.beta_0.5}',
+        "0.abstract.tex": "ABSTRACT", "part.beta_0.5.tex": "BODY",
+    })
+    result = build_file_tree(tmp_path)
+    assert result.main_file == "main.tex"
+    assert result.input_files == ("0.abstract.tex", "part.beta_0.5.tex")
+
+
 def test_single_file_and_repeat_run(tmp_path, default_output):
     write_files(tmp_path, {"only.tex": "A sentence."})
     expected = FileTree("only.tex", ())

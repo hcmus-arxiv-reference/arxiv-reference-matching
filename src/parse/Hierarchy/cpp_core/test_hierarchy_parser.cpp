@@ -102,7 +102,7 @@ void sentence_protection() {
     const auto sentences = of_kind(result, "sentence");
     check(sentences.size() == 2, "Split inside protected prose");
     check(sentences[0].content.find("https://example.org/a.b.") != std::string::npos, "URL changed");
-    check(sentences[1].content == R"(Next \textbf{not. split} and $a.b$.)", "Command/math content changed");
+    check(sentences[1].content == R"(Next not. split and $a.b$.)", "Command/math content changed");
 }
 
 void figure_reference_variants() {
@@ -151,7 +151,7 @@ void math_and_figure_leaves() {
     check(of_kind(result, "figure").size() == 2, "Tables map to figure");
     check(of_kind(result, "sentence").size() == 2, "Split inside atomic leaf");
     find(result, "sentence", "Before $x.y$.");
-    find(result, "formula", R"(\begin{align}a&=b\\c&=d\end{align})");
+    find(result, "formula", R"(\begin{equation}\begin{aligned}a&=b\\c&=d\end{aligned}\end{equation})");
     valid_edges(result);
 }
 
@@ -197,7 +197,8 @@ void unknown_sources_preserved_in_diagnostics() {
 \unknown{Keep. this} After.)");
     check(!result.complete(), "Unknown source must be reported");
     check(of_kind(result, "section").empty(), "Verbatim heading parsed");
-    check(result.diagnostics.front().source.find("%literal") != std::string::npos, "Opaque source was discarded");
+    find(result, "sentence", R"(\section{Fake}%literal)");
+    check(result.diagnostics.front().source == R"(\unknown{Keep. this})", "Unknown source was discarded");
     bool preserved = false;
     for (const auto& e : of_kind(result, "sentence")) if (e.content.find("\\unknown{Keep. this}") != std::string::npos) preserved = true;
     check(preserved, "Unknown command was discarded");

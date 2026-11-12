@@ -84,6 +84,7 @@ Group group_at(const std::string& text, std::size_t pos, char opening = '{') {
         throw std::runtime_error("Expected a grouped argument");
     const char closing = opening == '{' ? '}' : ']';
     int depth = 1;
+    int braces = 0;
     std::string body;
     for (++pos; pos < text.size();) {
         if (text[pos] == '\\') {
@@ -95,8 +96,10 @@ Group group_at(const std::string& text, std::size_t pos, char opening = '{') {
             pos = end == std::string::npos ? text.size() : end + 1;
         } else {
             const char c = text[pos++];
-            if (c == opening) ++depth;
-            if (c == closing) {
+            if (opening == '[' && c == '{') ++braces;
+            if (opening == '[' && c == '}') --braces;
+            if (c == opening && braces == 0) ++depth;
+            if (c == closing && braces == 0) {
                 --depth;
                 if (depth == 0) return {body, pos};
             }
@@ -152,9 +155,7 @@ struct Environment {
 };
 
 Environment environment_at(const std::string& text, std::size_t body_start,
-                           const std::string& name) {
-    // Verbatim bodies must not be interpreted as LaTeX commands.
-    const std::set<std::string> literal = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"};
+                           const std::string& name, const std::set<std::string>& literal) {
     if (literal.count(name)) {
         const std::string closing = "\\end{" + name + "}";
         const auto end = text.find(closing, body_start);
@@ -180,7 +181,7 @@ Environment environment_at(const std::string& text, std::size_t body_start,
                 const auto arg = group_at(text, pos);
                 pos = arg.end;
                 if (cmd.name == "\\begin") {
-                    if (literal.count(arg.text)) pos = environment_at(text, pos, arg.text).end;
+                    if (literal.count(arg.text)) pos = environment_at(text, pos, arg.text, literal).end;
                     else stack.push_back(arg.text);
                 } else {
                     if (stack.back() != arg.text) throw std::runtime_error("Mismatched environment: " + arg.text);
@@ -193,24 +194,81 @@ Environment environment_at(const std::string& text, std::size_t body_start,
     throw std::runtime_error("Unclosed environment: " + name);
 }
 
-std::string clean_comments(const std::string& text) {
+// Whitespace in inline verbatim is visible content, even inside a sentence.
+std::string compact_prose(const std::string& source, const std::set<std::string>& literal = {}) {
     std::string out;
-    for (std::size_t pos = 0; pos < text.size();) {
-        if (text[pos] == '%') {
-            const auto end = text.find('\n', pos);
-            pos = end == std::string::npos ? text.size() : end + 1;
-        } else if (text[pos] == '\\') {
+    bool gap = false;
+    for (std::size_t pos = 0; pos < source.size();) {
+        if (space(source[pos])) { gap = !out.empty(); ++pos; continue; }
+        if (gap) out += ' ';
+        gap = false;
+        if (source[pos] == '\\') {
             const auto start = pos;
-            const auto cmd = command_at(text, pos);
+            const auto cmd = command_at(source, pos);
             pos = cmd.end;
-            if (cmd.name == "\\verb" || cmd.name == "\\verb*") pos = verb_end(text, pos);
-            if (cmd.name != "\\centering" && cmd.name != "\\midrule") out += text.substr(start, pos - start);
-        } else {
-            out += text[pos++];
-        }
+            if (cmd.name == "\\verb" || cmd.name == "\\verb*") pos = verb_end(source, pos);
+            else if (cmd.name == "\\begin" && !literal.empty()) {
+                const auto name = group_at(source, pos);
+                if (literal.count(name.text)) pos = environment_at(source, name.end, name.text, literal).end;
+            }
+            out += source.substr(start, pos - start);
+        } else out += source[pos++];
     }
-    return compact(out);
+    return out;
 }
+
+std::string without_comments(const std::string& source) {
+    std::string out;
+    for (std::size_t pos = 0; pos < source.size();) {
+        if (source[pos] == '%') {
+            const auto end = source.find('\n', pos);
+            pos = end == std::string::npos ? source.size() : end + 1;
+        } else if (source[pos] == '\\') {
+            const auto start = pos;
+            const auto cmd = command_at(source, pos);
+            pos = cmd.end;
+            if (cmd.name == "\\verb" || cmd.name == "\\verb*") pos = verb_end(source, pos);
+            out += source.substr(start, pos - start);
+        } else out += source[pos++];
+    }
+    return out;
+}
+
+struct Arguments {
+    std::vector<std::string> required;
+    std::vector<std::string> optional;
+    std::string required_source;
+    std::vector<std::size_t> required_offsets;
+    std::vector<std::size_t> optional_offsets;
+    std::size_t end;
+};
+
+Arguments arguments_at(const std::string& source, std::size_t pos, const Json& rule,
+                       int required_default = 0, int optional_default = 0) {
+    Arguments out{{}, {}, "", {}, {}, pos};
+    auto read = [&](bool optional) {
+        const auto next = skip_space(source, out.end);
+        if (optional && (next == source.size() || source[next] != '[')) return;
+        const auto group = group_at(source, next, optional ? '[' : '{');
+        (optional ? out.optional : out.required).push_back(source.substr(next + 1, group.end - next - 2));
+        (optional ? out.optional_offsets : out.required_offsets).push_back(next + 1);
+        if (!optional) out.required_source += "{" + group.text + "}";
+        out.end = group.end;
+    };
+    if (rule.contains("argument_spec")) {
+        for (const auto& slot : rule.at("argument_spec")) read(slot == "optional");
+    } else {
+        for (int i = 0; i < rule.value("optional_arguments", optional_default); ++i) read(true);
+        for (int i = 0; i < rule.value("arguments", required_default); ++i) read(false);
+    }
+    return out;
+}
+
+struct MathRegion {
+    std::string body;
+    std::size_t end;
+    bool block;
+};
 
 std::string digest(const std::string& payload) {
     unsigned char bytes[EVP_MAX_MD_SIZE];
@@ -234,7 +292,10 @@ struct Node {
 class Engine {
 public:
     Engine(const Json& mapping, const std::string& latex, const std::string& arxiv_id, int version)
-        : mapping(mapping), text(latex), arxiv_id(arxiv_id), version(version) {}
+        : mapping(mapping), text(latex), arxiv_id(arxiv_id), version(version) {
+        for (const auto& [name, rule] : mapping.at("environments").items())
+            if (rule.value("action", "") == "literal" || name == "comment") literal_names.insert(name);
+    }
 
     ParseResult run() {
         if (compact(text).empty()) return {};
@@ -245,7 +306,7 @@ public:
             pos = body_start();
             parse_body(pos);
             if (!lists.empty()) throw std::runtime_error("Unclosed list environment");
-            if (abstract_headings) throw std::runtime_error("Unclosed abstract environment");
+            if (!containers.empty()) throw std::runtime_error("Unclosed container environment");
             if (!conditions.empty()) throw std::runtime_error("Unclosed conditional");
             flush();
         } catch (const std::runtime_error& error) {
@@ -268,7 +329,14 @@ private:
     std::vector<std::size_t> headings;
     struct ListFrame { std::string name; std::size_t node; std::optional<std::size_t> item; };
     std::vector<ListFrame> lists;
-    std::optional<std::vector<std::size_t>> abstract_headings;
+    struct Container {
+        std::string name;
+        std::string action;
+        bool paragraph_boundary;
+        std::vector<std::size_t> saved_headings;
+    };
+    std::vector<Container> containers;
+    std::set<std::string> literal_names;
     std::vector<std::optional<bool>> conditions;
     std::optional<int> excluded_level;
     bool wrapped = false;
@@ -352,11 +420,11 @@ private:
             if (prose[pos] != '.' || protected_chars[pos]) continue;
             if (pos + 1 < prose.size() && prose[pos + 1] == '.') continue;
             if (pos > 0 && pos + 1 < prose.size() && digit(prose[pos - 1]) && digit(prose[pos + 1])) continue;
-            const auto sentence = compact(prose.substr(start, pos + 1 - start));
+            const auto sentence = compact_prose(prose.substr(start, pos + 1 - start));
             if (!sentence.empty()) add("sentence", sentence);
             start = pos + 1;
         }
-        const auto tail = compact(prose.substr(start));
+        const auto tail = compact_prose(prose.substr(start));
         if (!tail.empty()) add("sentence", tail);
         prose.clear();
         protected_chars.clear();
@@ -380,7 +448,7 @@ private:
                     const auto group = group_at(text, pos);
                     pos = group.end;
                     if (group.text == "document") { wrapped = true; return pos; }
-                    pos = environment_at(text, pos, group.text).end;
+                    pos = environment_at(text, pos, group.text, literal_names).end;
                 }
             }
         }
@@ -388,12 +456,14 @@ private:
         return 0;
     }
 
-    void heading(const Json& rule, const std::string& title, std::size_t offset) {
+    void heading(const Json& rule, const std::string& title, std::size_t offset,
+                 std::optional<std::size_t> title_offset = std::nullopt) {
         flush();
         const int level = rule.at("level");
         if (excluded_level && level > *excluded_level) return;
         excluded_level.reset();
-        const auto title_key = lower(compact(title));
+        const auto normalized = normalize(title, "heading", 0, true, title_offset);
+        const auto title_key = lower(normalized);
         for (const auto& excluded : mapping.at("exclusions").at("heading_titles")) {
             if (title_key == lower(excluded.get<std::string>())) { excluded_level = level; return; }
         }
@@ -403,7 +473,155 @@ private:
         }
         while (headings.size() > 1 && nodes[headings.back()].level >= level) headings.pop_back();
         if (headings.size() >= 256) throw std::runtime_error("Hierarchy depth exceeds 256");
-        headings.push_back(add(rule.at("kind"), clean_comments(title), level));
+        headings.push_back(add(rule.at("kind"), normalized, level));
+    }
+
+    std::optional<MathRegion> math_at(const std::string& source, std::size_t pos) const {
+        // Block openers precede inline openers, so $$ is never read as two $ tokens.
+        for (const auto* category : {"block", "inline"}) {
+            for (const auto& rule : mapping.at("math_delimiters").at(category)) {
+                const auto opening = rule.at("open").get<std::string>();
+                if (source.compare(pos, opening.size(), opening) != 0) continue;
+                const auto closing = rule.at("close").get<std::string>();
+                const auto body_start = pos + opening.size();
+                auto end = body_start;
+                while (end < source.size()) {
+                    if (source.compare(end, closing.size(), closing) == 0)
+                        return MathRegion{source.substr(body_start, end - body_start), end + closing.size(), std::string(category) == "block"};
+                    if (source[end] == '%') {
+                        const auto newline = source.find('\n', end);
+                        end = newline == std::string::npos ? source.size() : newline + 1;
+                    } else if (source[end] == '\\') end = command_at(source, end).end;
+                    else ++end;
+                }
+                throw std::runtime_error("Unclosed math delimiter: " + opening);
+            }
+        }
+        return std::nullopt;
+    }
+
+    std::string math_content(const std::string& body, bool block) {
+        const auto target = mapping.at("normalization_targets").at(block ? "block_math" : "inline_math").get<std::string>();
+        const auto marker = target.find("...");
+        if (marker == std::string::npos) throw std::runtime_error("Math normalization target needs ... placeholder");
+        return target.substr(0, marker) + normalize(body, "formula") + target.substr(marker + 3);
+    }
+
+    bool applies(const Json& rule, const std::string& context) const {
+        return !rule.contains("contexts") || contains(rule.at("contexts"), context);
+    }
+
+    std::string action_of(const Json& rule) const {
+        // Keep support for older custom heading rules supplied through the public API.
+        if (rule.contains("action")) return rule.at("action");
+        return rule.contains("level") ? "heading" : "";
+    }
+
+    std::string normalize(const std::string& source, const std::string& context, int depth = 0,
+                          bool trim = true, std::optional<std::size_t> source_offset = std::nullopt) {
+        if (depth > 128) throw std::runtime_error("Normalization depth exceeds 128");
+        std::string out;
+        bool gap = false;
+        auto emit = [&](const std::string& value, bool literal = false) {
+            for (char c : value) {
+                if (!literal && space(c)) { gap = !out.empty() || !trim; continue; }
+                if (gap) out += ' ';
+                out += c;
+                gap = false;
+            }
+        };
+        for (std::size_t pos = 0; pos < source.size();) {
+            if (source[pos] == '%') {
+                const auto end = source.find('\n', pos);
+                pos = end == std::string::npos ? source.size() : end + 1;
+                continue;
+            }
+            if (context != "formula") {
+                if (const auto math = math_at(source, pos)) {
+                    emit(math_content(math->body, math->block));
+                    pos = math->end;
+                    continue;
+                }
+            }
+            if (source[pos] != '\\') { emit(source.substr(pos++, 1)); continue; }
+            const auto start = pos;
+            const auto cmd = command_at(source, pos);
+            pos = cmd.end;
+            if (cmd.name == "\\verb" || cmd.name == "\\verb*") {
+                pos = verb_end(source, pos);
+                emit(source.substr(start, pos - start), true);
+                continue;
+            }
+            if (cmd.name == "\\begin") {
+                const auto name = group_at(source, pos);
+                const auto& rules = mapping.at("environments");
+                if (rules.contains(name.text)) {
+                    const auto& rule = rules.at(name.text);
+                    const auto action = rule.value("action", "");
+                    if (action == "exclude") {
+                        pos = environment_at(source, name.end, name.text, literal_names).end;
+                        continue;
+                    }
+                    if (context != "formula" && (action == "formula" || action == "inline_math")) {
+                        const auto args = arguments_at(source, name.end, rule);
+                        const auto env = environment_at(source, args.end, name.text, literal_names);
+                        emit(action == "formula" ? formula_content(env.body, rule, args) : math_content(env.body, false));
+                        pos = env.end;
+                        continue;
+                    }
+                }
+                if (rules.contains(name.text) && rules.at(name.text).value("action", "") == "literal") {
+                    const auto args = arguments_at(source, name.end, rules.at(name.text));
+                    const auto env = environment_at(source, args.end, name.text, literal_names);
+                    emit(source.substr(start, args.end - start));
+                    emit(env.body, true);
+                    emit("\\end{" + name.text + "}");
+                    pos = env.end;
+                    continue;
+                }
+            }
+            const auto& rules = mapping.at("commands");
+            if (!rules.contains(cmd.name) || !applies(rules.at(cmd.name), context)) {
+                if (source_offset && context != "formula") {
+                    pos = arguments_end(source, pos);
+                    issue("unhandled_command", *source_offset + start,
+                          "Command preserved without macro expansion: " + cmd.name, source.substr(start, pos - start));
+                    emit(without_comments(source.substr(start, pos - start)), true);
+                } else emit(cmd.name);
+                continue;
+            }
+            const auto& rule = rules.at(cmd.name);
+            const auto action = action_of(rule);
+            if (action != "discard" && action != "unwrap" && action != "preserve" && action != "paragraph_break") {
+                emit(cmd.name);
+                continue;
+            }
+            const auto args = arguments_at(source, pos, rule);
+            pos = args.end;
+            if (action == "unwrap") {
+                for (std::size_t i = 0; i < args.required.size(); ++i)
+                    emit(normalize(args.required[i], context, depth + 1, false,
+                         source_offset ? std::optional<std::size_t>(*source_offset + args.required_offsets[i]) : std::nullopt), true);
+            } else if (action == "preserve") {
+                // Citation keys, URLs and references are semantic arguments, not formatting.
+                emit(without_comments(source.substr(start, pos - start)));
+            } else if (action == "paragraph_break") emit(" ");
+        }
+        if (gap && !trim) out += ' ';
+        return trim ? compact_prose(out, literal_names) : out;
+    }
+
+    std::string formula_content(const std::string& body, const Json& rule, const Arguments& args) {
+        auto content = normalize(body, "formula");
+        if (rule.contains("inner_environment")) {
+            const auto inner = rule.at("inner_environment").get<std::string>();
+            std::string argument;
+            if (rule.contains("inner_argument")) argument = rule.at("inner_argument");
+            if (rule.contains("inner_argument_from")) argument = normalize(args.required.at(rule.at("inner_argument_from").get<std::size_t>()), "formula");
+            content = "\\begin{" + inner + "}" + (argument.empty() ? "" : "{" + argument + "}") + content + "\\end{" + inner + "}";
+        }
+        const auto target = rule.at("normalize_to").get<std::string>();
+        return "\\begin{" + target + "}" + content + "\\end{" + target + "}";
     }
 
     void parse_body(std::size_t& pos) {
@@ -413,24 +631,15 @@ private:
                 pos = end == std::string::npos ? text.size() : end + 1;
                 continue;
             }
-            if (text[pos] == '$' && active()) {
-                const bool block = pos + 1 < text.size() && text[pos + 1] == '$';
-                const std::string delimiter = block ? "$$" : "$";
-                const auto start = pos;
-                auto end = pos + delimiter.size();
-                while (end < text.size()) {
-                    if (text[end] == '\\') end = command_at(text, end).end;
-                    else if (text.compare(end, delimiter.size(), delimiter) == 0) break;
-                    else ++end;
+            if (active()) {
+                if (const auto math = math_at(text, pos)) {
+                    pos = math->end;
+                    if (math->block) {
+                        flush();
+                        if (!excluded_level) add("formula", math_content(math->body, true));
+                    } else append(math_content(math->body, false), true);
+                    continue;
                 }
-                if (end == text.size()) throw std::runtime_error("Unclosed math delimiter");
-                const auto body = text.substr(start + delimiter.size(), end - start - delimiter.size());
-                pos = end + delimiter.size();
-                if (block) {
-                    flush();
-                    if (!excluded_level) add("formula", "\\begin{equation}" + clean_comments(body) + "\\end{equation}");
-                } else append("$" + body + "$", true);
-                continue;
             }
             if (text[pos] != '\\') {
                 if (active()) append(text.substr(pos, 1));
@@ -455,7 +664,9 @@ private:
                 continue;
             }
             if (!active()) {
-                if (cmd.name.rfind("\\if", 0) == 0) conditions.push_back(std::nullopt);
+                if (definitions.count(cmd.name)) pos = definition_end(text, cmd);
+                else if (cmd.name == "\\verb" || cmd.name == "\\verb*") pos = verb_end(text, pos);
+                else if (cmd.name.rfind("\\if", 0) == 0) conditions.push_back(std::nullopt);
                 continue;
             }
             if (definitions.count(cmd.name)) {
@@ -468,129 +679,130 @@ private:
                 append(text.substr(start, pos - start), true);
                 continue;
             }
-            if (cmd.name == "\\[" || cmd.name == "\\(") {
-                const bool block = cmd.name == "\\[";
-                const std::string closing = block ? "\\]" : "\\)";
-                auto end = pos;
-                while (end < text.size()) {
-                    if (text[end] != '\\') { ++end; continue; }
-                    const auto token = command_at(text, end);
-                    if (token.name == closing) break;
-                    end = token.end;
-                }
-                if (end == text.size()) throw std::runtime_error("Unclosed math delimiter");
-                const auto body = text.substr(pos, end - pos);
-                pos = end + closing.size();
-                if (block) {
-                    flush();
-                    if (!excluded_level) add("formula", "\\begin{equation}" + clean_comments(body) + "\\end{equation}");
-                } else append("$" + body + "$", true);
-                continue;
-            }
             if (cmd.name == "\\begin") {
                 const auto group = group_at(text, pos);
                 pos = group.end;
                 const auto name = group.text;
-                if (name == "abstract" && !excluded_level) {
-                    flush();
-                    if (abstract_headings || !lists.empty()) throw std::runtime_error("Invalid abstract nesting");
-                    abstract_headings = headings;
-                    headings = {0};
-                    const auto& rule = mapping.at("environments").at("abstract");
-                    headings.push_back(add(rule.at("kind"), "Abstract", rule.at("level")));
-                    continue;
-                }
-                const auto& environments = mapping.at("environments");
-                if (environments.contains(name) && environments.at(name).at("kind") == "itemize" && !excluded_level) {
-                    flush();
-                    if (lists.size() >= 128) throw std::runtime_error("List depth exceeds 128");
-                    lists.push_back({name, add("itemize", ""), std::nullopt});
-                    continue;
-                }
-                const auto environment = environment_at(text, pos, name);
-                pos = environment.end;
-                if (excluded_level || contains(mapping.at("exclusions").at("environments"), name) || name == "comment") continue;
-                flush();
                 const auto& rules = mapping.at("environments");
-                if (!rules.contains(name)) {
-                    issue("unhandled_environment", start, "Environment has no settled mapping: " + name,
-                          text.substr(start, pos - start));
-                } else if (rules.at(name).at("kind") == "formula") {
-                    // Preserve multi-line environments for the later normalization stage.
-                    add("formula", clean_comments(text.substr(start, pos - start)));
-                } else if (rules.at(name).at("kind") == "figure") {
-                    add("figure", clean_comments(text.substr(start, pos - start)));
-                } else {
-                    issue("unhandled_environment", start, "Nested document or unsupported container", text.substr(start, pos - start));
+                if (contains(mapping.at("exclusions").at("environments"), name)) {
+                    pos = environment_at(text, pos, name, literal_names).end;
+                    continue;
                 }
+                if (!rules.contains(name)) {
+                    const auto env = environment_at(text, pos, name, literal_names);
+                    pos = env.end;
+                    if (!excluded_level) {
+                        flush();
+                        issue("unhandled_environment", start, "Environment has no settled mapping: " + name, text.substr(start, pos - start));
+                    }
+                    continue;
+                }
+                const auto& rule = rules.at(name);
+                const auto action = action_of(rule);
+                if (action == "exclude") {
+                    pos = environment_at(text, pos, name, literal_names).end;
+                    continue;
+                }
+                if (action == "root") throw std::runtime_error("Nested document environment");
+                const auto args = arguments_at(text, pos, rule);
+                pos = args.end;
+                if (excluded_level) {
+                    pos = environment_at(text, pos, name, literal_names).end;
+                    continue;
+                }
+                if (action == "inline_math") {
+                    const auto env = environment_at(text, pos, name, literal_names);
+                    append(math_content(env.body, false), true);
+                    pos = env.end;
+                    continue;
+                }
+                const bool boundary = rule.value("paragraph_boundary", true);
+                if (boundary) flush();
+                if (action == "list" || action == "heading" || action == "transparent") {
+                    if (containers.size() >= 128) throw std::runtime_error("Container depth exceeds 128");
+                    Container frame{name, action, boundary, {}};
+                    if (action == "list") lists.push_back({name, add(rule.at("kind"), rule.value("content", "")), std::nullopt});
+                    if (action == "heading") {
+                        if (!lists.empty()) throw std::runtime_error("Heading environment inside a list");
+                        frame.saved_headings = headings;
+                        if (rule.value("parent", "") == "document") headings = {0};
+                        heading(rule, rule.at("content"), start);
+                    }
+                    containers.push_back(std::move(frame));
+                    if (rule.value("optional_argument_content", "") == "prepend")
+                        for (std::size_t i = 0; i < args.optional.size(); ++i) {
+                            if (rule.contains("optional_argument_indices")) {
+                                const auto& selected = rule.at("optional_argument_indices");
+                                if (std::find(selected.begin(), selected.end(), Json(i)) == selected.end()) continue;
+                            }
+                            append(normalize(args.optional[i], "prose", 0, true, args.optional_offsets[i]) + " ", true);
+                        }
+                    continue;
+                }
+                const auto env = environment_at(text, pos, name, literal_names);
+                pos = env.end;
+                if (action == "formula") add(rule.at("kind"), formula_content(env.body, rule, args));
+                else if (action == "figure")
+                    add(rule.at("kind"), "\\begin{" + name + "}" + normalize(args.required_source + env.body, "figure") + "\\end{" + name + "}");
+                else if (action == "literal") add(rule.at("kind"), env.body);
+                else issue("unhandled_environment", start, "Unsupported mapping action: " + action, text.substr(start, pos - start));
                 continue;
             }
             if (cmd.name == "\\end") {
                 const auto group = group_at(text, pos);
                 pos = group.end;
                 if (group.text == "document" && wrapped) {
-                    if (!lists.empty() || abstract_headings) throw std::runtime_error("Document ended inside an open container");
+                    if (!containers.empty()) throw std::runtime_error("Document ended inside an open container");
                     ended = true;
                     break;
                 }
-                if (group.text == "abstract" && abstract_headings && !excluded_level) {
-                    flush();
-                    headings = *abstract_headings;
-                    abstract_headings.reset();
-                    continue;
-                }
-                if (lists.empty() || group.text != lists.back().name) throw std::runtime_error("Unexpected end{" + group.text + "}");
-                flush();
-                lists.pop_back();
+                if (containers.empty() || group.text != containers.back().name)
+                    throw std::runtime_error("Unexpected end{" + group.text + "}");
+                const auto frame = containers.back();
+                if (frame.paragraph_boundary) flush();
+                if (frame.action == "list") lists.pop_back();
+                if (frame.action == "heading") headings = frame.saved_headings;
+                containers.pop_back();
                 continue;
             }
-            const auto& commands = mapping.at("commands");
-            if (commands.contains(cmd.name) && commands.at(cmd.name).contains("level")) {
-                auto next = skip_space(text, pos);
-                if (next < text.size() && text[next] == '[') pos = group_at(text, next, '[').end;
-                const auto title = group_at(text, pos);
-                pos = title.end;
-                heading(commands.at(cmd.name), title.text, start);
-            } else if (cmd.name == "\\item" && !excluded_level) {
-                flush();
-                if (lists.empty()) throw std::runtime_error("Item outside itemize");
-                auto next = skip_space(text, pos);
-                if (next < text.size() && text[next] == '[') {
-                    const auto label = group_at(text, next, '[');
-                    pos = label.end;
-                    // The label is visible prose; retain it in the item's first sentence.
-                    lists.back().item.reset();
+            const auto& rules = mapping.at("commands");
+            if (rules.contains(cmd.name) && applies(rules.at(cmd.name), "prose")) {
+                const auto& rule = rules.at(cmd.name);
+                const auto action = action_of(rule);
+                const auto args = arguments_at(text, pos, rule, action == "heading" ? 1 : 0,
+                                               action == "heading" || action == "item" ? 1 : 0);
+                pos = args.end;
+                if (excluded_level && action != "heading") continue;
+                if (action == "heading") heading(rule, args.required.at(0), start, args.required_offsets.at(0));
+                else if (action == "item" && !excluded_level) {
+                    flush();
+                    if (lists.empty()) throw std::runtime_error("Item outside list");
                     const auto index = nodes.size();
                     nodes[lists.back().node].children.push_back(index);
-                    nodes.push_back({"item", "", 0, {}, ""});
+                    nodes.push_back({rule.at("kind"), rule.value("content", ""), 0, {}, ""});
                     lists.back().item = index;
-                    append(label.text + " ", true);
-                    continue;
-                }
-                const auto index = nodes.size();
-                nodes[lists.back().node].children.push_back(index);
-                nodes.push_back({"item", "", 0, {}, ""});
-                lists.back().item = index;
+                    if (rule.value("optional_label", "") == "preserve_in_first_sentence")
+                        for (std::size_t i = 0; i < args.optional.size(); ++i)
+                            append(normalize(args.optional[i], "prose", 0, true, args.optional_offsets[i]) + " ", true);
+                } else if (action == "paragraph_break") flush();
+                else if (action == "unwrap") {
+                    for (std::size_t i = 0; i < args.required.size(); ++i)
+                        append(normalize(args.required[i], "prose", 0, false, args.required_offsets[i]), true);
+                } else if (action == "preserve") append(normalize(text.substr(start, pos - start), "prose"), true);
+                else if (action != "discard" && !excluded_level)
+                    issue("unhandled_command", start, "Unsupported mapping action: " + action, text.substr(start, pos - start));
             } else if (cmd.name == "\\appendix") {
                 flush();
                 excluded_level.reset();
             } else if (contains(mapping.at("exclusions").at("commands"), cmd.name)) {
                 pos = arguments_end(text, pos);
-            } else if (cmd.name == "\\centering" || cmd.name == "\\midrule") {
-                // Formatting does not contribute an Element.
             } else if (cmd.name == "\\endinput") {
                 break;
             } else {
                 pos = arguments_end(text, pos);
                 if (!excluded_level) {
-                    append(text.substr(start, pos - start), true);
-                    const std::set<std::string> inline_commands = {
-                        "\\textbf", "\\textit", "\\emph", "\\textrm", "\\texttt", "\\textsf",
-                        "\\cite", "\\citep", "\\citet", "\\cite*", "\\ref", "\\eqref", "\\autoref",
-                        "\\cref", "\\Cref", "\\url", "\\href", "\\label", "\\%", "\\&", "\\_", "\\$", "\\#", "\\{", "\\}"
-                    };
-                    if (!inline_commands.count(cmd.name))
-                        issue("unhandled_command", start, "Command preserved without macro expansion: " + cmd.name, text.substr(start, pos - start));
+                    append(without_comments(text.substr(start, pos - start)), true);
+                    issue("unhandled_command", start, "Command preserved without macro expansion: " + cmd.name, text.substr(start, pos - start));
                     if (cmd.name.rfind("\\if", 0) == 0) conditions.push_back(std::nullopt);
                 }
             }
@@ -636,10 +848,7 @@ HierarchyParser::HierarchyParser(std::string arxiv_id, int version,
     std::ifstream input(mapping_path);
     if (!input) throw std::runtime_error("Cannot read mapping: " + mapping_path.string());
     input >> mapping_;
-    // Resolved parser policies: use existing kinds; no table/schema changes.
-    for (const auto* name : {"enumerate", "description"})
-        mapping_["environments"][name] = mapping_.at("environments").at("itemize");
-    mapping_["environments"]["abstract"] = {{"kind", "section"}, {"level", 2}};
+
 }
 
 ParseResult HierarchyParser::parse(const std::string& latex) const {

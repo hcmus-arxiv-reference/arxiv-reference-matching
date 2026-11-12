@@ -47,11 +47,9 @@ public:
                     const std::filesystem::path& mapping_path);
 
     // Accepts a merged document or a body fragment. Does not execute TeX/macros.
-    // Abstract -> section under document; enumerate/description -> itemize;
-    // each multi-line math environment -> one formula. These policies resolve
-    // the corresponding pending entries in the current mapping, in memory only.
-    // Check complete() before consuming rows. Full normalization/BibTeX key
-    // rewriting must precede final dataset use; this class does not perform it.
+    // Executes command/environment actions and normalization declared in mapping.
+    // Unsupported constructs remain diagnostics; check complete() before dataset use.
+    // Citation keys are preserved; BibTeX key rewriting is a separate stage.
     // IDs hash compact UTF-8 JSON [kind, content] for leaves, or
     // [kind, content, ordered_child_ids] for structural nodes (SHA-256, 16 hex).
     ParseResult parse(const std::string& latex) const;

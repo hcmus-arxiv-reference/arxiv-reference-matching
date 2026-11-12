@@ -140,10 +140,83 @@ def test_endinput_and_child_end_document(tmp_path):
 @pytest.mark.parametrize("control", [r"\renewcommand{\input}[1]{}",
                                      r"\def\input#1{}", r"\includeonly{\chosen}",
                                      r"\endinput\input{missing}",
-                                     r"\AtBeginDocument{\fancyfoot[L]{Preprint}}"])
+                                     r"\AtBeginDocument{\input{part}}"])
 def test_compilation_command_redefinitions_and_dynamic_filters_are_flagged(tmp_path, control):
     result = assemble_source(tree(tmp_path, {"main.tex": r"\documentclass{article}" + control}))
     assert result.status in {"needs_review", "error"}
+
+
+@pytest.mark.parametrize("body", [
+    r"\AtBeginDocument{\providecommand\BibTeX{{Bib\TeX}}}",
+    r"\AtEndDocument{\fancyfoot[L]{Preprint}}",
+    r"\ifdefined\draft\newcommand{\name}{Draft}\else\newcommand{\name}{Final}\fi",
+    r"\if@double@blind@\newcommand{\link}[1]{Hidden}\else\newcommand{\link}[1]{\url{#1}}\fi",
+    r"\ifbool{draft}{\textbf{Draft}}{Final}",
+    r"\ifthenelse{\equal{a}{b}}{One}{Two}",
+    r"\IfFileExists{optional.sty}{\usepackage{optional}}{}",
+    r"\ifcsname labelindent\endcsname\let\labelindent\relax\fi",
+    r"$A\iff B$",
+    r"\newcount\n\n=0\loop\ifnum\n<100\advance\n by1\def\row{Text}\repeat",
+])
+def test_non_path_controls_do_not_block_gathering(tmp_path, body):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": r"\documentclass{article}" + body + r"\input{part}", "part.tex": "BODY",
+    }))
+    assert result.status == "ready", result.issues
+    assert result.files == ["main.tex", "part.tex"]
+    assert result.text.endswith("BODY")
+
+
+@pytest.mark.parametrize("body", [
+    r"\ifbool{draft}{\input{one}}{\input{two}}",
+    r"\ifstrequal{a}{b}{Nothing}{\input{one}}",
+    r"\IfFileExists{one.tex}{\input{one}}{}",
+    r"\ifdefined\draft\input{one}\else\input{two}\fi",
+    r"\loop\ifnum\n<2\input{one}\advance\n by1\repeat",
+    r"\ifdraft\let\input\relax\fi",
+    r"\ifdraft\def\input#1{}\fi",
+])
+def test_controls_that_can_change_includes_still_require_review(tmp_path, body):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": r"\documentclass{article}" + body + r"\input{part}",
+        "part.tex": "BODY", "one.tex": "ONE", "two.tex": "TWO",
+    }))
+    assert result.status == "needs_review"
+    assert result.files == ["main.tex", "part.tex"]
+    assert not any(issue.code == "unclosed_conditional" for issue in result.issues)
+
+
+def test_lstinline_options_and_braced_content_are_not_real_includes(tmp_path):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": (r"\documentclass{article}\lstinline[style=python]{x = '\input{missing}'}"
+                     r"\lstinline[language=tex]|\input{missing}|\input{part}"),
+        "part.tex": "BODY",
+    }))
+    assert result.status == "ready"
+    assert result.files == ["main.tex", "part.tex"]
+
+
+@pytest.mark.parametrize("argument,filename", [
+    ('"./part.tex"', "part.tex"),
+    ('"part name"', "part name.tex"),
+    ("0.abstract", "0.abstract.tex"),
+    ("plot.beta_0.5", "plot.beta_0.5.tex"),
+])
+def test_quoted_and_dotted_input_names_resolve(tmp_path, argument, filename):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": r"\documentclass{article}\input{" + argument + "}", filename: "BODY",
+    }))
+    assert result.status == "ready", result.issues
+    assert result.text == r"\documentclass{article}BODY"
+    assert result.files == ["main.tex", filename]
+
+
+def test_unbraced_quoted_input_can_contain_spaces(tmp_path):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": '\\documentclass{article}\\input "part name"\n', "part name.tex": "BODY",
+    }))
+    assert result.status == "ready"
+    assert result.text == "\\documentclass{article}BODY\n"
 
 
 def test_symlink_is_rejected(tmp_path):

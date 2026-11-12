@@ -1,11 +1,6 @@
 {
-  "description": "Ánh xạ nền tảng từ lệnh và môi trường LaTeX sang các loại Element trong schema hiện tại. Đây là cấu hình cho Parser, chưa phải bộ phân tích cú pháp.",
-  "sources": [
-    "parsing.md",
-    "src/common/schema.py",
-    "docs/data-contract.md",
-    "docs/m2-cong-viec.md"
-  ],
+  "description": "Ánh xạ khai báo từ cú pháp LaTeX sang các loại Element hiện có; engine thực thi quy tắc trước khi băm nội dung. Danh sách hữu hạn này không thay thế bộ thực thi macro TeX.",
+  "sources": ["parsing.md", "src/common/schema.py", "docs/data-contract.md", "docs/m2-cong-viec.md"],
   "groups": {
     "root": ["document"],
     "heading": ["chapter", "section", "subsection", "subsubsection", "paragraph"],
@@ -13,36 +8,408 @@
     "leaf": ["sentence", "formula", "figure"]
   },
   "commands": {
-    "\\chapter": {"kind": "chapter", "level": 1, "content": "title"},
-    "\\chapter*": {"kind": "chapter", "level": 1, "content": "title"},
-    "\\section": {"kind": "section", "level": 2, "content": "title"},
-    "\\section*": {"kind": "section", "level": 2, "content": "title"},
-    "\\subsection": {"kind": "subsection", "level": 3, "content": "title"},
-    "\\subsection*": {"kind": "subsection", "level": 3, "content": "title"},
-    "\\subsubsection": {"kind": "subsubsection", "level": 4, "content": "title"},
-    "\\subsubsection*": {"kind": "subsubsection", "level": 4, "content": "title"},
-    "\\paragraph": {"kind": "paragraph", "level": 5, "content": "title"},
-    "\\paragraph*": {"kind": "paragraph", "level": 5, "content": "title"},
-    "\\item": {"kind": "item", "content": "", "children": "parsed_body", "parent_kind": "itemize"}
+    "\\chapter": {"kind": "chapter", "level": 1, "content": "title", "action": "heading"},
+    "\\chapter*": {"kind": "chapter", "level": 1, "content": "title", "action": "heading"},
+    "\\section": {"kind": "section", "level": 2, "content": "title", "action": "heading"},
+    "\\section*": {"kind": "section", "level": 2, "content": "title", "action": "heading"},
+    "\\subsection": {"kind": "subsection", "level": 3, "content": "title", "action": "heading"},
+    "\\subsection*": {"kind": "subsection", "level": 3, "content": "title", "action": "heading"},
+    "\\subsubsection": {"kind": "subsubsection", "level": 4, "content": "title", "action": "heading"},
+    "\\subsubsection*": {"kind": "subsubsection", "level": 4, "content": "title", "action": "heading"},
+    "\\paragraph": {"kind": "paragraph", "level": 5, "content": "title", "action": "heading"},
+    "\\paragraph*": {"kind": "paragraph", "level": 5, "content": "title", "action": "heading"},
+    "\\item": {"kind": "item", "content": "", "children": "parsed_body", "parent_kind": "itemize", "action": "item", "optional_label": "preserve_in_first_sentence"},
+    "\\textbf": {
+      "action": "unwrap",
+      "arguments": 1,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\textit": {
+      "action": "unwrap",
+      "arguments": 1,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\emph": {
+      "action": "unwrap",
+      "arguments": 1,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\textrm": {
+      "action": "unwrap",
+      "arguments": 1,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\texttt": {
+      "action": "unwrap",
+      "arguments": 1,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\textsf": {
+      "action": "unwrap",
+      "arguments": 1,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\textnormal": {
+      "action": "unwrap",
+      "arguments": 1,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\textsc": {
+      "action": "unwrap",
+      "arguments": 1,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\textsl": {
+      "action": "unwrap",
+      "arguments": 1,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\textup": {
+      "action": "unwrap",
+      "arguments": 1,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\mbox": {
+      "action": "unwrap",
+      "arguments": 1,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\centering": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\raggedright": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\raggedleft": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\noindent": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\small": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\footnotesize": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\scriptsize": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\tiny": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\normalsize": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\large": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\Large": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\LARGE": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\huge": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\Huge": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\bfseries": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\itshape": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\rmfamily": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\sffamily": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\ttfamily": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\normalfont": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\slshape": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\scshape": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\upshape": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\toprule": {
+      "action": "discard",
+      "arguments": 0,
+      "optional_arguments": 1,
+      "contexts": ["figure"]
+    },
+    "\\midrule": {
+      "action": "discard",
+      "arguments": 0,
+      "optional_arguments": 1,
+      "contexts": ["figure"]
+    },
+    "\\bottomrule": {
+      "action": "discard",
+      "arguments": 0,
+      "optional_arguments": 1,
+      "contexts": ["figure"]
+    },
+    "\\hline": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["figure"]
+    },
+    "\\vspace": {
+      "action": "discard",
+      "arguments": 1,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\vspace*": {
+      "action": "discard",
+      "arguments": 1,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\hspace": {
+      "action": "discard",
+      "arguments": 1,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\hspace*": {
+      "action": "discard",
+      "arguments": 1,
+      "contexts": ["prose", "heading", "figure"]
+    },
+    "\\label": {
+      "action": "discard",
+      "arguments": 1,
+      "contexts": ["prose", "heading", "figure", "formula"]
+    },
+    "\\nonumber": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["formula"]
+    },
+    "\\notag": {
+      "action": "discard",
+      "arguments": 0,
+      "contexts": ["formula"]
+    },
+    "\\par": {"action": "paragraph_break", "arguments": 0},
+    "\\cite": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\citep": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\citet": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\cite*": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\citep*": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\citet*": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\parencite": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\textcite": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\autocite": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\ref": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\ref*": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\eqref": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\autoref": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\autoref*": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\cref": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\Cref": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\pageref": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\url": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\nolinkurl": {"action": "preserve", "arguments": 1, "optional_arguments": 2},
+    "\\href": {"action": "preserve", "arguments": 2, "optional_arguments": 1},
+    "\\%": {"action": "preserve", "arguments": 0},
+    "\\&": {"action": "preserve", "arguments": 0},
+    "\\_": {"action": "preserve", "arguments": 0},
+    "\\$": {"action": "preserve", "arguments": 0},
+    "\\#": {"action": "preserve", "arguments": 0},
+    "\\{": {"action": "preserve", "arguments": 0},
+    "\\}": {"action": "preserve", "arguments": 0}
   },
   "environments": {
-    "document": {"kind": "document", "content": "", "children": "parsed_body"},
-    "itemize": {"kind": "itemize", "content": "", "children": "items"},
-    "equation": {"kind": "formula", "atomic": true, "content": "whole_environment"},
-    "equation*": {"kind": "formula", "atomic": true, "content": "whole_environment"},
-    "displaymath": {"kind": "formula", "atomic": true, "content": "whole_environment"},
-    "align": {"kind": "formula", "content": "whole_environment", "segmentation": "pending"},
-    "align*": {"kind": "formula", "content": "whole_environment", "segmentation": "pending"},
-    "gather": {"kind": "formula", "content": "whole_environment", "segmentation": "pending"},
-    "gather*": {"kind": "formula", "content": "whole_environment", "segmentation": "pending"},
-    "multline": {"kind": "formula", "content": "whole_environment", "segmentation": "pending"},
-    "multline*": {"kind": "formula", "content": "whole_environment", "segmentation": "pending"},
-    "eqnarray": {"kind": "formula", "content": "whole_environment", "segmentation": "pending"},
-    "eqnarray*": {"kind": "formula", "content": "whole_environment", "segmentation": "pending"},
-    "figure": {"kind": "figure", "atomic": true, "content": "whole_environment"},
-    "figure*": {"kind": "figure", "atomic": true, "content": "whole_environment"},
-    "table": {"kind": "figure", "atomic": true, "content": "whole_environment"},
-    "table*": {"kind": "figure", "atomic": true, "content": "whole_environment"}
+    "document": {"kind": "document", "content": "", "children": "parsed_body", "action": "root"},
+    "itemize": {"action": "list", "kind": "itemize", "content": "", "children": "items", "optional_arguments": 1, "item_label": "preserve_in_first_sentence"},
+    "equation": {"action": "formula", "kind": "formula", "atomic": true, "content": "whole_environment", "segmentation": "whole_environment", "normalize_to": "equation"},
+    "equation*": {"action": "formula", "kind": "formula", "atomic": true, "content": "whole_environment", "segmentation": "whole_environment", "normalize_to": "equation"},
+    "displaymath": {"action": "formula", "kind": "formula", "atomic": true, "content": "whole_environment", "segmentation": "whole_environment", "normalize_to": "equation"},
+    "align": {"action": "formula", "kind": "formula", "atomic": true, "content": "whole_environment", "segmentation": "whole_environment", "normalize_to": "equation", "inner_environment": "aligned"},
+    "align*": {"action": "formula", "kind": "formula", "atomic": true, "content": "whole_environment", "segmentation": "whole_environment", "normalize_to": "equation", "inner_environment": "aligned"},
+    "gather": {"action": "formula", "kind": "formula", "atomic": true, "content": "whole_environment", "segmentation": "whole_environment", "normalize_to": "equation", "inner_environment": "gathered"},
+    "gather*": {"action": "formula", "kind": "formula", "atomic": true, "content": "whole_environment", "segmentation": "whole_environment", "normalize_to": "equation", "inner_environment": "gathered"},
+    "multline": {"action": "formula", "kind": "formula", "atomic": true, "content": "whole_environment", "segmentation": "whole_environment", "normalize_to": "equation", "inner_environment": "gathered"},
+    "multline*": {"action": "formula", "kind": "formula", "atomic": true, "content": "whole_environment", "segmentation": "whole_environment", "normalize_to": "equation", "inner_environment": "gathered"},
+    "eqnarray": {"action": "formula", "kind": "formula", "atomic": true, "content": "whole_environment", "segmentation": "whole_environment", "normalize_to": "equation", "inner_environment": "array", "inner_argument": "rcl"},
+    "eqnarray*": {"action": "formula", "kind": "formula", "atomic": true, "content": "whole_environment", "segmentation": "whole_environment", "normalize_to": "equation", "inner_environment": "array", "inner_argument": "rcl"},
+    "figure": {"action": "figure", "kind": "figure", "atomic": true, "content": "whole_environment", "optional_arguments": 1},
+    "figure*": {"action": "figure", "kind": "figure", "atomic": true, "content": "whole_environment", "optional_arguments": 1},
+    "table": {"action": "figure", "kind": "figure", "atomic": true, "content": "whole_environment", "optional_arguments": 1},
+    "table*": {"action": "figure", "kind": "figure", "atomic": true, "content": "whole_environment", "optional_arguments": 1},
+    "enumerate": {"action": "list", "kind": "itemize", "content": "", "children": "items", "optional_arguments": 1, "item_label": "preserve_in_first_sentence"},
+    "description": {"action": "list", "kind": "itemize", "content": "", "children": "items", "optional_arguments": 1, "item_label": "preserve_in_first_sentence"},
+    "abstract": {"action": "heading", "kind": "section", "level": 2, "content": "Abstract", "parent": "document", "children": "parsed_body"},
+    "acknowledgements": {"action": "heading", "kind": "section", "level": 2, "content": "Acknowledgements", "parent": "document", "children": "parsed_body"},
+    "acknowledgments": {"action": "heading", "kind": "section", "level": 2, "content": "Acknowledgements", "parent": "document", "children": "parsed_body"},
+    "flalign": {"action": "formula", "kind": "formula", "atomic": true, "content": "whole_environment", "segmentation": "whole_environment", "normalize_to": "equation", "inner_environment": "aligned"},
+    "flalign*": {"action": "formula", "kind": "formula", "atomic": true, "content": "whole_environment", "segmentation": "whole_environment", "normalize_to": "equation", "inner_environment": "aligned"},
+    "alignat": {"action": "formula", "kind": "formula", "atomic": true, "content": "whole_environment", "segmentation": "whole_environment", "normalize_to": "equation", "inner_environment": "alignedat", "arguments": 1, "inner_argument_from": 0},
+    "alignat*": {"action": "formula", "kind": "formula", "atomic": true, "content": "whole_environment", "segmentation": "whole_environment", "normalize_to": "equation", "inner_environment": "alignedat", "arguments": 1, "inner_argument_from": 0},
+    "sidewaysfigure": {"action": "figure", "kind": "figure", "atomic": true, "content": "whole_environment", "optional_arguments": 1},
+    "sidewaysfigure*": {"action": "figure", "kind": "figure", "atomic": true, "content": "whole_environment", "optional_arguments": 1},
+    "sidewaystable": {"action": "figure", "kind": "figure", "atomic": true, "content": "whole_environment", "optional_arguments": 1},
+    "sidewaystable*": {"action": "figure", "kind": "figure", "atomic": true, "content": "whole_environment", "optional_arguments": 1},
+    "wrapfigure": {
+      "action": "figure",
+      "kind": "figure",
+      "atomic": true,
+      "content": "whole_environment",
+      "argument_spec": ["optional", "required", "optional", "required"]
+    },
+    "wraptable": {
+      "action": "figure",
+      "kind": "figure",
+      "atomic": true,
+      "content": "whole_environment",
+      "argument_spec": ["optional", "required", "optional", "required"]
+    },
+    "longtable": {
+      "action": "figure",
+      "kind": "figure",
+      "atomic": true,
+      "content": "whole_environment",
+      "argument_spec": ["optional", "required"]
+    },
+    "proof": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "proof*": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "theorem": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "theorem*": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "lemma": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "lemma*": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "proposition": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "proposition*": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "corollary": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "corollary*": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "definition": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "definition*": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "remark": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "remark*": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "example": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "example*": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "assumption": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "assumption*": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "conjecture": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "conjecture*": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "claim": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "claim*": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "observation": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "observation*": {"action": "transparent", "children": "parsed_body", "optional_arguments": 1, "optional_argument_content": "prepend"},
+    "quote": {"action": "transparent", "children": "parsed_body"},
+    "quotation": {"action": "transparent", "children": "parsed_body"},
+    "center": {"action": "transparent", "children": "parsed_body"},
+    "flushleft": {"action": "transparent", "children": "parsed_body"},
+    "flushright": {"action": "transparent", "children": "parsed_body"},
+    "subequations": {"action": "transparent", "children": "parsed_body"},
+    "minipage": {
+      "action": "transparent",
+      "children": "parsed_body",
+      "argument_spec": ["optional", "optional", "optional", "required"]
+    },
+    "math": {"action": "inline_math", "content": "body", "normalize_to": "$...$"},
+    "comment": {"action": "exclude"},
+    "thebibliography": {"action": "exclude"},
+    "verbatim": {"action": "literal", "kind": "sentence", "content": "body", "atomic": true, "whitespace": "preserve_exact_body"},
+    "verbatim*": {"action": "literal", "kind": "sentence", "content": "body", "atomic": true, "whitespace": "preserve_exact_body"},
+    "Verbatim": {"action": "literal", "kind": "sentence", "content": "body", "atomic": true, "optional_arguments": 1, "whitespace": "preserve_exact_body"},
+    "lstlisting": {"action": "literal", "kind": "sentence", "content": "body", "atomic": true, "optional_arguments": 1, "whitespace": "preserve_exact_body"},
+    "minted": {
+      "action": "literal",
+      "kind": "sentence",
+      "content": "body",
+      "atomic": true,
+      "argument_spec": ["optional", "required"],
+      "whitespace": "preserve_exact_body"
+    },
+    "samepage": {"action": "transparent", "children": "parsed_body", "paragraph_boundary": false},
+    "tabular": {
+      "action": "figure",
+      "kind": "figure",
+      "atomic": true,
+      "content": "whole_environment",
+      "argument_spec": ["optional", "required"]
+    },
+    "tabular*": {
+      "action": "figure",
+      "kind": "figure",
+      "atomic": true,
+      "content": "whole_environment",
+      "argument_spec": ["required", "optional", "required"]
+    },
+    "teaserfigure": {"action": "figure", "kind": "figure", "atomic": true, "content": "whole_environment"},
+    "ack": {"action": "heading", "kind": "section", "level": 2, "content": "Acknowledgements", "parent": "document", "children": "parsed_body"},
+    "acks": {"action": "heading", "kind": "section", "level": 2, "content": "Acknowledgements", "parent": "document", "children": "parsed_body"},
+    "multicols": {
+      "action": "transparent",
+      "children": "parsed_body",
+      "argument_spec": ["required", "optional", "optional"],
+      "optional_argument_content": "prepend",
+      "optional_argument_indices": [0]
+    },
+    "multicols*": {
+      "action": "transparent",
+      "children": "parsed_body",
+      "argument_spec": ["required", "optional", "optional"],
+      "optional_argument_content": "prepend",
+      "optional_argument_indices": [0]
+    }
   },
   "math_delimiters": {
     "block": [
@@ -60,28 +427,18 @@
     "requires_latex_tag": false,
     "boundary_candidate": ".",
     "protected_regions": ["inline_math", "block_math", "latex_commands_and_arguments", "urls", "decimal_numbers", "abbreviations"],
-    "abbreviations": ["i.e.", "e.g.", "et al."],
+    "abbreviations": ["i.e.", "e.g.", "et al.", "vs.", "cf."],
     "abbreviation_match": "case_insensitive_literal",
     "pattern_engine": "python_re",
     "protected_patterns": [
-      {
-        "name": "figure_reference",
-        "pattern": "(?i)\\bfigs?\\.(?=[\\s~]*(?:\\d|\\\\(?:ref|autoref|cref)\\b))",
-        "note": "Bảo vệ dấu chấm trong Fig./Figs. trước số hình hoặc lệnh tham chiếu, kể cả khoảng trắng, xuống dòng, khoảng trắng không ngắt và dấu ~. Không nuốt dấu chấm kết thúc câu sau số hình."
-      }
+      {"name": "figure_reference", "pattern": "(?i)\\bfigs?\\.(?=[\\s~]*(?:\\d|\\\\(?:ref|autoref|cref)\\b))", "note": "Bảo vệ dấu chấm trong Fig./Figs. trước số hình hoặc lệnh tham chiếu, kể cả khoảng trắng, xuống dòng, khoảng trắng không ngắt và dấu ~. Không nuốt dấu chấm kết thúc câu sau số hình."},
+      {"name": "numbered_reference", "pattern": "(?i)\\b(?:eqs?|secs?|tabs?|chaps?|thms?|props?|defs?)\\.(?=[\\s~]*(?:\\d|\\\\(?:ref|eqref|autoref|cref|Cref)\\b))", "note": "Giữ dấu chấm trong viết tắt tham chiếu trước số hoặc lệnh tham chiếu; không che dấu chấm cuối câu."}
     ],
-    "note": "Dấu chấm chỉ là ứng viên kết thúc câu; không tách bên trong các vùng được bảo vệ. Mỗi câu trong item là con của item."
+    "note": "Chỉ dấu chấm là ứng viên kết thúc câu theo đề; bảo vệ toán, URL, số và toàn bộ đối số lệnh kể cả khi bỏ wrapper định dạng. Không tự thêm etc. vào từ viết tắt vô điều kiện vì nó có thể kết thúc câu."
   },
-  "heading_rules": {
-    "parent": "nearest_preceding_heading_with_lower_level_or_document",
-    "level_is_relative_rank": true,
-    "starred_creates_same_kind": true,
-    "title_argument": "required_braced_argument",
-    "optional_short_title": "not_used_as_content",
-    "note": "Không tạo heading giả cho cấp bị thiếu; cấp số chỉ biểu thị thứ bậc tương đối."
-  },
+  "heading_rules": {"parent": "nearest_preceding_heading_with_lower_level_or_document", "level_is_relative_rank": true, "starred_creates_same_kind": true, "title_argument": "required_braced_argument", "optional_short_title": "not_used_as_content", "note": "Không tạo heading giả cho cấp bị thiếu; cấp số chỉ biểu thị thứ bậc tương đối."},
   "exclusions": {
-    "environments": ["thebibliography"],
+    "environments": ["thebibliography", "comment"],
     "commands": ["\\bibliography", "\\bibliographystyle", "\\printbibliography", "\\addbibresource"],
     "heading_titles": ["References", "Bibliography", "Tài liệu tham khảo"],
     "heading_title_match": "trimmed_case_insensitive_exact",
@@ -92,32 +449,13 @@
     "include_starred": true,
     "note": "Giữ nguyên kind và cấp của lệnh heading gốc; tên mục không tự tạo một kind mới."
   },
-  "normalization_targets": {
-    "inline_math": "$...$",
-    "block_math": "\\begin{equation}...\\end{equation}",
-    "note": "Định dạng đích dành cho bước chuẩn hóa, không thay thế nội dung toán bằng dấu ba chấm."
-  },
+  "normalization_targets": {"inline_math": "$...$", "block_math": "\\begin{equation}...\\end{equation}", "note": "Chuẩn hóa trước khi băm ID; giữ các hàng/cột toán bằng môi trường con khai báo trong rule. Giữ nội dung hình/bảng và đối số ngữ nghĩa; chỉ bỏ định dạng đã liệt kê. Không đổi khóa cite hoặc suy diễn giá trị ref. Nội dung literal giữ nguyên khoảng trắng, xuống dòng, dấu phần trăm và lệnh; chỉ bỏ wrapper cùng đối số header đã khai báo.", "whitespace": "collapse_outside_literal_regions", "comments": "remove_unescaped_comments_outside_literal_regions", "float_placement": "discard_declared_optional_arguments", "formula_rows": "preserve_in_one_formula", "literal_whitespace": "preserve_exact_body"},
   "pending_decisions": [
-    {
-      "tags": ["enumerate", "description"],
-      "reason": "Kế hoạch M2 đề xuất dùng chung kind itemize, nhưng vẫn liệt kê việc này trong các quyết định chung cần chốt."
-    },
-    {
-      "tags": ["abstract"],
-      "reason": "Vị trí Abstract trong cây chưa được chốt trong tài liệu kế hoạch M2."
-    },
-    {
-      "decision": "multiline_formula_segmentation",
-      "tags": ["align", "align*", "gather", "gather*", "multline", "multline*", "eqnarray", "eqnarray*"],
-      "reason": "Đã ánh xạ các môi trường này sang kind formula; chỉ còn chờ chốt cách tách thành một hay nhiều phần tử. Bước tách câu phải bảo vệ toàn bộ môi trường toán, kể cả khi chưa chốt cách tách formula."
-    },
     {
       "tags": ["\\part", "\\part*", "\\subparagraph", "\\subparagraph*"],
       "reason": "Schema hiện chưa có kind tương ứng; không tự thêm hoặc gộp kind."
     }
   ],
-  "unknown_tags": {
-    "action": "preserve_and_report",
-    "note": "Không tự coi tag lạ là sentence, không xóa nội dung và không xử lý như văn xuôi trước khi xác định vai trò."
-  }
+  "unknown_tags": {"action": "preserve_and_report", "note": "Lệnh lạ được giữ nguyên cùng đối số và báo diagnostic; môi trường lạ giữ toàn bộ source trong diagnostic, không tự coi thân là văn xuôi. Không coi kết quả có diagnostic là parse hoàn chỉnh."},
+  "limitations": ["Tên môi trường định lý chỉ được nhận diện theo danh sách tường minh; định nghĩa lại hoặc alias qua macro chưa được thực thi.", "Không thực thi macro hoặc điều kiện TeX tùy ý; lệnh và môi trường chưa hỗ trợ phải được báo diagnostic.", "Môi trường literal được giữ thành một sentence nguyên khối; thuật toán và cấu trúc tùy biến chưa có quy tắc thì báo diagnostic, không tự gán thành figure.", "Tên theorem/proof và số tự sinh không được dựng lại; giữ thân và tiêu đề tùy chọn trong cùng nhánh hiện có.", "Cite và ref giữ nguyên cú pháp; hợp nhất BibTeX và đổi khóa trích dẫn thuộc bước riêng."]
 }

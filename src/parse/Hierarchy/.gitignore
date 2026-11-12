@@ -1,0 +1,5 @@
+# Native build output stays local to the selected Python interpreter.
+_hierarchy_native*.so
+_hierarchy_native*.pyd
+cpp_core/_build/
+output/

@@ -1,0 +1,446 @@
+{
+  "2410-01277/v1": {
+    "main_file": "2025-acc-bearingCBFControl.tex",
+    "note": "Reviewed IEEE conference article root with title and document body; preamble and notation are dependencies.",
+    "sha256": "af479c563991b860ce70a19add03c0922b41baa5db3f78cee2a17ea114d72220"
+  },
+  "2409-20375/v3": {
+    "main_file": "Root_Ver2_Accepted_IEEETSMC.tex",
+    "note": "Reviewed IEEE journal article root; numbered section files are dependencies.",
+    "sha256": "4984288440f838c7e1ded927b665af18e89de887fb13708a80c5405d95cddb09"
+  },
+  "2409-19709/v2": {
+    "main_file": null,
+    "note": "Ambiguous: both main_accept.tex and TRO-Dreamwaqpp-arxiv/main_accept.tex are article roots with the same title; no unique root asserted."
+  },
+  "2410-02970/v2": {
+    "main_file": "iclr2025_conference.tex",
+    "note": "Reviewed paper title and experiment inputs; rebuttal.tex is a separate response document.",
+    "sha256": "8bed9aa4a317cef0a0441da379f51aeee87df16a2941375bf34b3fbeb962482f"
+  },
+  "2409-19839/v5": {
+    "main_file": "paper.tex",
+    "note": "Reviewed titled article root and sec/ inputs.",
+    "sha256": "5c4947d8a1c9a49988a47a86bcc6997b6807b59156320ec57780246cc132b157"
+  },
+  "2409-19360/v1": {
+    "main_file": "manuscript.tex",
+    "note": "Reviewed LLNCS manuscript title and authors; Figures/ documents use standalone for individual TikZ figures.",
+    "sha256": "9d8f640b3adf2c02501a30e15213e1ee63b781ab206603802b3170cbd1d352cf"
+  },
+  "2409-18607/v1": {
+    "main_file": "bicolor.tex",
+    "note": "Reviewed titled article root using ourlematemasingle; FigColored files provide figures.",
+    "sha256": "4eb6c844fe2a38eb230bc21ce0ff9d14b28eafe7f272ecd891fd85aed737ed12"
+  },
+  "2409-18857/v2": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled article root with abstract, introduction, problem and methods inputs.",
+    "sha256": "8c315ca6aab3d58d24dea761b74573576f1c68c93ac30b3bc63ded9d32f219e8"
+  },
+  "2410-02415/v1": {
+    "main_file": "manuscript.tex",
+    "note": "Reviewed titled IEEE journal manuscript; figs/ documents use standalone for plots rather than the article.",
+    "sha256": "431d717b98b374529bef0942eb888e1acda9a83ac1fc179eb8aad45fa2704fba"
+  },
+  "2410-02637/v2": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled article root with authors, abstract and main_text section inputs.",
+    "sha256": "b2a0b19ff0e7b07dc702e2a99be612fe3d0ad9f6f2822b9701bb3b064696959c"
+  },
+  "2409-18896/v2": {
+    "main_file": "main.tex",
+    "note": "Reviewed paper author list and abstract/introduction inputs; supplemental.tex explicitly titles itself Supplemental Materials.",
+    "sha256": "f1cadbfc9737118148a22eeb188d53ba6e63bca5ff092119c0a6f555a07d37c3"
+  },
+  "2410-02693/v2": {
+    "main_file": "main.tex",
+    "note": "Reviewed article root with header chain, abstract and document body.",
+    "sha256": "e0b6cfd35e876f3596bd22618414ef511348becf16efae3c803ee4ac06ec13eb"
+  },
+  "2409-19951/v2": {
+    "main_file": "paper.tex",
+    "note": "Reviewed titled fairmeta article with Section/ chapter inputs.",
+    "sha256": "581c68459a8fc242bf9a9515b387f6a459b1a6e9ddf4514338f4d15e4dcb0522"
+  },
+  "2410-01692/v2": {
+    "main_file": "iclr2025_conference.tex",
+    "note": "Reviewed titled article with authors, abstract and numbered sections.",
+    "sha256": "8041a98483a4e9dfc7a492fcaba8c3c0454b0dce6631cf1f4ad9806d618ce6a0"
+  },
+  "2409-19898/v2": {
+    "main_file": "0-main.tex",
+    "note": "Reviewed titled article with introduction, related work, methods and experiments inputs.",
+    "sha256": "5bc10465c1b0b07a107f9b590d5bb01c60012d9b6e333005b048903a5adbf44c"
+  },
+  "2409-19811/v1": {
+    "main_file": "arxiv.tex",
+    "note": "Reviewed titled LLNCS article with abstract, introduction, related work and method inputs.",
+    "sha256": "4fff32de7c69971559e38da08e265d2194f889540b13dd47db27043b6622320f"
+  },
+  "2409-20566/v1": {
+    "main_file": "mm1_5_main.tex",
+    "note": "Reviewed titled article with author list and numbered sections.",
+    "sha256": "4593ba486a147bb4a74096188266383656d8204b0b8efe3e4f198878dcd642db"
+  },
+  "2409-19014/v4": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled article with macros, abstract, introduction and related-work inputs.",
+    "sha256": "6f0a606c0326d37b409c00ec015e9e8f05e0585155638f772cabddbb1a450098"
+  },
+  "2410-00945/v1": {
+    "main_file": "ms.tex",
+    "note": "Reviewed titled article with authors and main_text inputs; figures/ documents use standalone for individual plots.",
+    "sha256": "279f69f9231d35fb814bc5186c4110c8843dcb99db56057fc3485091759e26b0"
+  },
+  "2410-02465/v3": {
+    "main_file": "acl_latex.tex",
+    "note": "Reviewed titled article with author list and sections/ inputs.",
+    "sha256": "081836ec7a3c0233cd999aa2b5a127409fc7d5c072d62420409ccfcfab405f77"
+  },
+  "2410-01366/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed named-author LLNCS paper with abstract and main sections; rebuttal thanks reviewers; suppl_main has placeholder authors and supplementary input.",
+    "sha256": "f1cb625835cdae38a39b41b421c13d372e5c51c816dd101b08f93d59a7c2fa25"
+  },
+  "2410-02162/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled article with authors and introduction/planning/scheduling sections.",
+    "sha256": "5b8f2283286bdbbd3a581f8bdc9d4a69237021be1fc3dbda8aeb56c6da5687e3"
+  },
+  "2409-18776/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled article and table inputs; Out/slides.tex uses beamer presentation mode.",
+    "sha256": "fd3eaa900cd1755454f039cb947c3f57b8623221713058ef89e32c1484c24af0"
+  },
+  "2409-20556/v2": {
+    "main_file": "main.tex",
+    "note": "Reviewed ACM article with abstract, teaser, introduction and related work; supp.tex inputs supplementary implementation and experiments.",
+    "sha256": "83824d422507739649e998728bb5a408c3d745761137c5f79738267532992a33"
+  },
+  "2410-02073/v2": {
+    "main_file": "paper.tex",
+    "note": "Reviewed titled article with author list and tex/ section inputs.",
+    "sha256": "be740752e6da4b9ee94c79318579159ab5149b08b028cf12713a6cdd7d7909ed"
+  },
+  "2410-01729/v1": {
+    "main_file": "iclr2025_conference.tex",
+    "note": "Reviewed titled article with authors and numbered abstract/introduction/background inputs.",
+    "sha256": "79c806c29d1252ff30217c485fb00d3d8d4778d481036291165556152728272f"
+  },
+  "2410-01023/v2": {
+    "main_file": null,
+    "note": "Ambiguous: acl_latex.tex and main.tex share the same article title and section inputs but differ in author details; no unique root asserted."
+  },
+  "2409-19732/v1": {
+    "main_file": "main_paper.tex",
+    "note": "Reviewed titled article and contents/ section inputs.",
+    "sha256": "a029fbf84c804d706abd9449d4db4bfa6dc0f6229cd09615f01dd32a06e18f96"
+  },
+  "2409-20266/v1": {
+    "main_file": "root.tex",
+    "note": "Reviewed IEEE conference article root with doc/ packages, preamble, math and TikZ settings inputs.",
+    "sha256": "cd4f038d07da1b323a0cc80f7d1842a48fa5d9c4276718d179ee41106a6e9e57"
+  },
+  "2409-20248/v2": {
+    "main_file": "example.tex",
+    "note": "Reviewed titled IEEE conference article with body/ abstract, introduction, related-work and methods inputs despite generic filename.",
+    "sha256": "bf1ab1d56edea1a075533c2e4b60894b39e646cc5b8b4ebe9c389c3b3079f421"
+  },
+  "2410-00086/v2": {
+    "main_file": "iclr2025_conference_arxiv.tex",
+    "note": "Reviewed titled article root with abstract, introduction, method, dataset and experiment inputs.",
+    "sha256": "ff3a439851d295b8ff6f440c20030e2c13ed66a05057f34355ff311330278f5a"
+  },
+  "2409-18785/v1": {
+    "main_file": null,
+    "note": "Ambiguous: main.tex and samples/main.tex are article roots with the same title and table inputs; the folder also contains ACM templates. No unique article copy asserted."
+  },
+  "2410-02841/v1": {
+    "main_file": null,
+    "note": "Ambiguous: main_cvpr24.tex and FSE25/main.tex are different conference drafts on the same subject, with different titles. No authoritative submitted root established."
+  },
+  "2410-01260/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed ACM article root with routing-paper titles and doc/ abstract, introduction and algorithm inputs.",
+    "sha256": "c27ed875b5895f5c00e72a2f6a5f4509c278cdc229713de3ebd0cf54010eef5a"
+  },
+  "2409-19722/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled LLNCS article root with author list, macros and numbered section inputs.",
+    "sha256": "e97617149e83c2f98eca09bb1f0f9d2c311db23e49ecb93f7627c374a5320906"
+  },
+  "2410-02434/v1": {
+    "main_file": "manuscript.tex",
+    "note": "Reviewed titled IEEE article root and author list; figs/ documents use standalone for plots.",
+    "sha256": "639d0894302d6548296e36c44956086e9176e955bd559819567b390b18a4dd8b"
+  },
+  "2409-19414/v1": {
+    "main_file": "neurips_2024.tex",
+    "note": "Reviewed titled article root with abstract, introduction, related work and method inputs.",
+    "sha256": "2c13e5194f060b961df408b6a3a6dcd640318437321544e4bc0c23b28b9f69ac"
+  },
+  "2409-19715/v2": {
+    "main_file": "acl_latex.tex",
+    "note": "Reviewed titled Coffee-Gym article root with author list and abstract, task definition and dataset inputs.",
+    "sha256": "b6db4751bedc6431abcbd1a667c97ae783ead634ae6f4057c595fe080095346f"
+  },
+  "2410-00436/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled manipulation article root with abstract, figure and numbered section inputs.",
+    "sha256": "b469aece66393b6d1e4b57686de911c5674ec2a536bfdfdc0a4b3c9dcb0cdabc"
+  },
+  "2410-01083/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled LLNCS article root with abstract, introduction, related work and approach inputs.",
+    "sha256": "d8dc12ccae2fcb9ed1e6bcd013fd905f3c0ecec7fe63af233984d86e03dafd2c"
+  },
+  "2410-01093/v1": {
+    "main_file": "GLM-Imputation-final-v5.tex",
+    "note": "Reviewed article root with commands input, document body and abstract; figs/plots-eps article-class documents are tikzplotlib plots.",
+    "sha256": "a881fa34ffa1bd1288b88669d2ffa2faa770da83a4dfda7f721d98e60ca86333"
+  },
+  "2410-01445/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled elsarticle2 article root with author list, introduction, problem, literature, heuristic and results inputs.",
+    "sha256": "727ce83b4e45dc68e1cda467354dfd15a3a7544db6ac65eba7efbe53dec406c3"
+  },
+  "2410-02029/v2": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled IEEE article root with author list and abstract, introduction and cross-chain bridge sections.",
+    "sha256": "bc799d48d50792b9233203b653adac3c82543f17a6807a602c6373dbadb0c261"
+  },
+  "2410-02764/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled LLNCS article root with setup files, abstract and introduction inputs.",
+    "sha256": "8f42fad7242e167a8b80c83dfeca8b8be7a58e42ed2392eb225ef5694623ebf4"
+  },
+  "2409-18709/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled ACM article root with authors, macros, abstract, introduction and calculi inputs.",
+    "sha256": "e0a69193633b76741a784ec4cd62bc05f760a420af9531d53772b8213c11baa1"
+  },
+  "2409-19994/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed article-class root with document body; chap/title.tex supplies the thesis title and author, followed by abstract and chapter inputs.",
+    "sha256": "a93056bd981f5246a20affe1b3563f4d95748c2036ca1bab92c900d85a7234da"
+  },
+  "2409-19210/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled LLNCS article root with authors, macros, abstract, introduction and preliminary inputs.",
+    "sha256": "2685e9db15901cb6d4e09fb217ec779a47c3802acb7d12b55aad2e4fd0aa2127"
+  },
+  "2410-01620/v5": {
+    "main_file": "main.tex",
+    "note": "Reviewed article title/logo definition and abstract, introduction, related work, method and experiment inputs.",
+    "sha256": "b2efcf86c2b158ec0e44bcea2aefd4578ef32824993f622ae8af68fe1c4a6430"
+  },
+  "2410-01871/v1": {
+    "main_file": "main_arxiv.tex",
+    "note": "Reviewed titled auction-regulation article root with authors and arxiv-specific abstract and setting inputs.",
+    "sha256": "ca4f3d18d1548175089c966ebee49a1d0002b6091753a56bea6fcf798214eb35"
+  },
+  "2410-02646/v2": {
+    "main_file": "main.tex",
+    "note": "Reviewed named-author 3D-perception paper with abstract and main sections; iclr2025_conference.tex is Formatting Instructions with template authors; supp_main.tex inputs supplementary content.",
+    "sha256": "d652ff377abbb9078ac4b6cc87d27394ced689ad10c3692aea812c4283c09e87"
+  },
+  "2410-02660/v2": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled long-context article root with authors and introduction, evaluation, data and SFT inputs.",
+    "sha256": "c7c33a7c3613bd81d5e80ff9188c4b4e2ba7da708e2fdee8bf63d66f70e75423"
+  },
+  "2410-01568/v1": {
+    "main_file": "pocg-conf.tex",
+    "note": "Reviewed active IEEE documentclass in wrapper; content.tex supplies document body, title and abstract. The TeX root comment is not an active command.",
+    "sha256": "f55f99af94a8830b74e2bfd134b8e0592ae38dee5e2f7ec9f7b7706a2618f5f4"
+  },
+  "2410-02915/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled ACM article root with authors and numbered introduction, methods, results and discussion inputs; samples/ contains ACM templates.",
+    "sha256": "14a5f87690eaad5db9e8d3e35eb552ef2a3505d41b919f07257c815b320fc70b"
+  },
+  "2410-00601/v2": {
+    "main_file": "klocalgraphs.tex",
+    "note": "Reviewed titled LLNCS article root with named authors, shortcuts, abstract, introduction and graph-theory sections.",
+    "sha256": "25bd7f85af349dab90e56778b23dac2ee0d52dde578c5af0cccb67a0feae62f6"
+  },
+  "2410-01950/v2": {
+    "main_file": null,
+    "note": "Ambiguous: arxiv.tex and main.tex contain related but differently titled article drafts with different section paths; no unique submitted root established."
+  },
+  "2410-02677/v2": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled CulturalBench article root with author list, data-collection, dataset and experiment inputs.",
+    "sha256": "127a254324d6f392ad0db09a04c9ecf926e3889fa3bdb8240391a1cc7812ed2a"
+  },
+  "2410-01281/v2": {
+    "main_file": "paper.tex",
+    "note": "Reviewed ACM article root with human-mobility title and author list, abstract, introduction, methods and experiment inputs.",
+    "sha256": "edb0b49f77e8f836113502fe1cc52a619ad7eeacbd63c13adac8973359d6ab6e"
+  },
+  "2409-19774/v1": {
+    "main_file": "paper.tex",
+    "note": "Reviewed titled domain-generalization article root with authors, introduction, related work, methods and experiment inputs.",
+    "sha256": "4c74bbd28745f65e9b9c395cbf075cd707d6b4f0be9997607277d4d5b469e602"
+  },
+  "2409-18858/v3": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled ECAI article root with authors, macros and abstract, introduction and related-work inputs.",
+    "sha256": "23e45ec7e7510845f51fccb83e916c14cc53a2842b39e962c9f1f476ddd5b5c8"
+  },
+  "2409-19463/v1": {
+    "main_file": "farm_bank.tex",
+    "note": "Reviewed sole article root with packages, document body and table inputs; tables are fragments rather than competing document roots.",
+    "sha256": "49b5de166d9081c998eb9914b3d3b13085e6ec61461cd85df9203bf76f4aecf9"
+  },
+  "2409-19478/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled IEEE article root with abstract, introduction, background and hardware-verification section inputs.",
+    "sha256": "8e7413d5fb9bd2630163dc947d83c0bf7739085c6d5568b782847eaf3193f415"
+  },
+  "2409-19840/v2": {
+    "main_file": "neurips_2024.tex",
+    "note": "Reviewed titled article root with main/ abstract, introduction, related work, method and experiment inputs.",
+    "sha256": "46e271cb8bdfca9d9900bd537db59e4661b11e50a4fc002794a3754c1e7e6bed"
+  },
+  "2409-20156/v1": {
+    "main_file": "0_main.tex",
+    "note": "Reviewed titled article root with author list, macros and main/ introduction, setup, method and theory inputs.",
+    "sha256": "f1a1a61f382c357b3d4eaa077bdde04f39683557546e68cc63df659dc213e44a"
+  },
+  "2409-20306/v2": {
+    "main_file": "main.tex",
+    "note": "Reviewed ACM article root with routing-configuration title and abstract, introduction, motivation and design inputs.",
+    "sha256": "7bcecb36d54f12eb9b9775120ca9e7479918dc40af4cb47c08851e4aa743d005"
+  },
+  "2409-20389/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled AMS article root with author and commands, theorem and figure inputs.",
+    "sha256": "0a06305a9d24879dad1ade5f1417e44db3a567d60ec1aa31101828bf35c57f20"
+  },
+  "2410-00999/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled revtex article root with named author, preamble and content/ introduction, methods and results inputs.",
+    "sha256": "7dd6b429da26114c0ce26493b42234aa281ee3b33cb2adac5528a46e2863472a"
+  },
+  "2410-02184/v1": {
+    "main_file": "acl_latex.tex",
+    "note": "Reviewed code-generation evaluation article title, author list and latex/ section inputs.",
+    "sha256": "1a2a1802d822a9cd1ad867c6ffd89fa6b1dc7b3df988c71488d717df6b25579c"
+  },
+  "2410-02396/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled article root with authors and numbered abstract, introduction, related-work, method and experiment inputs.",
+    "sha256": "32e32d42c22f5031eec3bffd16cd2e7df893cd74f1a5132cc867587e0140e0ad"
+  },
+  "2409-19532/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled IEEE article root with authors and parts/ abstract, introduction, methods and experiments inputs.",
+    "sha256": "60569ae04a1b2af40dbb7b2a33ac58a183453133e3ce8b168e30866101e4c61d"
+  },
+  "2409-18961/v1": {
+    "main_file": "03-arxiv.tex",
+    "note": "Reviewed titled LLNCS article root with named authors, preamble and post-rebuttal introduction and related-work inputs.",
+    "sha256": "5274017d3e9b582cfd7b1688b35aa31a784a88948192eaf92965e0aa85705f22"
+  },
+  "2409-20343/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled IEEE article root with named authors; other TeX files do not declare competing document roots.",
+    "sha256": "b71e7f0f1afb72b4f4fc68f946e4109f54861c0f27cddb6b072e54984026842d"
+  },
+  "2410-01957/v1": {
+    "main_file": "arxiv.tex",
+    "note": "Reviewed titled human-feedback article root with macro, abstract, introduction and analysis inputs.",
+    "sha256": "cbcbd7b7b3d9be68d89713194ba8030d17be3112c244510071c238743f88550b"
+  },
+  "2410-02743/v1": {
+    "main_file": "iclr2025_conference.tex",
+    "note": "Reviewed titled MA-RLHF article root with author list and section/ introduction, preliminaries, method and experiments inputs.",
+    "sha256": "1eadfdc945cc2a7f608c68ffd8dc620e6ac8774241fe4da074c30f5d33737e1f"
+  },
+  "2410-02884/v2": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled mathematical-reasoning article root with math commands and text/abstract inputs.",
+    "sha256": "2465c8f47769a7a0c286c868cd70d236e7594616df65ae47e94e034bfb426047"
+  },
+  "2410-01540/v4": {
+    "main_file": "EGauthorGuidelines-conf-sub.tex",
+    "note": "Reviewed sole active egpubl root; conference-paper wrapper explicitly inputs EG_2026_final_version.inc despite its guideline filename.",
+    "sha256": "a7bf9efab75f4af039ab41e476f19690a02607b15a969d6d0021ded5afb2c11c"
+  },
+  "2410-03022/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled ACM article root with subtitle and commands, introduction, related work, methods and results inputs.",
+    "sha256": "15dc4fa192761c9f3ab69b9bfa1a05fc9127530b24d518364ddec50526aa340d"
+  },
+  "2409-19365/v3": {
+    "main_file": "Paper_final.tex",
+    "note": "Reviewed titled diffusion-model survey article root with authors, math commands, introduction, background and topic-section inputs.",
+    "sha256": "8c1fe1fe2d6980101541d8a31d0680d1af0c5cbccdc778adb7abe0c3acdfac83"
+  },
+  "2409-19550/v1": {
+    "main_file": "sample-authordraft.tex",
+    "note": "Reviewed sole active ACM article root; actual matrix-factorization title, named author and abstract replace sample content despite the sample filename.",
+    "sha256": "54bce2bf5fbe3e8e176984818302131e26166e6faf0aaafc989ee25ba94c2dbe"
+  },
+  "2409-19808/v2": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled skill-composition article root with author list and introduction, related work, preliminary and setup inputs.",
+    "sha256": "8f5f1d1a10e0e4716bd77434fc6af4036697e799bee9b9f51d1809fe3ba5b462"
+  },
+  "2410-01102/v1": {
+    "main_file": "root.tex",
+    "note": "Reviewed titled ieeeconf article root with introduction, related work, methods, evaluation and conclusion inputs.",
+    "sha256": "501a88a0c1ceff36b13880cf370d09a4a0bc60de7963bf1e4615a0b93c959e03"
+  },
+  "2410-01933/v2": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled JMLR TAEGAN article root with authors and numbered abstract, introduction, literature, preliminaries and model inputs.",
+    "sha256": "f29e5f7ab300d62c0970b312c26b24d6c9c0b4397467f38412f5e17044f8310b"
+  },
+  "2410-01945/v2": {
+    "main_file": "iclr2026_conference.tex",
+    "note": "Reviewed titled LFQA-E article root with named authors, math commands and main/ abstract, introduction, related-work and methodology inputs.",
+    "sha256": "466156ed9aa78ff9c6856b7aa6ab1f477004b15a4fb5e599ec8ecc1adaea04d0"
+  },
+  "2410-02005/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled FairlyUncertain article root with named authors, math commands, macros and table inputs.",
+    "sha256": "9f6fa7b471a3c66d259bb8461c8fd0bb898be9ebc1151281970e071bc1d84e55"
+  },
+  "2410-02683/v3": {
+    "main_file": "iclr2025_conference.tex",
+    "note": "Reviewed titled value-preference benchmark article root with named authors and numbered sections/ inputs.",
+    "sha256": "56bf2073270adb1a579a66ac1267df43f0ab2ffa406e3c631baa4389dd0f6983"
+  },
+  "2410-02979/v3": {
+    "main_file": "Paper.tex",
+    "note": "Reviewed titled optimization article root with named authors and project macros, style and augustPaper inputs.",
+    "sha256": "93701a18219bb2c6af45426ee0b6d3fa284e71153f698127f4eb0b5fc3c8c09d"
+  },
+  "2410-00202/v1": {
+    "main_file": "fst24-fusion.tex",
+    "note": "Reviewed titled spectral-element journal article root with named authors and document body; header and pf use unbraced input syntax.",
+    "sha256": "429a6d3ddb8922c8facacd330671ee5b1460739dc8f953947ef538a4ed17880c"
+  },
+  "2410-02200/v5": {
+    "main_file": null,
+    "note": "Ambiguous: main.tex and arxiv/main_Arxiv.tex contain the same prefix-tuning paper title and named authors in different layouts and section structures; no authoritative submitted root established."
+  },
+  "2410-01731/v1": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled ComfyGen article with author list and abstract/introduction sections; supplementary.tex explicitly labels itself Supplementary Materials.",
+    "sha256": "307ac896c68480aed9c7bbddbbacedf9ad89e1be0c9c4a3a6f47f57a721ee39e"
+  },
+  "2409-18618/v3": {
+    "main_file": "main.tex",
+    "note": "Reviewed titled summarization article root with named authors and scripts/ introduction, preliminaries, methods and experiments inputs.",
+    "sha256": "8f16177117c58edc91d741671c74d54688991f0a075d51c5383a928570aeecd8"
+  },
+  "2410-00435/v4": {
+    "main_file": "example_paper.tex",
+    "note": "Reviewed actual KAN-equivariance icmltitle, document body and abstract with section inputs despite template comments and generic filename.",
+    "sha256": "9883cd4e3cfedf0de0aa54fe4f94dc498b006505d7e58091e27f0390be41a1a9"
+  }
+}

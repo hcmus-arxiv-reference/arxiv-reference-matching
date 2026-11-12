@@ -10,7 +10,7 @@ if __name__ == "__main__" and not __package__:
     # Allow running this file directly, including from outside the repo.
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from src.parse.source import _group, _scan, _space
+from src.parse.source import _group, _input_names, _scan, _space
 
 DEFAULT_OUTPUT = Path(__file__).resolve().parent / "output" / "file_tree.json"
 
@@ -60,25 +60,31 @@ def _gather_inputs(main: Path, base: Path, scans: dict, files: set[Path],
         if (command.name == "include" and include_only is not None
                 and command.argument.removesuffix(".tex") not in include_only):
             continue
-        requested = Path(command.argument)
-        if requested.is_absolute():
+        try:
+            requested_names = _input_names(command.argument)
+        except ValueError:
             continue
-        if not requested.suffix:
-            requested = requested.with_suffix(".tex")
         # TeX resolves against the main directory; allow nested local files too.
+        child = None
         for parent in (main.parent, path.parent):
-            child = (parent / requested).resolve()
-            if not child.is_relative_to(base) or child not in files:
-                continue
-            name = child.relative_to(base).as_posix()
-            if child != main and name not in input_names and (recursive or len(pending) == 1):
-                inputs.append(name)
-                input_names.add(name)
-            if child not in visited:
-                visited.add(child)
-                if child in scans:
-                    pending.append((child, iter(scans[child].commands)))
-            break
+            for requested in requested_names:
+                candidate = (parent / requested).resolve()
+                if (not Path(requested).is_absolute() and candidate.is_relative_to(base)
+                        and candidate in files):
+                    child = candidate
+                    break
+            if child is not None:
+                break
+        if child is None:
+            continue
+        name = child.relative_to(base).as_posix()
+        if child != main and name not in input_names and (recursive or len(pending) == 1):
+            inputs.append(name)
+            input_names.add(name)
+        if child not in visited:
+            visited.add(child)
+            if child in scans:
+                pending.append((child, iter(scans[child].commands)))
     return tuple(inputs)
 
 

@@ -15,11 +15,22 @@ import re
 
 from src.common.corpus import verified_source
 
-ASSEMBLER_VERSION = "1"
+ASSEMBLER_VERSION = "2"
 _VERBATIM = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"}
 _DEFINITIONS = {"newcommand", "renewcommand", "providecommand", "DeclareRobustCommand",
                 "DeclareMathOperator", "newenvironment", "renewenvironment"}
 _FLOW = re.compile(r"\\(?:input|include|documentclass|endinput|includeonly)\b")
+_BRANCH_COMMANDS = {"ifthenelse": 3, "ifbool": 3, "iftoggle": 3, "ifstrequal": 4, "ifentrytype": 3}
+
+
+def _input_names(argument: str) -> tuple[str, ...]:
+    """TeX permits quoted filenames and appends .tex even after another suffix."""
+    name = argument.strip()
+    if name.startswith('"') and name.endswith('"'):
+        name = name[1:-1]
+    if not name or any(character in name for character in '\\#{}~$"'):
+        raise ValueError("Empty or dynamic input filename is unsupported")
+    return (name,) if name.lower().endswith(".tex") else (name, name + ".tex")
 
 
 @dataclass(frozen=True)
@@ -125,9 +136,23 @@ def _scan(text: str, file: str) -> _Scan:
     result = _Scan([], [], len(text))
     cursor = 0
     conditions: list[bool | None] = []
+    condition_positions: list[tuple[str, int]] = []
+    reported_conditions: set[int] = set()
+    loops: list[int] = []
 
     def issue(code: str, position: int, message: str, severity: str = "warning"):
         result.issues.append(Issue(code, severity, file, text.count("\n", 0, position) + 1, message))
+
+    def conditional_path():
+        # A conditional controlling only formatting does not change which files
+        # are gathered. Keep its source for later parsing, without guessing it.
+        if False not in conditions:
+            for value, (name, position) in zip(conditions, condition_positions):
+                if value is None:
+                    if position not in reported_conditions:
+                        issue("unsupported_conditional", position, f"\\{name}: neither branch is expanded")
+                        reported_conditions.add(position)
+                    break
 
     while cursor < len(text):
         if text[cursor] == "%":
@@ -141,8 +166,13 @@ def _scan(text: str, file: str) -> _Scan:
             if name in {"verb", "lstinline"}:
                 if cursor < len(text) and text[cursor] == "*":
                     cursor += 1
+                if name == "lstinline" and cursor < len(text) and text[cursor] == "[":
+                    _, cursor = _group(text, cursor, "[")
                 if cursor >= len(text) or text[cursor].isspace():
                     raise ValueError("Missing verbatim delimiter")
+                if name == "lstinline" and text[cursor] == "{":
+                    _, cursor = _group(text, cursor)
+                    continue
                 end = text.find(text[cursor], cursor + 1)
                 if end < 0 or "\n" in text[cursor:end]:
                     raise ValueError("Unclosed inline verbatim")
@@ -186,9 +216,12 @@ def _scan(text: str, file: str) -> _Scan:
                 body, cursor = _group(text, cursor)
                 if name.endswith("environment"):
                     tail, cursor = _group(text, cursor); body += tail
-                if active and (_FLOW.search(body) or definition_name in
-                               {"input", "include", "documentclass", "endinput", "includeonly"}):
-                    issue("macro_compilation_path", start, "Macro body controls input/root; expansion is unsupported")
+                if (_FLOW.search(body) or definition_name in
+                        {"input", "include", "documentclass", "endinput", "includeonly"}):
+                    if active:
+                        issue("macro_compilation_path", start, "Macro body controls input/root; expansion is unsupported")
+                    else:
+                        conditional_path()
                 continue
             if name == "newif":
                 cursor = _space(text, cursor)
@@ -202,16 +235,49 @@ def _scan(text: str, file: str) -> _Scan:
                         cursor = _space(text, cursor + 1)
                     if cursor < len(text) and text[cursor] == "\\":
                         alias, cursor = _control(text, cursor)
-                        if active and alias in {"input", "include", "documentclass", "endinput"}:
-                            issue("macro_compilation_path", start, "Aliased compilation command is unsupported")
+                        if alias in {"input", "include", "documentclass", "endinput", "includeonly"}:
+                            if active:
+                                issue("macro_compilation_path", start, "Aliased compilation command is unsupported")
+                            else:
+                                conditional_path()
                     else:
                         cursor += 1
                 continue
-            if name.startswith("if"):
+            if name == "loop":
+                loops.append(len(conditions))
+                continue
+            if name == "repeat" and loops:
+                # Plain TeX's loop/repeat closes its final conditional without
+                # a literal fi. Inputs inside an unknown loop still need review.
+                depth = loops.pop()
+                del conditions[depth:]
+                del condition_positions[depth:]
+                continue
+            if name in {"AtBeginDocument", "AtEndDocument"}:
+                body, cursor = _group(text, cursor)
+                if _FLOW.search(body):
+                    if active:
+                        issue("unsupported_control", start, f"\\{name} can change the compilation path")
+                    else:
+                        conditional_path()
+                continue
+            if name in _BRANCH_COMMANDS or name == "IfFileExists":
+                arguments = []
+                for _ in range(_BRANCH_COMMANDS.get(name, 3)):
+                    argument, cursor = _group(text, cursor)
+                    arguments.append(argument)
+                if any(_FLOW.search(argument) for argument in arguments):
+                    if active:
+                        issue("unsupported_control", start, f"\\{name} can change the compilation path")
+                    else:
+                        conditional_path()
+                continue
+            # \\iff is a standard math relation, not a TeX conditional.
+            if name.startswith("if") and name != "iff":
                 value = {"iftrue": True, "iffalse": False}.get(name)
-                if active and value is None:
-                    issue("unsupported_conditional", start, f"\\{name}: neither branch is expanded")
-                conditions.append(value); continue
+                conditions.append(value)
+                condition_positions.append((name, start))
+                continue
             if name == "else":
                 if not conditions:
                     raise ValueError("Unmatched else")
@@ -221,11 +287,16 @@ def _scan(text: str, file: str) -> _Scan:
             if name == "fi":
                 if not conditions:
                     raise ValueError("Unmatched fi")
-                conditions.pop(); continue
+                conditions.pop()
+                condition_positions.pop()
+                continue
             if not active:
+                if name in {"input", "include", "includeonly", "documentclass", "endinput",
+                            "catcode", "csname", "scantokens", "import", "subimport", "InputIfFileExists"}:
+                    conditional_path()
                 continue
             if name in {"catcode", "csname", "scantokens", "import", "subimport",
-                        "InputIfFileExists", "IfFileExists", "AtBeginDocument", "AtEndDocument"}:
+                        "InputIfFileExists"}:
                 issue("unsupported_control", start, f"\\{name} can change the compilation path")
             if name == "endinput":
                 tail = text[cursor:].split("\n", 1)[0].split("%", 1)[0]
@@ -240,9 +311,15 @@ def _scan(text: str, file: str) -> _Scan:
                 if cursor < len(text) and text[cursor] == "{":
                     argument, cursor = _group(text, cursor)
                 elif name == "input":
-                    end = cursor
-                    while end < len(text) and not text[end].isspace() and text[end] not in "%{}\\":
+                    if cursor < len(text) and text[cursor] == '"':
+                        end = text.find('"', cursor + 1)
+                        if end < 0:
+                            raise ValueError("Unclosed quoted input filename")
                         end += 1
+                    else:
+                        end = cursor
+                        while end < len(text) and not text[end].isspace() and text[end] not in "%{}\\":
+                            end += 1
                     argument, cursor = text[cursor:end], end
                 else:
                     raise ValueError("Include requires a braced literal filename")
@@ -342,27 +419,23 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
         chunks.append(chunk); size += len(chunk)
 
     def resolve(argument, name):
-        if any(ch in argument for ch in "\\#{}~$"):
-            raise ValueError("Dynamic filename is unsupported")
-        requested = Path(argument)
-        if requested.is_absolute():
-            raise ValueError("Absolute include path is forbidden")
-        if not requested.suffix:
-            requested = requested.with_suffix(".tex")
         candidates = []
         for parent in (working, (base / name).parent):
-            path = parent / requested
-            if not path.resolve().is_relative_to(base):
-                raise ValueError("Include path escapes Version directory")
-            if any(p.is_symlink() for p in (path, *path.parents)):
-                raise ValueError("Symlink in include path")
-            relative = path.resolve().relative_to(base).as_posix()
-            if relative in texts and relative not in candidates:
-                candidates.append(relative)
+            for requested in _input_names(argument):
+                path = parent / requested
+                if Path(requested).is_absolute():
+                    raise ValueError("Absolute include path is forbidden")
+                if not path.resolve().is_relative_to(base):
+                    raise ValueError("Include path escapes Version directory")
+                if any(p.is_symlink() for p in (path, *path.parents)):
+                    raise ValueError("Symlink in include path")
+                relative = path.resolve().relative_to(base).as_posix()
+                if relative in texts and relative not in candidates:
+                    candidates.append(relative)
         if not candidates:
             raise FileNotFoundError(f"Missing TeX input: {argument}")
         chosen = candidates[0]
-        if (working / requested).resolve() != base / chosen:
+        if not any((working / requested).resolve() == base / chosen for requested in _input_names(argument)):
             problem("relative_to_includer", name, f"Resolved {argument} relative to including file", "info")
         return chosen
 

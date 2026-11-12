@@ -92,11 +92,13 @@ def test_pending_rules_are_not_silently_active():
 @pytest.mark.parametrize("name", [
     "align", "align*", "gather", "gather*", "multline", "multline*", "eqnarray", "eqnarray*",
 ])
-def test_multiline_math_is_recognized_without_deciding_node_count(name):
+def test_multiline_math_is_one_normalized_formula(name):
     rule = load_mapping()["environments"][name]
     assert rule["kind"] == "formula"
     assert rule["content"] == "whole_environment"
-    assert rule["segmentation"] == "pending"
+    assert rule["segmentation"] == "whole_environment"
+    assert rule["atomic"] is True
+    assert rule["normalize_to"] == "equation"
 
 
 @pytest.mark.parametrize("text,expected", [
@@ -131,3 +133,17 @@ def test_all_configured_patterns_compile_and_literal_abbreviations_are_separate(
     assert "Fig. 1" not in sentence["abbreviations"]
     for rule in sentence["protected_patterns"]:
         re.compile(rule["pattern"])
+
+
+def test_actions_and_unique_configuration_entries():
+    mapping = load_mapping()
+    for rules in (mapping["commands"], mapping["environments"]):
+        assert all("action" in rule for rule in rules.values())
+    patterns = mapping["sentence"]["protected_patterns"]
+    assert len({rule["name"] for rule in patterns}) == len(patterns)
+    for key in ("commands", "environments", "heading_titles"):
+        entries = mapping["exclusions"][key]
+        assert len(entries) == len(set(entries))
+    assert mapping["commands"][r"\textbf"]["contexts"] == ["prose", "heading", "figure"]
+    for name in ("verbatim", "lstlisting", "minted"):
+        assert mapping["environments"][name]["whitespace"] == "preserve_exact_body"
