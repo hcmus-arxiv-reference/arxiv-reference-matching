@@ -1,0 +1,64 @@
+{
+  "arxiv_id": "2508.02872",
+  "version": 1,
+  "root": {
+    "node": "Section",
+    "kind": "document",
+    "title_raw": "",
+    "starred": false,
+    "span": [
+      41,
+      234
+    ],
+    "children": [
+      {
+        "node": "Section",
+        "kind": "section",
+        "title_raw": "Intro",
+        "starred": false,
+        "span": [
+          41,
+          122
+        ],
+        "children": [
+          {
+            "node": "Leaf",
+            "kind": "sentence",
+            "raw": "We follow Smith et al.~\\cite{smith20}.",
+            "span": [
+              57,
+              95
+            ]
+          },
+          {
+            "node": "Leaf",
+            "kind": "sentence",
+            "raw": "The loss is $L=\\|x\\|^2$ .",
+            "span": [
+              96,
+              121
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "dropped": [
+    {
+      "reason": "preamble",
+      "span": [
+        0,
+        41
+      ]
+    },
+    {
+      "reason": "references",
+      "span": [
+        122,
+        234
+      ]
+    }
+  ],
+  "issues": [],
+  "leaves_version": "1"
+}

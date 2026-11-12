@@ -1,0 +1,12 @@
+{
+  "arxiv_id": "2508.02872",
+  "version": 2,
+  "bib_files": {
+    "refs.bib": "@article{Smith2020,\n  author = {J. Smith},\n  title = {Title},\n  year = {2020}\n}\n"
+  },
+  "missing_bib": [],
+  "bibitems_raw": [],
+  "cite_keys_used": [
+    "Smith2020"
+  ]
+}
