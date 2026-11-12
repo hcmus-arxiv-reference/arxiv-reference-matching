@@ -1,4 +1,4 @@
-"""Read bibliography sources under the M2.4b contract.
+"""Read and merge bibliography entries of one Publication under the M2.4b contract.
 
 Sources: docs/m2-interfaces.md, docs/data-contract.md (C6), and BibtexParser's
 https://bibtexparser.readthedocs.io/en/main/customize.html for the parse stack.
@@ -9,14 +9,21 @@ from collections import defaultdict
 from dataclasses import dataclass
 from functools import lru_cache
 import re
+from typing import TYPE_CHECKING
+import unicodedata
 
 import bibtexparser
 from bibtexparser import middlewares
 from bibtexparser.model import DuplicateBlockKeyBlock, Entry
 
+from src.common.schema import require_id
 from .normalize import _group_end, _space_end, normalize
 
+if TYPE_CHECKING:
+    from src.parse.types import BibResult, BibSource
 
+
+BIBTEX_VERSION = "3"
 _DOI = re.compile(r"\b10\.\d{4,9}/[^\s{}<>\"\\]+", re.I)
 _URL = re.compile(r"https?://[^\s{}<>\"\\]+", re.I)
 _ARXIV = r"(?:\d{4}\.\d{4,5}|[a-z][a-z.\-]*/\d{7})"
@@ -371,3 +378,151 @@ def _bibitem_candidate(version: int, text: str) -> _Candidate | None:
         "journal": next(iter(explicit.get("journal", ())), None),
         "doi": doi, "url": url, "arxiv": arxiv[1] if arxiv else None,
     })
+
+
+_FIELDS = ("entry_type", "title", "authors", "year", "doi", "journal", "url")
+
+
+def _priority(entry: _Candidate) -> tuple:
+    return (-entry.version, entry.key, entry.origin != "bib")
+
+
+def _title_key(title: str) -> str:
+    text = unicodedata.normalize("NFKC", title).casefold().replace("{", "").replace("}", "")
+    return " ".join(re.findall(r"\w+", text))
+
+
+def _groups(entries: list[_Candidate], issues: list[dict]) -> list[list[_Candidate]]:
+    """Join strong identifiers first, then allow unambiguous title/year joins."""
+    parent = list(range(len(entries)))
+    identifiers = [{"doi": {e.fields["doi"]} - {None}, "arxiv": {e.ref_arxiv} - {None}} for e in entries]
+
+    def root(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def join(a: int, b: int) -> None:
+        a, b = root(a), root(b)
+        if a != b:
+            parent[b] = a
+            for name in ("doi", "arxiv"):
+                identifiers[a][name].update(identifiers[b][name])
+
+    strong, weak = {}, defaultdict(list)
+    for i, entry in enumerate(entries):
+        for name, value in (("doi", entry.fields["doi"]), ("arxiv", entry.ref_arxiv)):
+            if value:
+                join(strong.setdefault((name, value), i), i)
+        title, year = entry.fields["title"], entry.fields["year"]
+        if title and year and (normalized := _title_key(title)):
+            weak[(normalized, year)].append(i)
+
+    for (title, year), indices in sorted(weak.items()):
+        roots = sorted({root(i) for i in indices})
+        if len(roots) < 2:
+            continue
+        if any(len(set().union(*(identifiers[i][name] for i in roots))) > 1 for name in ("doi", "arxiv")):
+            issues.append({"code": "ambiguous_title_year", "title": title, "year": year})
+            continue
+        for i in roots[1:]:
+            join(roots[0], i)
+
+    grouped = defaultdict(list)
+    for i, entry in enumerate(entries):
+        grouped[root(i)].append(entry)
+    return sorted((sorted(group, key=_priority) for group in grouped.values()), key=lambda g: _priority(g[0]))
+
+
+def merge_bibtex(arxiv_id: str, sources: list[BibSource]) -> BibResult:
+    """Return full bibtex rows and a Version-scoped citation key map.
+
+    Fill missing fields from other copies. On conflict, use the newest
+    nonempty value, then the lexicographically smallest source key. Prefer a
+    .bib value to a bibitem value on the same Version/key. Record conflicts
+    and unresolved citations in stats for the integration log.
+    """
+    from src.parse.types import BibResult
+
+    require_id(arxiv_id)
+    by_version = {}
+    for source in sources:
+        if source.arxiv_id != arxiv_id or type(source.version) is not int or source.version < 1:
+            raise ValueError("Expected a positive Version of the requested Publication")
+        if source.version in by_version:
+            raise ValueError(f"Duplicate BibSource for Version {source.version}")
+        by_version[source.version] = source
+
+    candidates, issues = [], []
+    for version, source in sorted(by_version.items()):
+        candidates.extend(_bib_candidates(version, source.bib_files, issues))
+        issues.extend({"version": version, "code": "missing_bib", "file": name}
+                      for name in sorted(source.missing_bib))
+        for text in source.bibitems_raw:
+            entry = _bibitem_candidate(version, text)
+            if entry:
+                candidates.append(entry)
+                if entry.fields["title"] is None:
+                    issues.append({"version": version, "key": entry.key, "code": "missing_bibitem_title"})
+            else:
+                issues.append({"version": version, "code": "invalid_bibitem"})
+
+    rows, conflicts, invalid_years, raw_years = [], [], [], {}
+    key_targets = defaultdict(set)
+    used, reserved = set(), {entry.key for entry in candidates}
+    for group in _groups(candidates, issues):
+        preferred = group[0].key
+        canonical = preferred
+        suffix = 2
+        while canonical in used:
+            canonical = f"{preferred}__{suffix}"
+            suffix += 1
+            while canonical in reserved:
+                canonical = f"{preferred}__{suffix}"
+                suffix += 1
+        if canonical != preferred:
+            issues.append({"code": "canonical_key_collision", "key": preferred, "chosen": canonical})
+        used.add(canonical)
+        row = {"arxiv_id": arxiv_id, "citation_key": canonical}
+        for name in _FIELDS:
+            available = [entry for entry in group if entry.fields[name] is not None]
+            winner = available[0] if available else None
+            row[name] = winner.fields[name] if winner else ("misc" if name == "entry_type" else None)
+            alternatives = [{"version": entry.version, "key": entry.key, "value": entry.fields[name]}
+                            for entry in available if entry.fields[name] != row[name]]
+            if alternatives:
+                conflicts.append({"citation_key": canonical, "field": name, "chosen": row[name],
+                                  "chosen_version": winner.version, "alternatives": alternatives})
+        rows.append(row)
+        for entry in group:
+            key_targets[(entry.version, entry.key)].add(canonical)
+            if entry.raw_year is not None:
+                if row["year"] is None:
+                    raw_years.setdefault(canonical, entry.raw_year)
+                invalid_years.append({"version": entry.version, "key": entry.key, "value": entry.raw_year})
+
+    key_map, unresolved = {}, []
+    for version, source in sorted(by_version.items()):
+        mapping = {}
+        for key in dict.fromkeys(source.cite_keys_used):
+            targets = key_targets[(version, key)]
+            if len(targets) == 1:
+                mapping[key] = next(iter(targets))
+            else:
+                mapping[key] = key
+                unresolved.append({"version": version, "key": key,
+                                   "reason": "ambiguous" if targets else "missing_entry"})
+        key_map[str(version)] = mapping
+
+    return BibResult(arxiv_id=arxiv_id, entries=sorted(rows, key=lambda row: row["citation_key"]),
+        key_map=key_map, raw_years=raw_years, bibtex_version=BIBTEX_VERSION, stats={
+            "entry_before": len(candidates), "entry_after": len(rows),
+            "from_bib": sum(e.origin == "bib" for e in candidates),
+            "from_bibitem": sum(e.origin == "bibitem" for e in candidates),
+            "unresolved": len(unresolved), "unresolved_keys": unresolved,
+            "field_conflicts": len(conflicts), "conflicts": conflicts,
+            "invalid_years": invalid_years, "issues": issues,
+            "versions_without_bibliography": sum(not s.bib_files and not s.bibitems_raw and not s.missing_bib
+                                                 for s in by_version.values()),
+        })
