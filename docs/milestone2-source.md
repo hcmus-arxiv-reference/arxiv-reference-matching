@@ -22,6 +22,10 @@ thì API cũng từ chối, không tự hạ mức kiểm tra.
   Ưu tiên đường dẫn tương đối thư mục root (working directory của TeX).
   Nếu chỉ có đường dẫn tương đối file gọi thì dùng fallback và ghi thông
   tin `relative_to_includer`. Không chạy TeX hoặc truy cập hệ thống TeX.
+  Từ v3, nếu cả hai vị trí đều không khớp chính xác, so đường dẫn đầy đủ
+  với inventory TeX sau khi bỏ phân biệt hoa/thường. Một kết quả duy nhất
+  được dùng và ghi `include_case_mismatch` mức info kèm dòng gọi. Nhiều
+  kết quả thì báo `include_error` để người đọc kiểm tra.
 - Bỏ include nằm trong comment/verbatim khỏi đường duyệt. Comment vẫn
   giữ trong văn bản gộp để bảo toàn vị trí nguồn; lớp dựng cây sau phải
   xử lý comment như nội dung không được biên dịch, không sinh Sentence.

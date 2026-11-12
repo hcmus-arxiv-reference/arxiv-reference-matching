@@ -10,12 +10,13 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 
 from src.common.corpus import verified_source
 
-ASSEMBLER_VERSION = "2"
+ASSEMBLER_VERSION = "3"
 _VERBATIM = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"}
 _DEFINITIONS = {"newcommand", "renewcommand", "providecommand", "DeclareRobustCommand",
                 "DeclareMathOperator", "newenvironment", "renewenvironment"}
@@ -377,7 +378,7 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
                                  texts[name].count("\n", 0, start) + 1))
         chunks.append(chunk); size += len(chunk)
 
-    def resolve(argument, name):
+    def resolve(argument, name, line):
         if any(ch in argument for ch in "\\#{}~$"):
             raise ValueError("Dynamic filename is unsupported")
         requested = Path(argument)
@@ -386,19 +387,29 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
         if not requested.suffix:
             requested = requested.with_suffix(".tex")
         candidates = []
+        requested_paths = []
         for parent in (working, (base / name).parent):
             path = parent / requested
             if not path.resolve().is_relative_to(base):
                 raise ValueError("Include path escapes Version directory")
             if any(p.is_symlink() for p in (path, *path.parents)):
                 raise ValueError("Symlink in include path")
-            relative = path.resolve().relative_to(base).as_posix()
-            if path.is_file() and relative not in texts:
+            relative = Path(os.path.normpath(path)).relative_to(base).as_posix()
+            requested_paths.append(relative)
+            if path.is_file() and path.suffix.lower() != ".tex" and relative not in texts:
                 raise ValueError(f"Input is not an inventoried TeX file: {argument}")
             if relative in texts and relative not in candidates:
                 candidates.append(relative)
         if not candidates:
-            raise FileNotFoundError(f"Missing TeX input: {argument}")
+            folded = {relative.casefold() for relative in requested_paths}
+            matches = sorted(target for target in texts if target.casefold() in folded)
+            if not matches:
+                raise FileNotFoundError(f"Missing TeX input: {argument}")
+            if len(matches) > 1:
+                raise ValueError(f"Ambiguous case-insensitive input {argument}: {matches}")
+            chosen = matches[0]
+            problem("include_case_mismatch", name, f"Resolved {argument} to {chosen}", "info", line=line)
+            return chosen
         chosen = candidates[0]
         if (working / requested).resolve() != base / chosen:
             problem("relative_to_includer", name, f"Resolved {argument} relative to including file", "info")
@@ -440,7 +451,7 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
                         and command.argument.removesuffix(".tex") not in include_only):
                     entry["status"] = "excluded_by_includeonly"
                 else:
-                    target = resolve(command.argument, name)
+                    target = resolve(command.argument, name, line)
                     entry["target"] = target
                     stopped = expand(target, [*stack, name])
                     entry["status"] = "expanded"

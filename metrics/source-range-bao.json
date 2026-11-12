@@ -1,9 +1,10 @@
 {
-  "assembler_version": "2",
+  "assembler_version": "3",
   "issue_versions": {
     "ambiguous_root": 200,
     "encoding_fallback": 46,
-    "include_error": 173,
+    "include_case_mismatch": 17,
+    "include_error": 159,
     "invalid_syntax": 70,
     "macro_compilation_path": 15,
     "missing_bbl": 137,
@@ -74,15 +75,15 @@
     "2508-07719"
   ],
   "publications_present": 4941,
-  "ready_fraction": 0.8281576382119482,
-  "ready_tex_versions": 5947,
+  "ready_fraction": 0.82927168917978,
+  "ready_tex_versions": 5955,
   "revision": "68417da5f3f5ad7300d68716b409d0c7aa3ec6de",
   "scope": "raw/bao/2508-02872..2508-07871, published Versions only",
   "statuses": {
     "empty_non_tex": 481,
-    "error": 561,
-    "needs_review": 673,
-    "ready": 5947
+    "error": 547,
+    "needs_review": 679,
+    "ready": 5955
   },
   "tex_versions": 7181,
   "versions": 7662

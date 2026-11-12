@@ -284,3 +284,31 @@ def test_source_golden(case, tmp_path):
     assert "".join(result.text[s.output_start:s.output_end] for s in result.spans) == result.text
     for span in result.spans:
         assert result.text[span.output_start:span.output_end] == golden["files"][span.file][span.source_start:span.source_end]
+
+
+@pytest.mark.parametrize("command", ["input", "include"])
+def test_unique_case_insensitive_include(tmp_path, command):
+    root = tree(tmp_path, {"main.tex": "\\documentclass{article}\n\\" + command + "{sec/1_intro}",
+                           "Sec/1_Intro.tex": "Introduction"})
+    result = assemble_source(root)
+    assert result.status == "ready"
+    assert result.text.endswith("Introduction")
+    assert result.includes[0]["target"] == "Sec/1_Intro.tex"
+    assert [(i.code, i.severity, i.line) for i in result.issues] == [
+        ("include_case_mismatch", "info", 2)]
+
+
+@pytest.mark.parametrize("exact", [False, True])
+def test_case_fallback_considers_both_include_directories(tmp_path, exact):
+    root = tree(tmp_path, {"main.tex": r"\documentclass{article}\input{sub/body}",
+                           "sub/body.tex": r"\input{part}", "Part.tex": "ROOT",
+                           "sub/part.tex" if exact else "sub/PART.tex": "LOCAL"})
+    result = assemble_source(root)
+    if exact:
+        assert result.status == "ready"
+        assert result.includes[-1]["target"] == "sub/part.tex"
+        assert not any(i.code == "include_case_mismatch" for i in result.issues)
+    else:
+        assert result.status == "error"
+        assert result.includes[-1]["target"] is None
+        assert "Ambiguous case-insensitive" in result.issues[-1].message
