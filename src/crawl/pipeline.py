@@ -55,7 +55,8 @@ class CrawlPipeline:
     (see ``_prefetch_references``). Batches run one after another in a single
     background S2 thread, and the next one is queued while half of the current
     batch is still ahead. After a Publication's downloads the arXiv thread
-    waits at most ``references_wait`` seconds for its batch; a batch still
+    waits at most ``references_wait`` seconds for its batch (not at all while
+    an earlier Publication is still waiting for S2); a batch still
     pending (S2 429 backoff) is left for later and recorded by
     ``settle_references``, which the Runner calls between Publications and
     before each Export. A throttled batch is retried in the S2 thread for up to
@@ -480,7 +481,9 @@ class CrawlPipeline:
         if isinstance(refs, _Batched):
             # Time the arXiv thread is held up by S2 after its own downloads.
             waited = self.clock()
-            if not refs.batch.done():
+            if not refs.batch.done() and not self._refs_deferred:
+                # Wait only while S2 looks healthy: once a batch is overdue, every
+                # Publication behind it would add the full wait.
                 wait([refs.batch], timeout=self.references_wait)
             timing["references_wait_seconds"] = self.clock() - waited
             if not refs.batch.done():

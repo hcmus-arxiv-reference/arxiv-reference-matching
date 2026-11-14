@@ -283,3 +283,19 @@ def test_stopping_a_run_keeps_deferred_batches_for_the_next_run(tmp_path):
     (tmp_path / 'STOP_RANGE').unlink()
     assert run_range(engine, [A], max_passes=1, retry_delay=0)['status'] == 'complete'
     assert calls == [('POST', [A])]
+
+
+def test_only_the_first_overdue_publication_waits_for_s2(tmp_path):
+    import time
+    batch, release = gated_batch()
+    engine, _ = make(tmp_path, batch)
+    engine.references_wait = 0.5
+    started = time.monotonic()
+    engine.crawl_ids([A], upcoming=[B])      # waits 0.5 s, then is left for later
+    first = time.monotonic() - started
+    started = time.monotonic()
+    engine.crawl_ids([B])                    # S2 already overdue: no wait
+    second = time.monotonic() - started
+    assert first >= 0.5 and second < 0.3 and engine.references_pending() == 2
+    release.set()
+    assert sorted(engine.settle_references(timeout=5)) == [A, B]
