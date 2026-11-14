@@ -3,6 +3,7 @@
 All HTTP is an in-memory transport; S2 requests are recorded as (method, IDs).
 """
 import json
+import threading
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -14,7 +15,7 @@ from src.crawl.pipeline import CrawlPipeline
 from src.crawl.semantic_scholar import SemanticScholarClient
 from src.crawl.source import ArxivSourceDownloader
 
-A, B, C = '2508.02872', '2508.02873', '2508.02874'
+A, B, C, D = '2508.02872', '2508.02873', '2508.02874', '2508.02875'
 
 
 def paper(n):
@@ -27,12 +28,12 @@ def client(transport):
     return HttpClient('offline', transport=transport, sleeper=lambda _: None, max_retries=0)
 
 
-def make(tmp_path, batch, single=None, now=None):
+def make(tmp_path, batch, single=None, now=None, batch_size=100, on_arxiv=None):
     """Pipeline whose S2 transport answers POST /paper/batch with ``batch(ids)``.
 
     ``batch`` returns the JSON payload or an HTTP status; ``single(arxiv_id)``
     returns the rows of the paginated endpoint. ``now`` is a fake clock that
-    every request advances by 3 seconds.
+    every request advances by 3 seconds. ``on_arxiv(url)`` sees every arXiv request.
     """
     calls = []
 
@@ -42,6 +43,8 @@ def make(tmp_path, batch, single=None, now=None):
 
     def arxiv(request, _):
         tick()
+        if on_arxiv is not None:
+            on_arxiv(request.full_url)
         if '/api/query?' in request.full_url:
             ids = parse_qs(urlsplit(request.full_url).query)['id_list'][0].split(',')
             entries = ''.join(f'<entry><id>http://arxiv.org/abs/{i}v1</id><title>T</title>'
@@ -63,7 +66,7 @@ def make(tmp_path, batch, single=None, now=None):
         return HttpResponse(200, {}, json.dumps({'data': single(arxiv_id)}).encode())
 
     engine = CrawlPipeline(BatchedDiscovery(client(arxiv)), ArxivSourceDownloader(client(arxiv), tmp_path / 'raw'),
-                           tmp_path, references=SemanticScholarClient(client(s2)))
+                           tmp_path, references=SemanticScholarClient(client(s2), batch_size=batch_size))
     if now is not None:
         engine.clock = lambda: now[0]
     return engine, calls
@@ -178,5 +181,43 @@ def test_batch_time_is_charged_to_the_first_publication_apart_from_discovery(tmp
     engine.crawl_ids([B])                    # v1 source only
     first, second = [json.loads(line) for line in
                      (tmp_path / 'manifests' / 'timings.jsonl').read_text().splitlines()]
-    assert (first['seconds'], first['discovery_seconds'], first['batch_references_seconds']) == (9, 3, 3)
-    assert (second['seconds'], second['discovery_seconds'], second['batch_references_seconds']) == (3, 0, 0)
+    # The S2 batch runs in its own thread, so its 3 s land either in the start of
+    # the batch or in the wait after the source download, never twice.
+    assert (first['seconds'], first['discovery_seconds']) == (9, 3)
+    assert first['batch_references_seconds'] + first['references_wait_seconds'] in (0, 3)
+    assert (second['seconds'], second['discovery_seconds'], second['batch_references_seconds'],
+            second['references_wait_seconds']) == (3, 0, 0, 0)
+
+
+def test_s2_batch_does_not_hold_up_arxiv_downloads(tmp_path):
+    """The batch answers only after the source of A was requested: a blocking batch would time out."""
+    source_requested, order = threading.Event(), []
+
+    def on_arxiv(url):
+        if '/src/' in url:
+            order.append('source')
+            source_requested.set()
+
+    def batch(ids):
+        answered = source_requested.wait(timeout=5)
+        order.append('batch' if answered else 'batch-timeout')
+        return [{'references': []} for _ in ids]
+
+    engine, _ = make(tmp_path, batch, on_arxiv=on_arxiv)
+    assert engine.crawl_ids([A])['references_success'] == 1
+    assert order == ['source', 'batch']
+
+
+def test_next_batch_starts_while_half_of_the_current_one_is_ahead(tmp_path):
+    engine, calls = make(tmp_path, lambda ids: [{'references': [paper(n)]} for n, _ in enumerate(ids)],
+                         batch_size=2)
+    engine.crawl_ids([A], upcoming=[B, C, D])
+    assert calls == [('POST', [A, B])]
+    engine.crawl_ids([B], upcoming=[C, D])   # C is within batch_size // 2 ahead: start [C, D]
+    engine._refs_futures[C].result(timeout=5)
+    assert calls == [('POST', [A, B]), ('POST', [C, D])]
+    engine.crawl_ids([C], upcoming=[D])
+    engine.crawl_ids([D])
+    assert calls == [('POST', [A, B]), ('POST', [C, D])]
+    assert all(engine.status(i).complete for i in (A, B, C, D))
+    assert cached_rows(tmp_path, D) == [{'citedPaper': paper(1)}]

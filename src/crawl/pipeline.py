@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import threading
 import time
 from typing import Iterator, Sequence
 
@@ -35,7 +36,10 @@ class CrawlPipeline:
     References theo lô when the S2 client has ``references_batch``: one request
     returns the S2 citation lists of the next Publications, so a Range needs
     about ``n / batch_size`` S2 requests instead of one or more per Publication
-    (see ``_prefetch_references``). A Publication the batch did not cover is
+    (see ``_prefetch_references``). Each batch runs in its own background
+    thread and the next one starts while half of the current batch is still
+    ahead, so S2 waits (429 backoff up to minutes) overlap arXiv downloads
+    instead of stopping them. A Publication the batch did not cover is
     fetched alone in one worker thread while the main thread downloads its
     sources (Liễu's overlapped References). Cache checks, Manifest and cache
     writes stay on the main thread, and a failed S2 request never marks a
@@ -68,10 +72,12 @@ class CrawlPipeline:
         self.clock = time.monotonic
         # IDs already sent in a Discovery batch by this Engine; see _prefetch_window.
         self._batched: set[str] = set()
-        # References theo lô: IDs already sent in a batch, and results not yet consumed
-        # (rows, None = unknown to S2, or the error that failed the whole batch).
+        # References theo lô: IDs sent in a batch and not consumed yet, and the
+        # Future of the batch that holds each one (a dict ID -> rows | None, or
+        # the error that failed the whole batch). Only the main thread reads or
+        # changes these two; batch threads only fill their own Future.
         self._refs_batched: set[str] = set()
-        self._refs_ready: dict[str, list[dict] | Exception | None] = {}
+        self._refs_futures: dict[str, Future] = {}
         self.manifest: Manifest | None = None
         # Loading may repair a torn final line, so it happens under the lock.
         with self.corpus_lock():
@@ -211,18 +217,22 @@ class CrawlPipeline:
             return False
 
     def _prefetch_references(self, ids, upcoming) -> None:
-        """Batch-fetch S2 citation lists of ``ids`` plus the next IDs the caller will crawl.
+        """Start S2 batches for ``ids`` and the next IDs the caller will crawl.
 
-        Mirrors ``_prefetch_window``: a batch starts only when one of ``ids`` was
-        never batched and lacks a verified references cache, and is filled
-        positionally from ``upcoming`` up to the client's ``batch_size``. Results
-        stay in memory until each Publication is crawled; nothing is written here.
+        Mirrors ``_prefetch_window`` with two differences:
 
-        A batch that fails with 429/5xx is kept as that error for every ID in
-        it: asking for the same Publications one by one would hit the same
-        limit and stall the arXiv downloads behind S2's backoff. Those IDs are
-        batched again on the next pass. Any other failure (unexpected payload,
-        4xx) falls back to one request per Publication.
+        - A batch runs in a background thread (``_start_references_batch``);
+          nothing is written there, and the main thread waits only when it
+          needs a Publication whose batch has not answered yet.
+        - Look-ahead: a new batch also starts when an ID among the next
+          ``batch_size // 2`` upcoming ones is not covered yet, so the batch
+          after the current one is usually ready before the crawl reaches it.
+
+        A batch is filled positionally with IDs that were never batched and
+        lack a verified references cache. A batch that fails with 429/5xx keeps
+        that error for every ID in it (asking one by one would hit the same
+        limit); those IDs are batched again on the next pass. Any other batch
+        failure falls back to one request per Publication.
         """
         # Looked up on the class so a client without the method, or a test double, opts out.
         if self.references is None or not callable(getattr(type(self.references), "references_batch", None)):
@@ -230,22 +240,48 @@ class CrawlPipeline:
         size = getattr(self.references, "batch_size", 0)
         if not isinstance(size, int) or size < 1:
             return
-        if all(i in self._refs_batched or self._references_verified(i) for i in ids):
+
+        def needed(identifier):
+            return identifier not in self._refs_batched and not self._references_verified(identifier)
+
+        ahead = list(upcoming[:max(1, size // 2)])
+        if not any(needed(i) for i in ids) and not any(needed(i) for i in ahead):
             return
-        candidates = [*ids, *[i for i in upcoming if i not in ids]][:max(size, len(ids))]
-        window = [i for i in candidates if i not in self._refs_batched and not self._references_verified(i)]
+        limit = max(size, len(ids))
+        window: list[str] = []
+        # Bounded scan: a resumed Range may have many verified caches in a row.
+        for identifier in [*ids, *[i for i in upcoming[:4 * limit] if i not in ids]]:
+            if needed(identifier):
+                window.append(identifier)
+                if len(window) >= limit:
+                    break
         for start in range(0, len(window), size):
             chunk = window[start:start + size]
+            batch = self._start_references_batch(chunk)
+            for identifier in chunk:
+                self._refs_futures[identifier] = batch
+            self._refs_batched.update(chunk)
+
+    def _start_references_batch(self, chunk) -> Future:
+        """Run one S2 batch request in a daemon thread; its Future holds the dict or the error.
+
+        Daemon: a batch still sleeping in 429 backoff when the run stops must
+        not hold the process open; its results were only in memory.
+        """
+        batch: Future = Future()
+
+        def work():
             try:
-                self._refs_ready.update(self.references.references_batch(chunk))
-            except Exception as error:
+                batch.set_result(self.references.references_batch(chunk))
+            except BaseException as error:
                 throttled = isinstance(error, HttpStatusError) and error.status in RETRY_STATUSES
                 print(json.dumps({"event": "batch_references_failed" if throttled else "batch_references_fallback",
                                   "error_type": type(error).__name__,
                                   "http_status": getattr(error, "status", None), "size": len(chunk)}), flush=True)
-                if throttled:
-                    self._refs_ready.update(dict.fromkeys(chunk, error))
-            self._refs_batched.update(chunk)
+                batch.set_exception(error)
+
+        threading.Thread(target=work, name="s2-batch", daemon=True).start()
+        return batch
 
     def _submit_references(self, pool, arxiv_id, refresh):
         """Future of new S2 rows (None result for a verified cache); None without S2."""
@@ -259,27 +295,31 @@ class CrawlPipeline:
                 return cached
             except (OSError, ValueError, TypeError, KeyError):
                 pass
-            if arxiv_id in self._refs_ready:
-                return self._batched_references(pool, arxiv_id, self._refs_ready.pop(arxiv_id))
+            batch = self._refs_futures.pop(arxiv_id, None)
+            if batch is not None:
+                # Consumed: on success the cache is verified, on failure the
+                # next pass batches this ID again.
+                self._refs_batched.discard(arxiv_id)
+                return pool.submit(self._batched_references, arxiv_id, batch)
         return pool.submit(self._fetch_references, arxiv_id)
 
-    def _batched_references(self, pool, arxiv_id, ready):
-        """Future for one Publication of a finished batch."""
-        future = Future()
-        if isinstance(ready, Exception):
-            self._refs_batched.discard(arxiv_id)   # batch it again on the next pass
-            future.set_exception(ready)
-        elif ready is None:
+    def _batched_references(self, arxiv_id, batch: Future):
+        """Citation list of one Publication from its batch (runs in the References worker)."""
+        try:
+            ready = batch.result()
+        except HttpStatusError as error:
+            if error.status in RETRY_STATUSES:
+                raise
+            return self._fetch_references(arxiv_id)
+        except Exception:
+            return self._fetch_references(arxiv_id)
+        rows = ready.get(arxiv_id)
+        if rows is None:
             # Same record as the single-Publication endpoint answering 404.
-            future.set_exception(HttpStatusError(404, "Semantic Scholar"))
-        elif len(ready) >= BATCH_ROW_LIMIT:
-            return pool.submit(self._fetch_references, arxiv_id)   # possibly truncated: paginate
-        else:
-            try:
-                future.set_result(CitationList.from_raw(arxiv_id, ready))
-            except ValueError as error:
-                future.set_exception(error)
-        return future
+            raise HttpStatusError(404, "Semantic Scholar")
+        if len(rows) >= BATCH_ROW_LIMIT:
+            return self._fetch_references(arxiv_id)   # possibly truncated: paginate
+        return CitationList.from_raw(arxiv_id, rows)
 
     def _fetch_references(self, arxiv_id):
         return CitationList.from_raw(arxiv_id, self.references.references(arxiv_id))
@@ -321,7 +361,8 @@ class CrawlPipeline:
                 timing = {"arxiv_id": arxiv_id,
                           "started_at": datetime.now(timezone.utc).isoformat(),
                           "discovery_seconds": charged, "batch_discovery_seconds": charged,
-                          "batch_references_seconds": refs_charged}
+                          "batch_references_seconds": refs_charged,
+                          "references_wait_seconds": 0.0}
                 started = self.clock()
                 try:
                     self._crawl_publication(pool, arxiv_id, refresh, stats, timing)
@@ -357,7 +398,12 @@ class CrawlPipeline:
         if refs is None:
             return
         try:
-            citations = refs.result()
+            # Time the arXiv thread is held up by S2 after its own downloads.
+            waited = self.clock()
+            try:
+                citations = refs.result()
+            finally:
+                timing["references_wait_seconds"] = self.clock() - waited
             if citations is not None:
                 path = self._references_path(arxiv_id)
                 write_json(path, {"format": 1, "arxiv_id": arxiv_id, "rows": list(citations.raw)})

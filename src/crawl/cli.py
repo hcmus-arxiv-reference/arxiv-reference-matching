@@ -9,6 +9,7 @@ import signal
 
 from src.common.config import get_settings, member_ids
 from src.crawl.discovery import BatchedDiscovery
+from src.common.metrics import JsonlLog
 from src.crawl.http_client import HttpClient
 from src.crawl.pipeline import CrawlPipeline
 from src.crawl.semantic_scholar import SemanticScholarClient
@@ -50,9 +51,12 @@ def main(argv=None):
     ids = list(dict.fromkeys(require_id(i) for i in ids))
     if args.limit:
         ids = ids[:args.limit]
-    arxiv = HttpClient(settings.user_agent(), min_interval=3.1)
+    # One line per HTTP attempt and backoff, for the runtime check (src/crawl/runtime_model.py).
+    request_log = JsonlLog(settings.data_dir / "manifests" / "requests.jsonl")
+    arxiv = HttpClient(settings.user_agent(), min_interval=3.1, name="arxiv", on_request=request_log)
     s2 = HttpClient(settings.user_agent(), min_interval=1.1 if settings.s2_api_key else 3.1,
-                    headers={"x-api-key": settings.s2_api_key} if settings.s2_api_key else {})
+                    headers={"x-api-key": settings.s2_api_key} if settings.s2_api_key else {},
+                    name="s2", on_request=request_log)
     # Engine on main (ADR 0001); range-run.json and the M1 report record engine="main".
     pipeline = CrawlPipeline(BatchedDiscovery(arxiv, args.discover_batch),
         ArxivSourceDownloader(arxiv, settings.data_dir / "raw"), settings.data_dir,
