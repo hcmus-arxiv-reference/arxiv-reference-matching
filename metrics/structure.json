@@ -1,0 +1,82 @@
+{
+  "data_origin": "corpus",
+  "dataset_revision": "68417da5f3f5ad7300d68716b409d0c7aa3ec6de",
+  "elapsed_seconds": 8.269,
+  "fully_parsed_tex_publications_without_section": 0,
+  "headings_by_kind": {
+    "paragraph": 244,
+    "section": 954,
+    "subsection": 1094,
+    "subsubsection": 289
+  },
+  "parser_commit": "fe2aad7",
+  "plan_sha256": "66db7a57274c842b63fda7a8540a177eb7fbb3c7f1edced87a2b7c5953fa66f3",
+  "publications": 100,
+  "publications_with_references_heading": [],
+  "publications_with_tex_tree_checked": 91,
+  "ready_tex_fraction": 0.8652482269503546,
+  "ready_tex_versions": 122,
+  "seed": 20261112,
+  "source_issue_counts": {
+    "ambiguous_root": 4,
+    "encoding_fallback": 2,
+    "invalid_syntax": 2,
+    "missing_bbl": 4,
+    "unsupported_conditional": 7
+  },
+  "structure_failures": [
+    {
+      "arxiv_id": "2508.03907",
+      "error": "[B.root.children[5].children[2]] Block.raw còn chứa comment LaTeX chưa thay bằng khoảng trắng\n[B.root.children[6].children[2].children[8]] Block.raw còn chứa comment LaTeX chưa thay bằng khoảng trắng",
+      "version": 1
+    },
+    {
+      "arxiv_id": "2508.03927",
+      "error": "Cannot build structure for a failed SourceBundle",
+      "version": 1
+    },
+    {
+      "arxiv_id": "2508.04618",
+      "error": "[B.root.children[10].children[1]] Block.raw còn chứa comment LaTeX chưa thay bằng khoảng trắng",
+      "version": 1
+    },
+    {
+      "arxiv_id": "2508.04618",
+      "error": "[B.root.children[10].children[1]] Block.raw còn chứa comment LaTeX chưa thay bằng khoảng trắng",
+      "version": 2
+    },
+    {
+      "arxiv_id": "2508.06444",
+      "error": "Cannot build structure for a failed SourceBundle",
+      "version": 1
+    },
+    {
+      "arxiv_id": "2508.06783",
+      "error": "Cannot build structure for a failed SourceBundle",
+      "version": 2
+    },
+    {
+      "arxiv_id": "2508.06982",
+      "error": "Cannot build structure for a failed SourceBundle",
+      "version": 1
+    },
+    {
+      "arxiv_id": "2508.07326",
+      "error": "Cannot build structure for a failed SourceBundle",
+      "version": 1
+    },
+    {
+      "arxiv_id": "2508.07326",
+      "error": "Cannot build structure for a failed SourceBundle",
+      "version": 2
+    }
+  ],
+  "structure_versions_validated": 132,
+  "tex_versions": 141,
+  "versions_by_status": {
+    "empty_non_tex": 7,
+    "error": 6,
+    "needs_review": 13,
+    "ready": 122
+  }
+}
