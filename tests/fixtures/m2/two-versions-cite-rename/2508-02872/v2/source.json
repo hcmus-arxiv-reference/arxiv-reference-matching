@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "arxiv_id": "2508.02872",
+  "version": 2,
+  "status": "success",
+  "checksum": "30a8c15efdddcc086e7ca5552e4ce58209b78e5b98e1e8d9bb70331970dac49a",
+  "files": {
+    "main.tex": "47025199f5cd4ecf2ef603d105a9dac536d82b39c796f7dde57b22e45d12c470",
+    "refs.bib": "35dc728422b65785890c04b78d50d1846f177cddbce033e09c9e72a4c890e166"
+  }
+}

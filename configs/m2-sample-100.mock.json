@@ -1,0 +1,1811 @@
+{
+  "data_origin": "mock",
+  "excluded": {
+    "missing_metadata": 4900
+  },
+  "format": 1,
+  "hf_member": "bao",
+  "population_count": 100,
+  "population_ids_sha256": "cd8b52f4d7944268c54d1b6eea5d514a303955c2b4f8f7fa745e0a8a9954131e",
+  "publications": [
+    {
+      "arxiv_id": "2508.02903",
+      "metadata_sha256": "41480b7e44c3711b249150be5ba3eed3514d143a4e1dd57e3d58f945979149f3",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-02903/v1",
+          "receipt_sha256": "c007cf2d91d02d9b7e151309ceb63d1f80cb7144500cc6feafeef482916088f9",
+          "status": "non_tex",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03006",
+      "metadata_sha256": "4793bbde1e9101cffb40a338798f03d2f16914eac3f9db5cc5e3b0f1e2031659",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03006/v1",
+          "receipt_sha256": "817fb7eed51f245932fdc69cae9fe3cdb8f7f61a45fa8dc414a2fef212d63301",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03006/v2",
+          "receipt_sha256": "4a8a18099bb02e6322e4ab66abc175713888a413ffe53f906c062ef48382f526",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03069",
+      "metadata_sha256": "1cde0af7be1b681b1221de9570c61ec5158b3541bfd8fe75c82b3ac57b5f0676",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03069/v1",
+          "receipt_sha256": "cb3cac45634aedea190e9b51766218ebdd4663c8115a6d795335403c6cf946a2",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03069/v2",
+          "receipt_sha256": "5d04e1df1bbf383b78122c02f3099efd906270505f5cb5f4ac290689c31da537",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03069/v3",
+          "receipt_sha256": "4c06c62c983db57c08e6ca262625b6bf6f87e333e31ed916dc11e57d5fbaea19",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03079",
+      "metadata_sha256": "084c7315fb3c71ce96d1cea5f2999dc3d625c82e4057857fc0205bc604e8340f",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03079/v1",
+          "receipt_sha256": "05a8907c01f125cea00dc6817ffe0644a2d5ccaed7d90a50ced5c8cb7279ee8a",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03138",
+      "metadata_sha256": "2bd600301f7e3b35b7450abdedf16f9b303e42e41696ace0c8cf8e4e260a5a93",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03138/v1",
+          "receipt_sha256": "5fca0bbdff2ccbf28c22a96a0c8bb24185ea3d6ac9b938465e27a426de306666",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03138/v2",
+          "receipt_sha256": "5541a459773b54e3920e4acac7e8a193b809c495fda9a3234828b0bea89b7c6d",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03217",
+      "metadata_sha256": "313804d41204df7733947427d3f2b2d3dc111081e3ee1566c40f043a902fd64f",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03217/v1",
+          "receipt_sha256": "8182a2ec6368bb0847e3696a94813a3de82ebd7800dc67fcd1233f8d04ebae71",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03217/v2",
+          "receipt_sha256": "5b016088e1f0a39d6e18e394d040cd220cc5d920853f18d694e8d39af36e374c",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03217/v3",
+          "receipt_sha256": "7c8388a9ff5bddb7418ae738ad40776ebd39243222a8a75bfdd383501409c124",
+          "status": "non_tex",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03226",
+      "metadata_sha256": "d8132e3332a09fe9c3ce1f242b8e6a42cb2214e0f5c1bb07e6e39f3bc2cd8ca7",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03226/v1",
+          "receipt_sha256": "eb874e32074214d065073a034d3d494c9d4271234086b5d7d6d97d3671c97fb6",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03283",
+      "metadata_sha256": "1569d770d1ea1542a65f1a11eadd097e3396d8fc823d175bff2a55394cd8475b",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03283/v1",
+          "receipt_sha256": "95df97559bb88bffe71332d83faabcf7ca2b8983e79f56e1ee5436489bd7dfd1",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03283/v2",
+          "receipt_sha256": "0802464f79bd834adcbd891a810d2abc51ce8351cb64f84b1ef49cf4acc33da8",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03318",
+      "metadata_sha256": "657731519f62c893b79b6b07138a294872a983ec912f1f4c1dad4382868ff952",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03318/v1",
+          "receipt_sha256": "e09d127740a87ba665431ef33bc3e12be1720f73900e10a19d7eaec08f5c105c",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03318/v2",
+          "receipt_sha256": "ccd70d8a865064237574ffff1616d4e7d3adbff8f9b6fe825b04b052314aaa22",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03318/v3",
+          "receipt_sha256": "a13746a070e1fc2000a3ea7474ee3505bfb5bcd96b2c06f75807aac3c1b84ba3",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03404",
+      "metadata_sha256": "55b64765ee855a51cf34e9233358e10c48d7f984fe752c06f83413bc680469e3",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03404/v1",
+          "receipt_sha256": "bfd322e72e0416ac0c40efba57c948bf0e768b0d7c713f2737187bf2d5adf65b",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03424",
+      "metadata_sha256": "8fa63ba53f567e106437c53fced30d2deecfb6e041485c1ea014c3faa689a183",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03424/v1",
+          "receipt_sha256": "2f2b7e710653c772cebd387dce59d233107d3475dd73d2c618e90405e0508ac6",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03424/v2",
+          "receipt_sha256": "edc58242655c8be7369b0555d5fdb8dfade264644a1b50cc3a873f5bf47e97f0",
+          "status": "non_tex",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03508",
+      "metadata_sha256": "0017c994e739fcc36282d3ea33c1e8daf0692d9220b845338fdb1f8713effa58",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03508/v1",
+          "receipt_sha256": "aa56d580d738a99179da836cf3c97a690367eaaeb175304955dce7a3634839db",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03508/v2",
+          "receipt_sha256": "e8fd87a12edc6b63de57e60d043d1a6c4e0648fa93c33f57f2d12ec40f240b63",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03508/v3",
+          "receipt_sha256": "fc6f70a64435c1b3ad9f738d5f82d9d8a0907cc8da4e02b35c686fbacc1fcc61",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03511",
+      "metadata_sha256": "f58b14f44ad8eb39b203274f50bee82b67137ca938b4b3cc5f372b9e0b93821b",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03511/v1",
+          "receipt_sha256": "8c4c2ec878b154319f937c529d68aac869bec3d12e9d51253f3f45b78c683591",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03567",
+      "metadata_sha256": "328892e2b929bafe41d225c091d60cd6502a9e9c54b12e52f611cd7d4927e81c",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03567/v1",
+          "receipt_sha256": "c0ea12797d7f55695e5aca9e03330c6bdacdc565c72d122b38d7640c21554461",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03567/v2",
+          "receipt_sha256": "2ad9edebd8380d0fc4f1bcc038ff416dc23111f6840da69dddfd741e61ae323e",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03622",
+      "metadata_sha256": "32c80ebd4e119f1e6736fd16d8e9f01a926feba4eac17a71ae8c5ba6bc21b5ed",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03622/v1",
+          "receipt_sha256": "76020c0d7050f39395b63b33f583dacb93a6fd5fe4c5667484b6fa830b4a300d",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03622/v2",
+          "receipt_sha256": "ab606fe24f07996cb8fa06a372395d450896de3b524ddb511078019dbf46f3e6",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03622/v3",
+          "receipt_sha256": "9e1afe5b522622fd39fee0712f6152bdada2f692b9891ffcfb0fdf86be116b7d",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03695",
+      "metadata_sha256": "695a3c0fdba1eb9f2e7b85a80c7ca77e781c9bddb942fbca7692eb52ed88cb49",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03695/v1",
+          "receipt_sha256": "2f15042b11087d1dbcd415f7316facd6577abe072c0267f58f47605f85e524b5",
+          "status": "non_tex",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03765",
+      "metadata_sha256": "f18f7ca19af5debb3d8605577b160197c7abfe80c7b55b765d64deaf3568da90",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03765/v1",
+          "receipt_sha256": "f9434d1c2d29c1d0cd3ce670fe68ab70283c20a6d7971387fa02c34a28da815b",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03765/v2",
+          "receipt_sha256": "bdf077660ace5fe8fadcbf0a973ca41e69ccf5a7a4a146c5704f467428684707",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03766",
+      "metadata_sha256": "babc72a292f108da46aff43cc5bc655d349ba36e180d974d5653eb5d8a2d953f",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03766/v1",
+          "receipt_sha256": "82e5e5bb7a1b7cf93d448316c7f3f5aab864eb6cb83aa4f93be59a4dbf5a343c",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03766/v2",
+          "receipt_sha256": "ba20ea3bd726ec87d9bdd20feab0f599134cf31ba3d754929e52254372864cb4",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03766/v3",
+          "receipt_sha256": "0b798c0edc588b7584a299299bc890690d04895edbccfabe73d383aa927f7bfc",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03820",
+      "metadata_sha256": "1ad854215e6251455a1f2c08e366a8ddee55339e8df8d8f7f691a9b7216fe1a5",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03820/v1",
+          "receipt_sha256": "0a6438fe7efead3427ecb73d8350f338d854691e710dbbd621ca24625dae7ce8",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03848",
+      "metadata_sha256": "00a184bf1c3cbf486cee69e2eca48c50168a96d69af54ba094fb0a1e265e0867",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03848/v1",
+          "receipt_sha256": "8c0a291b8aefc8bf2b4a48bda6334f4a28581df70054229911e4644b5c7f857b",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03848/v2",
+          "receipt_sha256": "e8efa269f1438f710db28daf3f4dd1f830d483355cc71886c2b9118ce60031ec",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03892",
+      "metadata_sha256": "c9be7f397a61f2b9fccfc9bc157141252e0bc289fdbe711c093c25b2b6397aa3",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03892/v1",
+          "receipt_sha256": "58a44c85f3de111a39ea59bf3ae000d3543b0b8fcbec1dad5f2b854b9672153a",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03892/v2",
+          "receipt_sha256": "01a85ca9b0548e87521fd96f45975e8f40f9157633bd146d3fc6ee84c53fd148",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03892/v3",
+          "receipt_sha256": "7ff041bf440b7cff1b27d2fc6953cfa304c7fe17d078917fbd6b562270ce74af",
+          "status": "non_tex",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03912",
+      "metadata_sha256": "51f74aaa0276a24714dc48f15e4782038e29a7569d341f8fd107d48725a9faee",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03912/v1",
+          "receipt_sha256": "02d350690c123cb2dadb7d6af40c7c914933c45405cbf25050aaa2965ffd8453",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03929",
+      "metadata_sha256": "ac5e73c2b905deb7471aa11ccf003968a61d1e65885839ea07dd783457b1c67a",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03929/v1",
+          "receipt_sha256": "67ba41cc888a5be6dd432bfde4b7f40265bb553bb5e8874b54c1f1373f115a4e",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03929/v2",
+          "receipt_sha256": "34e5a09ab93a4175d02458af4bd3d99f025cbee9a89e9ea2b9a815a63bc3d1af",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03931",
+      "metadata_sha256": "c6c20a325b69dac6697d51aa271ec81a15e25a927b2a59d7a0194cb9615abc87",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03931/v1",
+          "receipt_sha256": "e4b39ebed51a1c21dc9698276d9ef846c86e512948c572580a347d915562d6cb",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03931/v2",
+          "receipt_sha256": "cbda63d1b3854fc712830dcb7ac5bf84426da90e5895cb1bac421293b92d30e7",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-03931/v3",
+          "receipt_sha256": "879710d96ee28cdf8aa0fc7aa859288e3411b9b33ed1ced5e543f26df766f41d",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.03934",
+      "metadata_sha256": "e6e47eee48dbc87b9789ebd79c4d8137ec561e8f7504016d4510e96d0f0e8d9e",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-03934/v1",
+          "receipt_sha256": "a370677f63401e55518ae833b1b0a0fdb64b07176fb0130176392e3cba678b96",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04043",
+      "metadata_sha256": "f818be65b249d1527191c81aee4f083927a65f568c3f15deba5b48a6b30bc100",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04043/v1",
+          "receipt_sha256": "9ff7917c9d9c0040dddf615de82ab303e6eb59da994bb1ac526a23e9ff9fd783",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04043/v2",
+          "receipt_sha256": "c850f0c3819ba2d5465cf2caffde0265896f6b7631d95c84a5e72f09218afeb6",
+          "status": "non_tex",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04044",
+      "metadata_sha256": "bd2debc7788638e103c2a0c0eacca578f84f67e1b29b63008a0e3491e0dc4b65",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04044/v1",
+          "receipt_sha256": "7e84638fb04d02dda1950f2d1df4d8d325513aa41a03cfd33f6f569e45b99924",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04044/v2",
+          "receipt_sha256": "03ee93c39788f9947d14ddf00fa5ac23a47d6c5acbe13061ed27d84c91bc48ab",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04044/v3",
+          "receipt_sha256": "1eba628187e7dda6e3c3cb32f9b0d128f6fc96edf3789a8e0c81e721e50d2c70",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04061",
+      "metadata_sha256": "c0eb6942488c95b91698d11af3fafb9e3fc4b95b774aea4d6ffc7ff83b46b73f",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04061/v1",
+          "receipt_sha256": "7d96e48ccf05afcef7e90baec5a68c222ba78d350ec9956cdc74304b8c5275e3",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04272",
+      "metadata_sha256": "50bdd7c089e95f519671cc09889b21074b80e03dbf30ab63bbb1fb945f42ade7",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04272/v1",
+          "receipt_sha256": "61244c057cdb9b27f5bd14a5fdc2fd6a1136b54a94664b9bb4bbaaabf4ab5159",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04272/v2",
+          "receipt_sha256": "5df10722a993a8d78cd6be675ae8bb2975a1e6bd52f8c55c506b12c119e71efa",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04287",
+      "metadata_sha256": "4d25c41cec25e889b5065a9e09222c9abadf399dc0902f810d4877047b4c86ec",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04287/v1",
+          "receipt_sha256": "0c3d36d9599162bf7d88d5fcb2609b284f68b6d1443fee913bf1c9be67b674d2",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04287/v2",
+          "receipt_sha256": "b8dedbf20108acc483c0001e78da705757b69184aa37e785c3e13f45cec37183",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04287/v3",
+          "receipt_sha256": "ef13544cf38517d8e254bee4bcdf575bab1e2c59595224b12b4275e241c724da",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04312",
+      "metadata_sha256": "defa9c8ec0798f08c5d1ae4ab4d565ce2fb0e1fbde50bef49229069fa16899a7",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04312/v1",
+          "receipt_sha256": "000068676e0bb82fbe3a3055b88d6e374014b46c4f4a1153e164fcb10bdf93ec",
+          "status": "non_tex",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04422",
+      "metadata_sha256": "35a0113c7226a1dd3b27ef0930b1ab461175a26eb02738e90a11d00aba9baf9c",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04422/v1",
+          "receipt_sha256": "6593ff66e558e8557b9e2048c074f8b90340f8a66efd20a4466f0ae365dd6580",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04422/v2",
+          "receipt_sha256": "d5815d25a72b1a4940007894aef68f566e6bbbb9bf563321d69de11e8bf6de70",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04534",
+      "metadata_sha256": "80e2d1be392e759de5ddd8e0c8bdca992d5dedc0e82e82d73a83a1d2c9961a33",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04534/v1",
+          "receipt_sha256": "93e551547b33b5509ac841693909f02e3a33a91baa70bad5c46bb5be7ea64169",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04534/v2",
+          "receipt_sha256": "c77060786e4db0a1e3f3208d8848b888e1e995e51a62676672614a895331c4a3",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04534/v3",
+          "receipt_sha256": "d19bfb9326171bbad851bbeddf95e3696786c41d45b33ae59427d84c216dae54",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04555",
+      "metadata_sha256": "5706c1cc7ce4763faf5a0b58a20eb5187606b492af4cd41398e70992416b55c1",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04555/v1",
+          "receipt_sha256": "b8f964c369187025401af249126ef497bd7f06d5f2c182502388a0528e24574b",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04571",
+      "metadata_sha256": "65605b00d957883522a24a0ab463d7b795f175ebe1a95a47108406149ae24a31",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04571/v1",
+          "receipt_sha256": "bbf2a75818b435ccd82199a06eba4650613b4f78075ffba59a034f6fb4079f96",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04571/v2",
+          "receipt_sha256": "94ac16bb29bf746bce3e10785153fd5a7b6c49dccd9adedb3f91a27ade0ec4f0",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04598",
+      "metadata_sha256": "8122ba6f1871b14c6b79e2e91859278fffc02e7f1f8d66d2b776c8fd1ce20966",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04598/v1",
+          "receipt_sha256": "4c302ebfccbe79d32c1a535ea72f9c48f57c8469d8078bedc880020ec7b3630c",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04598/v2",
+          "receipt_sha256": "4ef21245563ee5a53ae21528d285a7de7b408250a724f50b7ecd46476038fbfd",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04598/v3",
+          "receipt_sha256": "b92d7dd8e708f6c346d834fd901830df335e749875341406b0de2099427e4ef9",
+          "status": "non_tex",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04674",
+      "metadata_sha256": "c12c348f4e6f4a673e0661e6b1a220bed214ffd2dcefca057b8913fda231597a",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04674/v1",
+          "receipt_sha256": "89ad871a6014144c183a04a55cd12a6d97fd632c3fcd20600a7d4ac9d9ca3c7d",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04711",
+      "metadata_sha256": "0bbdbe4e4023317f9b2eaebc84656ed13a0ea6fd2986802fcb70dfc420e35618",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04711/v1",
+          "receipt_sha256": "e84d0441317c47acd2d921bdc7e358ebeb0f5fd06a6dc0ac044308f7f0412790",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04711/v2",
+          "receipt_sha256": "b0b7741ff16c109bb0023de20ec8b3357b511f09f381066eb204e40880803790",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04755",
+      "metadata_sha256": "4d38ca3878af8fdbef9d6e914f674fe40a286d0a7d7f66f5dc5244b583b9ab9f",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04755/v1",
+          "receipt_sha256": "85cb17fe04868a67ff66e7c5d8f1ab11a7fedba864165df77c297ed04ede1d85",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04755/v2",
+          "receipt_sha256": "7189eb1350dfb45c41e212950ccdf9739b45605e6f9dd2facd5a26be68cc8571",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04755/v3",
+          "receipt_sha256": "c005a611482421bcb19842429382fd70887c76d721ca959f8d47c7f99677fb7a",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04768",
+      "metadata_sha256": "3f6d9050e182c559894ac4d0ec4cf74e4995314529928ce7ee8723df833001b1",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04768/v1",
+          "receipt_sha256": "180d9497310e8084507841fa20f94f6565b38de85da1879c1e0a976af94ec76b",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04780",
+      "metadata_sha256": "5ef13dd2cb46d0a9dadf6ddc398da829535c56cad658668688bf9ef73e0f2148",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04780/v1",
+          "receipt_sha256": "8b6dd5b683ece23e9ecdce1cdb2fd0fd078818a20d0a3836638ce89137b3f3a1",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04780/v2",
+          "receipt_sha256": "31eab49519e2cbe4019d338cff74f233aa7cc447d7cf88f1b3dbcfa9d6025c92",
+          "status": "non_tex",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04801",
+      "metadata_sha256": "7b9e278d3cafcc0122ee1e48bce01ae90a658fc00a48312e9e16cbd7fa70c51b",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04801/v1",
+          "receipt_sha256": "6478b51e240a39a48d10a1f331621b981450991be9f22d518a8fba18adb3c77f",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04801/v2",
+          "receipt_sha256": "40fa57022a26b98850fcd8b2443287b96e595fb93c53feb2c1d1bcd8247f01e0",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04801/v3",
+          "receipt_sha256": "606ffe67a975eb1a8a1ca06ccc40bee5b6d5572398aeb96fc0bc2cc1cb1e2e23",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04855",
+      "metadata_sha256": "878c2bd54959615d3b13eb4d69b9d04f8d5df0cc5b52c8ee8dafb4bd34c899eb",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04855/v1",
+          "receipt_sha256": "46ea6ad7b821be1e3654b1fb6f8d9c629ee6985ae1e5471df124699783751b90",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04866",
+      "metadata_sha256": "36a4d3977afc164cc5921e9422b2205cf3ee5e05ef7cd9384f8a6a6ef8dbbec3",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04866/v1",
+          "receipt_sha256": "226c050a19d7fb2785ddf9acf43e1888dfd2d723ef1dd2196853c1775061086c",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04866/v2",
+          "receipt_sha256": "c1bcbc916970be3a6296b8a1077efbd2ed9975c3d90444352b0469d3999426a7",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04909",
+      "metadata_sha256": "d3c1d338dae177ec810a03f4e1297660387ee9e6ce30e97edb5f59f2050f2953",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04909/v1",
+          "receipt_sha256": "6e2fe03e794f27f27ccbdcba29172d9deeb1bba1949b0edeb04f98597eb47ddd",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04909/v2",
+          "receipt_sha256": "39c7e10bc5f593fa34648bf9f0d31e4ea2e3697e422d1c95a4a119fc940369e6",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-04909/v3",
+          "receipt_sha256": "7c8e01f60ae3876ad665db0fda18bd0e3a160dc8a0b51b6e08c465067e0916f3",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.04918",
+      "metadata_sha256": "36b05ac017b9e33be98d1e58fcfa2888a11be5b0e80c13c525f8f89b8fe0499a",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-04918/v1",
+          "receipt_sha256": "ce1b2e730c09aef6d0f901416761654adea394cb296a44f292bb082af8a997b2",
+          "status": "non_tex",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.05024",
+      "metadata_sha256": "551dad13ceddf61c7866a3e132c4f0557f2fb6348627b2dd7d23bdb3bd906acb",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-05024/v1",
+          "receipt_sha256": "461585bab778f7b2dcf0e4b21ff5f647e366644312b6699a05d081f97cd65232",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-05024/v2",
+          "receipt_sha256": "0da55ec509d602ff8b4c969cdc81aafa37e069d5979e7286621398eaafb9f644",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.05151",
+      "metadata_sha256": "552cee048f2fab0ef24b3e1dc20f24cae3f6b76af70e375118d5bbd1965b5163",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-05151/v1",
+          "receipt_sha256": "96d3a149948278b38ac29f9629fec7894e7f703bcbafc7162e536754e47b5b27",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-05151/v2",
+          "receipt_sha256": "eab5d8e92ab910442d902c00054cfbb7f59f7e42879e0b413a751e6bd33a12a6",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-05151/v3",
+          "receipt_sha256": "6c241335f7d461bac62c79488475208c63de5bbf43fadb1217b7d8992fb0927d",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.05169",
+      "metadata_sha256": "b82d7de5f3f7f3fe90442404a1f2134fab542c6e09dd0afce1d55d7105eb9dcd",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-05169/v1",
+          "receipt_sha256": "3ac5b7f9d9cee43cfbbcde678a7a3e026731061daecf1432d27b9240ef8cfa90",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.05177",
+      "metadata_sha256": "8d6ea3f27c66b8b353b09be7e2dbb8536d8ef9327593c2b666bdae8c0409d95a",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-05177/v1",
+          "receipt_sha256": "2d2c7c2cd0f98f1699508bfd80e28b48f8b247f0e12e1df82c2e0368032cfdfe",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-05177/v2",
+          "receipt_sha256": "48e87866051601ebaf87ac9cb3e8028969c0438849a82fc830fbc635e749ac2e",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.05294",
+      "metadata_sha256": "d6c08ac801e28a1a68317b3e6f2dcd79cee4d75f277c4c64dc2d3ab9ec3fb51e",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-05294/v1",
+          "receipt_sha256": "d70e70592fcf485d0485db59bee0c597145dbd3bcdefa034e29847aadde61fbb",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-05294/v2",
+          "receipt_sha256": "4286cbc3a55c4207f358c7f1d554d3068cb4bf00477aa9fcd3c987a248d68c32",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-05294/v3",
+          "receipt_sha256": "944db2279c7febcf539132ba28f92f273d353f04e484ba4905787fe56e768da5",
+          "status": "non_tex",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.05366",
+      "metadata_sha256": "20592605de23529f7b04baeda057e009f5361a5e40fa0e90d84c0ee7e482e1ba",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-05366/v1",
+          "receipt_sha256": "d644981f505ca1e2815c4cd10eb3fb84ede6388e77a188a0853072dac9496fff",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.05373",
+      "metadata_sha256": "65b9bcae25910f8dd457881648f95ca8994be107ad2c0c7d01b6b7bf3a459bf0",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-05373/v1",
+          "receipt_sha256": "7f074189e74450144b9de99d7d309a5df82886a8d171df0dd74792bd39fa10e9",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-05373/v2",
+          "receipt_sha256": "9d5a8a24158e91e816efb6b350f56358b1dcec1afde542823113c96d87fc1388",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.05407",
+      "metadata_sha256": "eacff4c4428835d0412f4c5a8a1503e95eb2ddb2624b94b4bf9192faabf10fdd",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-05407/v1",
+          "receipt_sha256": "31418f9efe69b9356b42b046188fd51e4d936680d6e618c7aa0d84d705c1f7a4",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-05407/v2",
+          "receipt_sha256": "54cba59a778c50b707a30c3ab21ab5ff005f441bbbe942dea9f52f307aec45d4",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-05407/v3",
+          "receipt_sha256": "dabfe835023b01c61111268ab46a9cc7a8b7d30c17a2b9a2c2ffc09d0a62829e",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.05552",
+      "metadata_sha256": "9ac461728c648745a4f5ac6992f3bcb153f11df66ae957ddb858970fb3164e28",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-05552/v1",
+          "receipt_sha256": "27aaa0f41a96a17cabc4dc9b5081fff184a5dd99005ea10a8ac16bb4c5c53581",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.05630",
+      "metadata_sha256": "875217f840039b411337fe687313bfe0a23da1e02c1d53302d311a246d653e49",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-05630/v1",
+          "receipt_sha256": "c3e38ba9e7153cb149889e639982d0c75f55d8eb656729a097dc0248b5d27f3d",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-05630/v2",
+          "receipt_sha256": "3ab6f37f5b757a14319e4d9cb89b7222196f2415f7640af9770101a86282212a",
+          "status": "non_tex",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.05644",
+      "metadata_sha256": "5ddaae6fde452f2e0084e88a497e48f71fb6c2a4cf16825f67bd634fe2955556",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-05644/v1",
+          "receipt_sha256": "dd5d6643d140e5b6379830d872595d0b79b2b70a22130d70628ad7f68d30da35",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-05644/v2",
+          "receipt_sha256": "46a52b1ff28f3d1ee2f9f3aa50d76cbb98ce8c2204336653a41fe4d2008b5a8a",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-05644/v3",
+          "receipt_sha256": "25707510b1174dac821e5b182d851eeded6f413b6b817614c0f81c8701ebbb69",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.05667",
+      "metadata_sha256": "af3f3d6f837a1566045ffb82bf2353b39494625db65c3343a86e5af9896df26c",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-05667/v1",
+          "receipt_sha256": "eb326e138b3f766479648a13dfe781d6ea9862545ccdb458a852749738979447",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.05679",
+      "metadata_sha256": "f16924eabcf5e79884dc8581754ca05d107fc1d4e0cfdace8c836e6b575b31e0",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-05679/v1",
+          "receipt_sha256": "2713085ced5346d361941ddc7430c2de55c7d28dc8a73ed5592c6d87d320b78d",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-05679/v2",
+          "receipt_sha256": "80906f08109d60623d525ac347550bf8eea25443b0babb9f06540222e3506f05",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.05762",
+      "metadata_sha256": "c201308df2cae14227552b4ec5867872398cc80678e35f01e9efe4f767ebb8f5",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-05762/v1",
+          "receipt_sha256": "90abeee5b712f7f47eed360507d65c06aa0df8ac467552803b6674151994bc1e",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-05762/v2",
+          "receipt_sha256": "0b238ee44367ceae9441e9a05b67d67fbc4dee16c8df8a755a62d098a28ccd76",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-05762/v3",
+          "receipt_sha256": "e0688feb621e29131f341952b3d15a2fa19da36c015ef32006f9bb7b1c583afa",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.05772",
+      "metadata_sha256": "82a5263bb2d8db1a20b7e637a6415ed3d0cc7f6e6ae8402022402a66303de29b",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-05772/v1",
+          "receipt_sha256": "71f313e258f2586852c8e8045c992c74a611dc4ab604596b7bc31946137118a3",
+          "status": "non_tex",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.05955",
+      "metadata_sha256": "f787743888987de6d97b56a6896a278e6e1dfb119459112366b62e01c19e2c1a",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-05955/v1",
+          "receipt_sha256": "1295d47dc8f99b9b0e48d780ba3cdd65c2d29e293762c622ffba7069917865a1",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-05955/v2",
+          "receipt_sha256": "c585d94c6b2fbb29ba10ffa2c88dd36dc548dfcc096b332614ebb9f876126717",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06005",
+      "metadata_sha256": "6722888fe0e7347c02a7980a0b5d20bf089ae2b8dd2ac8fae40db80c4aaf0022",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06005/v1",
+          "receipt_sha256": "3229ba007d162fa949e312f4bc2d81fd8958f2994df7c6cea39df4b2bad5cd73",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06005/v2",
+          "receipt_sha256": "f4a923a89185612215c1aeb6bb6e18ab557ff72eba95c4fe8dad81f5e4666b33",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06005/v3",
+          "receipt_sha256": "b90a3f6a49f8ac6232ac0b97d77be3f1044a6ce170bb62ee6a3853c3d20b4adf",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06249",
+      "metadata_sha256": "c759801f54014a43b0b7bf783f548af8fe019dc66899301135cc0685e5036ff2",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06249/v1",
+          "receipt_sha256": "42f07c7cb4ba22d97a411d3e3bf10c8cd9c54defc1f9dda2a83e1baa5cef8cd5",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06253",
+      "metadata_sha256": "96d4fe9c642843420b5b160e67a5f1dc018c0b3b17c6a6d612be5d483d734d67",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06253/v1",
+          "receipt_sha256": "1426164fc6c0dcc74ab3078e37df75cefc2db2feec7df88dc69704aca7766b79",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06253/v2",
+          "receipt_sha256": "6735d44246c8da1fdc01ddbfcac7e2bc75c45a5d09790abed9e3321126d92c3f",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06262",
+      "metadata_sha256": "fa8670cd2d6a76acc7294561f30f7f6bd84d9322e883ca3dd9fb9f48c309a985",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06262/v1",
+          "receipt_sha256": "b8bb7559943537eb4df2301de0ff016e86e3904a684d650dcb57813c4d669729",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06262/v2",
+          "receipt_sha256": "f216952ab90137295146d93933f75a9329a1039388570efed58b40663d76dbd7",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06262/v3",
+          "receipt_sha256": "cb9e850f3dc870e8a05d1cc663ef1b78d0eb098bc6bc3c26f1c2934352534d3f",
+          "status": "non_tex",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06314",
+      "metadata_sha256": "16067f955e472cc06fc74fbc956879d9c5a70a9cafc04b68a08ac0558e0ab032",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06314/v1",
+          "receipt_sha256": "a0e1d912c46f38df18608facd168f403a370322a47efe8ed755550e8c84784ae",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06317",
+      "metadata_sha256": "ad2c058c94248d35d3c7598e9fa08178c2b3461e499e44de48b67a6091a9d4ad",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06317/v1",
+          "receipt_sha256": "1c34082f0d9e456640d8f3f7addbe4762a904434f95e96c073ccc0924aae4908",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06317/v2",
+          "receipt_sha256": "5b21a064d6c0482be6b2da1f466cdaeb88fb0686949db635b9b64ca6101506a5",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06320",
+      "metadata_sha256": "766c8a8dee557fc92b7418315150501a1e7206bd287115b4c5ca15f171291e3d",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06320/v1",
+          "receipt_sha256": "0dbb9904fbdc5cca7bc4e5ae62429422f14fbd978689dd2b39a9ebd5e07cc9b0",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06320/v2",
+          "receipt_sha256": "d8d2d4cd9e9f7894f66668d0de7522d4dcd0fe6a1d3478257082844037997001",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06320/v3",
+          "receipt_sha256": "e6d3b2e06f3fcd7dfe0f1390b71e7d91f76a9cb76eb01b5847ada9625e56182f",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06389",
+      "metadata_sha256": "3f940c620c6290e22a2e932fe41adb5810d50a6df39b06f635340631bb2cb85f",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06389/v1",
+          "receipt_sha256": "e8d5d595c2e9bf0609d4bb8d59377df6171e6905b50e48288ce8cdebc0e286fa",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06400",
+      "metadata_sha256": "23243b9e8d0897d2ca79467d0f5d9de9447b2556872451afa4408f4bd2491a97",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06400/v1",
+          "receipt_sha256": "fbf9b0cae6f8f12f740eba0778750a5f896e1c39c1ca2c7fe0f33c795533e67f",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06400/v2",
+          "receipt_sha256": "bb57b413a7f443d624ca44ba0284fb51d5417c6040dd962a4270985cf7c2eb92",
+          "status": "non_tex",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06402",
+      "metadata_sha256": "d4842aedaada20e9c06a32c7ffde17d26606348b8020bf7269bf44af9c00d823",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06402/v1",
+          "receipt_sha256": "9faea4a4289e82ce65ab53aef0c9cc49b39352b61acae0c578d3b11ea75be4a9",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06402/v2",
+          "receipt_sha256": "4b43727c1b4c72cc3875bb365c8389424624b8c10a48d0b2957f31f3ac61d591",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06402/v3",
+          "receipt_sha256": "03b2915e45bad58da3593a9e175f4c17caf545515da124611e8ecb1530089292",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06438",
+      "metadata_sha256": "be39f04613dc2cceb5937df4f743ef0919baa6567511bdcafe48f26649465c53",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06438/v1",
+          "receipt_sha256": "9e398ba665d559b14836bec1da9022948a3dacea16ce0a99c8eba17bd32bedd5",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06455",
+      "metadata_sha256": "23411afa6fd02f0286822b7b4dd5ef1f26309f46d6c3bbae84de9b974c6f7781",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06455/v1",
+          "receipt_sha256": "b7c7278307e91604d8a506b415d1719d4d6639f86179f5aa9612b684e2be30de",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06455/v2",
+          "receipt_sha256": "0f75d16a557ede44fd43a117f9b67b885c93e69f334a5df4a45f894e604dc311",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06485",
+      "metadata_sha256": "7752222a4cba306e9df5707beadece3630d4a55b407fdf8ce1b4ca7514de8ce6",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06485/v1",
+          "receipt_sha256": "5d35318e3abbd9fbc092560c812e3a2751e939e30ee70806610629c89b6c0d42",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06485/v2",
+          "receipt_sha256": "bdaca88b2d48ebab07c35710c48263007f213ea98d01aeed4a81b52e62c646bf",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06485/v3",
+          "receipt_sha256": "48e2fdd775050610a81b8ec4f3bd82c2aa10d32f1d08dec067a7f5614cb60b45",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06568",
+      "metadata_sha256": "f4f4b2f2de15f3a305e1a3e397bd4f882b4e17331937dc9c52c850c59dcf8ba9",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06568/v1",
+          "receipt_sha256": "b33705efda7aae9b62effdf7be01ee195936eb166bf1fc8e3d41e38c4850a448",
+          "status": "non_tex",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06631",
+      "metadata_sha256": "0fcfd3bfdd2b764ac497def0a640a51ca0b4250d61d2fbe04c056277a78f7103",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06631/v1",
+          "receipt_sha256": "d6273f18878bbf346e899ba41b8ea42bdb7584aba6c3f054f0b4e3b652c933f1",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06631/v2",
+          "receipt_sha256": "79a678756646f307cd2e3732f272faf2fcee12f592c9689986e8f8a4c5efae98",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06717",
+      "metadata_sha256": "61d45d6c55e791e372f8d3b2e4fef97be7563234219cf36f863ff97b5d286dd8",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06717/v1",
+          "receipt_sha256": "026a3a2f7fff1501d66743e881a1a879416c7a531c96f6fd43b587e9db8e688f",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06717/v2",
+          "receipt_sha256": "de463d54b139a4d21bf6d2996b6f53bf1d3ad7f97b7fb8a3c81cb5f7e5574ba8",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06717/v3",
+          "receipt_sha256": "504f579aed9a6427e12315ff96e5c2b736978da50ebe5b9da2d5c90409308c62",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06741",
+      "metadata_sha256": "a584d943f184ef86779483203f625d4d6f7a9864ffb62899ea71640ea9cae88e",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06741/v1",
+          "receipt_sha256": "349db5cdfe472a98497094e29d20d1656a964611730b8452680a2afb811d8eb8",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06757",
+      "metadata_sha256": "e0cbf450aa38bb512e54c69e81cb93e5f603457e17ada72021549cb91504fe07",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06757/v1",
+          "receipt_sha256": "f2a48490cdd3189ce877d2d2b5ec0bbb3b06343fb47910ba0e4ed1d5f3cc426c",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06757/v2",
+          "receipt_sha256": "9ac4952b14f9a958b195e608dcd8913ec39bf754a3406a62055139e784dc9a66",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06762",
+      "metadata_sha256": "3decffbaad256e75062edf0666693158096fafff72374521bcbfaf923ea05cda",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06762/v1",
+          "receipt_sha256": "fde7161de52c15e51889843ba3c6c110c0ca271792c25fea0b98f52a8724033d",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06762/v2",
+          "receipt_sha256": "a468318b2460a6d42cbc372cd9648d685a4e1a15a4ad6c8334cc7956415dbff1",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06762/v3",
+          "receipt_sha256": "ca390b0a14978b425a6cc39b3c2e5c4f13920120135a3adf7e79563236c9e354",
+          "status": "non_tex",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06777",
+      "metadata_sha256": "a8f3c577069a2983a2e59a8fe6e05dd70832188a7e1e8ba4ca75a7c1563c860a",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06777/v1",
+          "receipt_sha256": "83bedc7107db2291a85fa2800f4d2a841144b182b426d318cd384c36ff97d3ce",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06916",
+      "metadata_sha256": "f3de9d8429fd3fcde73cd9f4f1a0b5420a908d65602e026e9d4aa1c80b974cf6",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06916/v1",
+          "receipt_sha256": "6409a9317eb096f0b04702002ebaaf72c1fec2cf32004d1d5694226bf8de36cd",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06916/v2",
+          "receipt_sha256": "13eeec9448c549ef5110f8469543b533c66a9ac3726c0c295b5978f70b825c7b",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.06933",
+      "metadata_sha256": "587694093eea4fcf8fc651219c1e2b58240c5b6f7d21dc5f80276177f4c99a72",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-06933/v1",
+          "receipt_sha256": "6aced628371da8d4702a7395adeee3ab5d6c605b22b10241b1fd5a8b3ee727b1",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06933/v2",
+          "receipt_sha256": "d3a0d844d1cdc8d9934d78da966b7d16b7a512c1e4bd15196ab64c2252803296",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-06933/v3",
+          "receipt_sha256": "93c4f76bcf366b44e66e66e4da35724a061679a5ad68c91a7bc0262aab260748",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.07011",
+      "metadata_sha256": "bf0f9b753bda75f5316871128868e540560c2ef778eb6d66ba96c8acf1fb2fa2",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-07011/v1",
+          "receipt_sha256": "46c3f4ff8ea66cee74c5791217a100639c425dc4e15eb168cfd5f3d3a99bf35a",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.07129",
+      "metadata_sha256": "f667d0019d566563555da1af5aacce2e4d898e26ad059b39b7de7db0ddba8c00",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-07129/v1",
+          "receipt_sha256": "55b7a34aabf6c0239c84c32003d4dc27065a0c5b29fc8d2831b56ee27e15a413",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-07129/v2",
+          "receipt_sha256": "ecf6274f869d6a85d8fe62c793f3e028138fb762427360ab9e251e6e456a03e1",
+          "status": "non_tex",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.07186",
+      "metadata_sha256": "6cb5e9b643d782c73c9086f77cb797c52aef84bf68768f10496a75f047c0287f",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-07186/v1",
+          "receipt_sha256": "129d3db5c0c3020b0081b7f4cf20445adcf948f3ad8329c2aff81e6b55b33ba7",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-07186/v2",
+          "receipt_sha256": "478a220cafcf702c3cc3070f285b488e7bd39dfeb480c00265551afe939cbccb",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-07186/v3",
+          "receipt_sha256": "eff0082ce7c5733b51e02dc823931928c5510fa7ef493ac73a960e1862532fad",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.07198",
+      "metadata_sha256": "778f1c6f7d5c9c85280324333d7285f4da702b81827d79d183c1187ed141eb69",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-07198/v1",
+          "receipt_sha256": "a87d7325b66c664f43793c8079056c59d896d262b25d58b1766e9438dfbf819f",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.07207",
+      "metadata_sha256": "0c4b850c65990790b6760ca5060e0446040398e8039121a49488f0a6e5646daa",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-07207/v1",
+          "receipt_sha256": "0536e7899f15d9ff8905460819fb3996d9b4341f8838c7fed508071404c227b6",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-07207/v2",
+          "receipt_sha256": "e6384ade9a0d858c54793a5c002970b2713dbc74b0c3330a5df3ce146f9a9b50",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.07272",
+      "metadata_sha256": "195d039c1edf4074e67b4db1bcc61beb040a5a9893ea8d3c07ac064006d67061",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-07272/v1",
+          "receipt_sha256": "fc7b65ffd901073358c6755df0fe035ceb39829f7f4c51952fd089aca97ea881",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-07272/v2",
+          "receipt_sha256": "f6a24d7f8d84ebcd53652f6c4658161dc2fda74b00c3ae576deb8f46ef166cd2",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-07272/v3",
+          "receipt_sha256": "458ff4e16850132da8e8fa5b3887d8950a22e99ccd4317ac4376addcf038dad1",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.07303",
+      "metadata_sha256": "103fda458a566882871281e2a0ea55d4ee1d5ffc9b3e2494c041293dd1625c69",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-07303/v1",
+          "receipt_sha256": "c96e2a918e4ea84f61c06da31dbf9c62d5084301b779e6e421c2577cfc134ec9",
+          "status": "non_tex",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.07319",
+      "metadata_sha256": "3e7936b06de7235d0fbfee267716b5c6d6d3eae4083fa868a1ceb368c8b498d1",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-07319/v1",
+          "receipt_sha256": "60825a025d64c63dfdb6a8ce6b61baba5fe7246009cc2cadcd504777cb4bcbbb",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-07319/v2",
+          "receipt_sha256": "13d7cf61c66e3755cabc77af67078d0418439e83515546f13a21637bf74286c9",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.07326",
+      "metadata_sha256": "c68010a9484ac0bbc09c7a32380b6ac4b29e404e6de4c08226eeea6edae35972",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-07326/v1",
+          "receipt_sha256": "8b67282bc6a944a01053d1890ba47910c9803b0a5ce487fb5c193fd978faf512",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-07326/v2",
+          "receipt_sha256": "12a0818827804b7eba46aefa47ae6ecc35028a16d8b3e009385a81442c01aef4",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-07326/v3",
+          "receipt_sha256": "e058a07f17401d1efac18b9ce7c28cc75baecbbc0aa84c9a800c0423f6f6a088",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.07426",
+      "metadata_sha256": "365b5797f81f1bb328fd861eff7c385b2cf361eff21609f54f3276ca9757b7bb",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-07426/v1",
+          "receipt_sha256": "6bdc87d404690e944eb2b67e9bf81a95a198968364c92497072b25c823b7f17c",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.07456",
+      "metadata_sha256": "a0eabca05ef74d641621a0a29a834c82b7aec819a33c1830588d8d83aced1653",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-07456/v1",
+          "receipt_sha256": "6aa822afcf74ca7e6021cedf9e9314b0412e61d845d181aa9792230dd1345260",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-07456/v2",
+          "receipt_sha256": "b0798d50c27552398fcceae40e9d8001244ea3a1c3a124f5f644c5088431137b",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.07462",
+      "metadata_sha256": "6b287a726223676c38b75bdb812015c11095653eab807f69742a8a41f50f514c",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-07462/v1",
+          "receipt_sha256": "bc7fd71a0d2f4a0729591414488b0c510b13bb1ca32beab768f230dd7e0e917f",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-07462/v2",
+          "receipt_sha256": "586f0898b44e41d7aede54af272aa902105334bd57718af7a6ddbb3f7507728d",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-07462/v3",
+          "receipt_sha256": "2497a510c117c0cebe7effd8c6e9175008b6943491a4e3edaed684c65d892bf1",
+          "status": "non_tex",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.07562",
+      "metadata_sha256": "d123acf67bcd1a9296f73636cbe2acb6d23457ccb8ad26497283e75ecf8a7292",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-07562/v1",
+          "receipt_sha256": "c45000f35b0d7b7c159d973d5711d91030b6b9efb6f13ca6281ecddeaa157a6f",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.07792",
+      "metadata_sha256": "e79fbe4a7af23906784916fd712c1214578d3676014826c7f3a4d6b8b5297dcc",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-07792/v1",
+          "receipt_sha256": "3bd3d2f9ccc7e6613745f11bc621aac2b67d477ddf07ce5bfc73ba0f6d8d8873",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-07792/v2",
+          "receipt_sha256": "b4442734ba3332d480ad6b264017c37778d71371fa497732f61c76011bf13662",
+          "status": "success",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.07820",
+      "metadata_sha256": "6d4a690b8177a19e1be46f8c98a5cfe0755ba5f41522c427b9faee991f48b74d",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-07820/v1",
+          "receipt_sha256": "d3c97d1634b101657156fff59871e3115eeac63175addbaae49925dbd692d592",
+          "status": "success",
+          "version": 1
+        },
+        {
+          "path_in_repo": "raw/bao/2508-07820/v2",
+          "receipt_sha256": "6c2185bc0d36c430b26a994f0b98f4db93f8dbe57f4c871fe4aa55088da9865a",
+          "status": "success",
+          "version": 2
+        },
+        {
+          "path_in_repo": "raw/bao/2508-07820/v3",
+          "receipt_sha256": "c38a17cfad5105af170c55a044f327a461c43d87cd6a751c46ecfc281b637df1",
+          "status": "success",
+          "version": 3
+        }
+      ]
+    },
+    {
+      "arxiv_id": "2508.07828",
+      "metadata_sha256": "2d156d0ce8a712f547ec8d3f56bfc8851125b48087d7654b440a906f5d5ef275",
+      "versions": [
+        {
+          "path_in_repo": "raw/bao/2508-07828/v1",
+          "receipt_sha256": "ef249588e26cf78aeb18e5f507b3869a14183e3f58232e31ff18b2a7ef1c9f6d",
+          "status": "success",
+          "version": 1
+        }
+      ]
+    }
+  ],
+  "range_member": "bao",
+  "sample_size": 100,
+  "sample_version": "1",
+  "seed": 20261112,
+  "selection": "valid_metadata_and_all_verified_sources"
+}
