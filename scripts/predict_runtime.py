@@ -56,6 +56,7 @@ def main(argv=None) -> int:
     check.add_argument("--data-dir", type=Path, required=True)
     check.add_argument("--speedtest", type=Path, help="kết quả speedtest; thiếu thì đo từ log của lượt")
     check.add_argument("--range-publications", type=int, default=5000)
+    check.add_argument("--wall-seconds", type=float, help="wall time các đoạn; thiếu thì cộng timings.jsonl")
     check.add_argument("--out", type=Path)
     args = parser.parse_args(argv)
 
@@ -71,7 +72,8 @@ def main(argv=None) -> int:
             link = Link(**json.loads(args.speedtest.read_text(encoding="utf-8"))["link"])
         manifests = args.data_dir / "manifests"
         result = check_run(read_jsonl(manifests / "requests.jsonl"), read_jsonl(manifests / "timings.jsonl"),
-                           link=link, range_publications=args.range_publications)
+                           link=link, range_publications=args.range_publications,
+                           wall_seconds=args.wall_seconds)
         print(describe(result))
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)

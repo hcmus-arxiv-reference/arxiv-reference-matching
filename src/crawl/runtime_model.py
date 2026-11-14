@@ -103,11 +103,14 @@ def link_from_requests(records: Iterable[dict]) -> Link | None:
 
 
 def check_run(requests: list[dict], timings: list[dict], *, link: Link | None = None,
-              sizes: list[int] | None = None, range_publications: int = 5000) -> dict:
+              sizes: list[int] | None = None, range_publications: int = 5000,
+              wall_seconds: float | None = None) -> dict:
     """So lượt chạy với mô hình.
 
     ``link`` là đường truyền đo trước khi chạy (``speedtest``); thiếu thì đo từ
     chính log của lượt. Số request mỗi Publication lấy từ log của lượt.
+    ``wall_seconds`` là wall time của các đoạn (gồm khởi động và Export); thiếu
+    thì cộng ``seconds`` trong ``timings.jsonl``.
 
     Tốc độ dự đoán của lượt dùng kích thước các file lượt đã tải (khi có ít
     nhất ``MIN_RUN_FILES``), vì vài trăm bài đầu Range có thể nặng hay nhẹ hơn
@@ -117,7 +120,7 @@ def check_run(requests: list[dict], timings: list[dict], *, link: Link | None = 
     observed = [r["bytes"] for r in arxiv_sources(requests) if not r.get("range")]
     run_sizes = observed if len(observed) >= MIN_RUN_FILES else sizes
     visits = len(timings)
-    wall = sum(t.get("seconds", 0.0) for t in timings)
+    wall = wall_seconds if wall_seconds else sum(t.get("seconds", 0.0) for t in timings)
     s2_wait = sum(t.get("references_wait_seconds", 0.0) for t in timings)
     arxiv_requests = [r for r in requests if r.get("service") == "arxiv" and r.get("event") == "request"]
     arxiv_busy = sum(r.get("paced", 0.0) + r.get("seconds", 0.0) for r in arxiv_requests)
