@@ -33,6 +33,9 @@ class Engine(Protocol):
     - ``export(ids)``: write ``papers``/``references`` for every ready
       Publication of ``ids``; returns ``(bundles, table paths)``.
     - ``issues(id)``: unfinished tasks of one Publication, safe to print.
+    - Optional, for Engines that finish References after the downloads
+      (References theo lô): ``settle_references(timeout)``,
+      ``references_pending()``, ``settled_ids`` and ``references_patience``.
     """
     engine: str
     data_dir: Path
@@ -107,6 +110,28 @@ def run_range(pipeline: Engine, identifiers, *, max_passes=3, retry_delay=1800,
         write_json(status_path, report)
         return report
 
+    def refresh_settled():
+        """Re-inspect Publications whose deferred S2 batch the Engine recorded meanwhile."""
+        settled = getattr(pipeline, "settled_ids", None)
+        if settled:
+            for identifier in list(settled):
+                if identifier in states:
+                    states[identifier] = inspect_publication(pipeline, identifier)
+            settled.clear()
+
+    def settle(timeout):
+        """Wait up to ``timeout`` s for deferred S2 batches; STOP_RANGE ends the wait early."""
+        settle_references = getattr(pipeline, "settle_references", None)
+        if settle_references is None:
+            return
+        deadline = time.monotonic() + timeout
+        while True:
+            settle_references(min(30.0, max(0.0, deadline - time.monotonic())))
+            refresh_settled()
+            if (not pipeline.references_pending() or time.monotonic() >= deadline
+                    or (root / "STOP_RANGE").exists()):
+                return
+
     with pipeline.exclusive():
         states = {i: inspect_publication(pipeline, i) for i in identifiers}
         save("running")
@@ -122,6 +147,7 @@ def run_range(pipeline: Engine, identifiers, *, max_passes=3, retry_delay=1800,
                     save("running")
                     pipeline.crawl_ids([current], upcoming=pending[position + 1:])
                     states[current] = inspect_publication(pipeline, current)
+                    refresh_settled()
                     visited += 1
                     report = save("running")
                     print(json.dumps({"pass": pass_number, "id": current,
@@ -129,6 +155,9 @@ def run_range(pipeline: Engine, identifiers, *, max_passes=3, retry_delay=1800,
                                       "pending": len(report["pending_ids"]),
                                       "issues": pipeline.issues(current)}), flush=True)
                 current = None
+                if getattr(pipeline, "references_pending", lambda: 0)():
+                    save("settling_references")
+                    settle(getattr(pipeline, "references_patience", 0.0))
                 bundles, _ = pipeline.export(identifiers)
                 # Export performs its own full validation, not just manifest counts.
                 if len(bundles) == len(identifiers):
@@ -146,6 +175,7 @@ def run_range(pipeline: Engine, identifiers, *, max_passes=3, retry_delay=1800,
                         remaining -= delay
             return save("incomplete", exported_publications=len(bundles))
         except (KeyboardInterrupt, InterruptedError):
+            settle(0.0)   # record batches that already answered; the rest is batched again next run
             bundles, _ = pipeline.export(identifiers)
             return save("stopped", exported_publications=len(bundles))
         except Exception as error:

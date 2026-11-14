@@ -1,13 +1,14 @@
 """Crawl tasks with per-Version failures, validated caches and resumable exports."""
 from __future__ import annotations
 
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import queue
 import threading
 import time
 from typing import Iterator, Sequence
@@ -27,6 +28,21 @@ from .storage import require_id
 from src.common.json_io import write_json
 from src.common.metrics import append_jsonl
 
+# References theo lô (see CrawlPipeline): how long the arXiv thread may wait for a
+# batch after a Publication's own downloads before leaving it for later, how long
+# the S2 thread keeps retrying a throttled batch, and its pause between retries.
+REFERENCES_WAIT = 10.0
+REFERENCES_PATIENCE = 1800.0
+THROTTLE_PAUSE = 60.0
+
+
+class _Batched:
+    """A Publication whose citation list the S2 thread is fetching (Future of a CitationList)."""
+    __slots__ = ("batch",)
+
+    def __init__(self, batch: Future) -> None:
+        self.batch = batch
+
 
 class CrawlPipeline:
     """One writer per data directory. Source failures never overwrite discovery.
@@ -36,10 +52,14 @@ class CrawlPipeline:
     References theo lô when the S2 client has ``references_batch``: one request
     returns the S2 citation lists of the next Publications, so a Range needs
     about ``n / batch_size`` S2 requests instead of one or more per Publication
-    (see ``_prefetch_references``). Each batch runs in its own background
-    thread and the next one starts while half of the current batch is still
-    ahead, so S2 waits (429 backoff up to minutes) overlap arXiv downloads
-    instead of stopping them. A Publication the batch did not cover is
+    (see ``_prefetch_references``). Batches run one after another in a single
+    background S2 thread, and the next one is queued while half of the current
+    batch is still ahead. After a Publication's downloads the arXiv thread
+    waits at most ``references_wait`` seconds for its batch; a batch still
+    pending (S2 429 backoff) is left for later and recorded by
+    ``settle_references``, which the Runner calls between Publications and
+    before each Export. A throttled batch is retried in the S2 thread for up to
+    ``references_patience`` seconds. A Publication the batch did not cover is
     fetched alone in one worker thread while the main thread downloads its
     sources (Liễu's overlapped References). Cache checks, Manifest and cache
     writes stay on the main thread, and a failed S2 request never marks a
@@ -72,12 +92,18 @@ class CrawlPipeline:
         self.clock = time.monotonic
         # IDs already sent in a Discovery batch by this Engine; see _prefetch_window.
         self._batched: set[str] = set()
-        # References theo lô: IDs sent in a batch and not consumed yet, and the
-        # Future of the batch that holds each one (a dict ID -> rows | None, or
-        # the error that failed the whole batch). Only the main thread reads or
-        # changes these two; batch threads only fill their own Future.
+        # References theo lô: IDs sent in a batch and not recorded yet, and one
+        # Future per ID (its CitationList, or the error to record). Only the main
+        # thread reads or changes these; the S2 thread only fills the Futures.
         self._refs_batched: set[str] = set()
         self._refs_futures: dict[str, Future] = {}
+        # Publications whose downloads finished before their batch: recorded later.
+        self._refs_deferred: dict[str, Future] = {}
+        # IDs recorded by settle_references since the Runner last read this list.
+        self.settled_ids: list[str] = []
+        self.references_wait = REFERENCES_WAIT
+        self.references_patience = REFERENCES_PATIENCE
+        self._refs_queue: queue.SimpleQueue | None = None
         self.manifest: Manifest | None = None
         # Loading may repair a torn final line, so it happens under the lock.
         with self.corpus_lock():
@@ -257,34 +283,80 @@ class CrawlPipeline:
                     break
         for start in range(0, len(window), size):
             chunk = window[start:start + size]
-            batch = self._start_references_batch(chunk)
-            for identifier in chunk:
-                self._refs_futures[identifier] = batch
+            self._refs_futures.update(self._start_references_batch(chunk))
             self._refs_batched.update(chunk)
 
-    def _start_references_batch(self, chunk) -> Future:
-        """Run one S2 batch request in a daemon thread; its Future holds the dict or the error.
+    def _start_references_batch(self, chunk) -> dict[str, Future]:
+        """Queue one S2 batch for the S2 thread; one Future per Publication."""
+        futures = {identifier: Future() for identifier in chunk}
+        if self._refs_queue is None:
+            self._refs_queue = queue.SimpleQueue()
+            # Daemon: a batch still in 429 backoff when the run stops must not hold
+            # the process open; its results were only in memory.
+            threading.Thread(target=self._references_worker, args=(self._refs_queue,),
+                             name="s2-batch", daemon=True).start()
+        self._refs_queue.put(futures)
+        return futures
 
-        Daemon: a batch still sleeping in 429 backoff when the run stops must
-        not hold the process open; its results were only in memory.
+    def _references_worker(self, jobs: queue.SimpleQueue) -> None:
+        """S2 thread: answer queued batches in order. Only HTTP happens here.
+
+        - A throttled batch (429/5xx) is retried after ``THROTTLE_PAUSE`` while
+          ``references_patience`` lasts, then fails every Publication in it
+          (asking one by one would hit the same limit).
+        - A batch that fails another way falls back to one paginated request per
+          Publication, still in this thread, so it overlaps arXiv downloads.
+        - A list of ``BATCH_ROW_LIMIT`` rows or more may be truncated and is
+          fetched again with pagination.
         """
-        batch: Future = Future()
+        while True:
+            futures = jobs.get()
+            chunk = list(futures)
+            started = time.monotonic()
+            while True:
+                try:
+                    ready = self.references.references_batch(chunk)
+                except BaseException as error:
+                    throttled = isinstance(error, HttpStatusError) and error.status in RETRY_STATUSES
+                    if throttled and time.monotonic() - started + THROTTLE_PAUSE <= self.references_patience:
+                        print(json.dumps({"event": "batch_references_throttled", "http_status": error.status,
+                                          "size": len(chunk), "pause": THROTTLE_PAUSE}), flush=True)
+                        time.sleep(THROTTLE_PAUSE)
+                        continue
+                    print(json.dumps({"event": "batch_references_failed" if throttled else "batch_references_fallback",
+                                      "error_type": type(error).__name__,
+                                      "http_status": getattr(error, "status", None), "size": len(chunk)}),
+                          flush=True)
+                    for identifier, future in futures.items():
+                        if throttled:
+                            future.set_exception(error)
+                        else:
+                            self._settle_future(future, self._fetch_references, identifier)
+                    break
+                for identifier, future in futures.items():
+                    rows = ready.get(identifier)
+                    if rows is None:
+                        # Same record as the single-Publication endpoint answering 404.
+                        future.set_exception(HttpStatusError(404, "Semantic Scholar"))
+                    elif len(rows) >= BATCH_ROW_LIMIT:
+                        self._settle_future(future, self._fetch_references, identifier)
+                    else:
+                        self._settle_future(future, CitationList.from_raw, identifier, rows)
+                break
 
-        def work():
-            try:
-                batch.set_result(self.references.references_batch(chunk))
-            except BaseException as error:
-                throttled = isinstance(error, HttpStatusError) and error.status in RETRY_STATUSES
-                print(json.dumps({"event": "batch_references_failed" if throttled else "batch_references_fallback",
-                                  "error_type": type(error).__name__,
-                                  "http_status": getattr(error, "status", None), "size": len(chunk)}), flush=True)
-                batch.set_exception(error)
-
-        threading.Thread(target=work, name="s2-batch", daemon=True).start()
-        return batch
+    @staticmethod
+    def _settle_future(future: Future, function, *args) -> None:
+        try:
+            future.set_result(function(*args))
+        except BaseException as error:
+            future.set_exception(error)
 
     def _submit_references(self, pool, arxiv_id, refresh):
-        """Future of new S2 rows (None result for a verified cache); None without S2."""
+        """How the citation list of ``arxiv_id`` arrives; None without S2.
+
+        A Future (verified cache: result None; or one paginated request in the
+        worker), or ``_Batched`` when the S2 thread holds it.
+        """
         if self.references is None:
             return None
         if not refresh:
@@ -295,31 +367,38 @@ class CrawlPipeline:
                 return cached
             except (OSError, ValueError, TypeError, KeyError):
                 pass
-            batch = self._refs_futures.pop(arxiv_id, None)
+            batch = self._refs_futures.pop(arxiv_id, None) or self._refs_deferred.pop(arxiv_id, None)
             if batch is not None:
-                # Consumed: on success the cache is verified, on failure the
-                # next pass batches this ID again.
-                self._refs_batched.discard(arxiv_id)
-                return pool.submit(self._batched_references, arxiv_id, batch)
+                return _Batched(batch)
         return pool.submit(self._fetch_references, arxiv_id)
 
-    def _batched_references(self, arxiv_id, batch: Future):
-        """Citation list of one Publication from its batch (runs in the References worker)."""
-        try:
-            ready = batch.result()
-        except HttpStatusError as error:
-            if error.status in RETRY_STATUSES:
-                raise
-            return self._fetch_references(arxiv_id)
-        except Exception:
-            return self._fetch_references(arxiv_id)
-        rows = ready.get(arxiv_id)
-        if rows is None:
-            # Same record as the single-Publication endpoint answering 404.
-            raise HttpStatusError(404, "Semantic Scholar")
-        if len(rows) >= BATCH_ROW_LIMIT:
-            return self._fetch_references(arxiv_id)   # possibly truncated: paginate
-        return CitationList.from_raw(arxiv_id, rows)
+    def references_pending(self) -> int:
+        """Publications whose downloads are done but whose batch has not been recorded."""
+        return len(self._refs_deferred)
+
+    def settle_references(self, timeout: float = 0.0) -> list[str]:
+        """Record deferred Publications whose batch has answered, waiting up to ``timeout`` s.
+
+        Returns the recorded IDs (also appended to ``settled_ids``).
+        """
+        settled: list[str] = []
+        if not self._refs_deferred:
+            return settled
+        deadline = time.monotonic() + max(0.0, timeout)
+        stats = {"errors": 0, "references_success": 0}
+        with self.corpus_lock():
+            for arxiv_id, batch in list(self._refs_deferred.items()):
+                if not batch.done():
+                    wait([batch], timeout=max(0.0, deadline - time.monotonic()))
+                if not batch.done():
+                    continue
+                del self._refs_deferred[arxiv_id]
+                # Recorded: on success the cache is verified, on failure the next pass batches it again.
+                self._refs_batched.discard(arxiv_id)
+                self._record_references(arxiv_id, batch, stats)
+                settled.append(arxiv_id)
+        self.settled_ids.extend(settled)
+        return settled
 
     def _fetch_references(self, arxiv_id):
         return CitationList.from_raw(arxiv_id, self.references.references(arxiv_id))
@@ -354,6 +433,7 @@ class CrawlPipeline:
         if not refresh:
             self._prefetch_references(ids, upcoming)
         refs_seconds = self.clock() - refs_started
+        self.settle_references(0.0)   # record batches that answered meanwhile
         with ThreadPoolExecutor(max_workers=1) as pool:
             for index, arxiv_id in enumerate(ids):
                 charged = batch_seconds if index == 0 else 0.0
@@ -397,13 +477,23 @@ class CrawlPipeline:
                 stats["errors"] += 1
         if refs is None:
             return
-        try:
+        if isinstance(refs, _Batched):
             # Time the arXiv thread is held up by S2 after its own downloads.
             waited = self.clock()
-            try:
-                citations = refs.result()
-            finally:
-                timing["references_wait_seconds"] = self.clock() - waited
+            if not refs.batch.done():
+                wait([refs.batch], timeout=self.references_wait)
+            timing["references_wait_seconds"] = self.clock() - waited
+            if not refs.batch.done():
+                self._refs_deferred[arxiv_id] = refs.batch   # settle_references records it
+                return
+            self._refs_batched.discard(arxiv_id)
+            refs = refs.batch
+        self._record_references(arxiv_id, refs, stats)
+
+    def _record_references(self, arxiv_id, refs: Future, stats) -> None:
+        """Write the citation cache and Manifest record of one Publication (main thread)."""
+        try:
+            citations = refs.result()
             if citations is not None:
                 path = self._references_path(arxiv_id)
                 write_json(path, {"format": 1, "arxiv_id": arxiv_id, "rows": list(citations.raw)})

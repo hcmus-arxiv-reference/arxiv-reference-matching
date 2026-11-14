@@ -12,6 +12,7 @@ from src.crawl import pipeline as pipeline_module
 from src.crawl.discovery import BatchedDiscovery
 from src.crawl.http_client import HttpClient, HttpResponse, HttpStatusError
 from src.crawl.pipeline import CrawlPipeline
+from src.crawl.runner import run_range
 from src.crawl.semantic_scholar import SemanticScholarClient
 from src.crawl.source import ArxivSourceDownloader
 
@@ -33,7 +34,7 @@ def make(tmp_path, batch, single=None, now=None, batch_size=100, on_arxiv=None):
 
     ``batch`` returns the JSON payload or an HTTP status; ``single(arxiv_id)``
     returns the rows of the paginated endpoint. ``now`` is a fake clock that
-    every request advances by 3 seconds. ``on_arxiv(url)`` sees every arXiv request.
+    every arXiv request advances by 3 seconds. ``on_arxiv(url)`` sees every arXiv request.
     """
     calls = []
 
@@ -53,7 +54,8 @@ def make(tmp_path, batch, single=None, now=None, batch_size=100, on_arxiv=None):
         return HttpResponse(200, {}, b'\\documentclass{article}')
 
     def s2(request, _):
-        tick()
+        # S2 runs in its own thread: it never advances the fake clock, which
+        # measures the arXiv thread only.
         if request.get_method() == 'POST':
             ids = [i.removeprefix('ARXIV:') for i in json.loads(request.data)['ids']]
             calls.append(('POST', ids))
@@ -69,6 +71,8 @@ def make(tmp_path, batch, single=None, now=None, batch_size=100, on_arxiv=None):
                            tmp_path, references=SemanticScholarClient(client(s2), batch_size=batch_size))
     if now is not None:
         engine.clock = lambda: now[0]
+    # Deterministic: a batch answers well within 5 s here, and is never retried.
+    engine.references_wait, engine.references_patience = 5.0, 0.0
     return engine, calls
 
 
@@ -177,14 +181,11 @@ def test_unusable_batch_falls_back_to_one_request_per_publication(tmp_path):
 def test_batch_time_is_charged_to_the_first_publication_apart_from_discovery(tmp_path):
     now = [0.0]
     engine, _ = make(tmp_path, lambda ids: [{'references': []} for _ in ids], now=now)
-    engine.crawl_ids([A], upcoming=[B])      # Discovery batch + References batch + v1 source
+    engine.crawl_ids([A], upcoming=[B])      # Discovery batch + v1 source; S2 batch in its thread
     engine.crawl_ids([B])                    # v1 source only
     first, second = [json.loads(line) for line in
                      (tmp_path / 'manifests' / 'timings.jsonl').read_text().splitlines()]
-    # The S2 batch runs in its own thread, so its 3 s land either in the start of
-    # the batch or in the wait after the source download, never twice.
-    assert (first['seconds'], first['discovery_seconds']) == (9, 3)
-    assert first['batch_references_seconds'] + first['references_wait_seconds'] in (0, 3)
+    assert (first['seconds'], first['discovery_seconds'], first['batch_references_seconds']) == (6, 3, 0)
     assert (second['seconds'], second['discovery_seconds'], second['batch_references_seconds'],
             second['references_wait_seconds']) == (3, 0, 0, 0)
 
@@ -221,3 +222,64 @@ def test_next_batch_starts_while_half_of_the_current_one_is_ahead(tmp_path):
     assert calls == [('POST', [A, B]), ('POST', [C, D])]
     assert all(engine.status(i).complete for i in (A, B, C, D))
     assert cached_rows(tmp_path, D) == [{'citedPaper': paper(1)}]
+
+
+def gated_batch(rows=lambda ids: [{'references': [paper(0)]} for _ in ids]):
+    """A batch answer that waits until the test releases it."""
+    release = threading.Event()
+
+    def batch(ids):
+        assert release.wait(timeout=5)
+        return rows(ids)
+    return batch, release
+
+
+def test_a_slow_batch_is_recorded_later_without_holding_up_arxiv(tmp_path):
+    batch, release = gated_batch()
+    engine, calls = make(tmp_path, batch)
+    engine.references_wait = 0.0
+    stats = engine.crawl_ids([A], upcoming=[B])
+    assert stats['references_success'] == 0 and stats['errors'] == 0
+    assert engine.status(A).sources_complete and not engine.status(A).complete
+    assert engine.references_pending() == 1
+    release.set()
+    assert engine.settle_references(timeout=5) == [A]
+    assert engine.status(A).complete and engine.references_pending() == 0
+    assert engine.settled_ids == [A]
+    engine.crawl_ids([B])                    # same batch: no second request
+    assert calls == [('POST', [A, B])]
+    assert engine.status(B).complete
+
+
+def test_throttled_batch_is_retried_in_the_s2_thread(tmp_path, monkeypatch):
+    monkeypatch.setattr(pipeline_module, 'THROTTLE_PAUSE', 0.0)
+    answers = [429, 429, None]
+    engine, calls = make(tmp_path, lambda ids: answers.pop(0) or [{'references': []} for _ in ids])
+    engine.references_patience = 60.0
+    assert engine.crawl_ids([A])['references_success'] == 1
+    assert calls == [('POST', [A])] * 3
+    assert engine.status(A).complete
+
+
+def test_runner_settles_deferred_batches_before_export(tmp_path):
+    batch, release = gated_batch()
+    engine, _ = make(tmp_path, batch)
+    engine.references_wait, engine.references_patience = 0.0, 30.0
+    threading.Timer(0.3, release.set).start()
+    report = run_range(engine, [A, B], max_passes=1, retry_delay=0)
+    assert report['status'] == 'complete', report
+    assert report['counts']['complete'] == 2
+
+
+def test_stopping_a_run_keeps_deferred_batches_for_the_next_run(tmp_path):
+    batch, release = gated_batch()
+    engine, calls = make(tmp_path, batch)
+    engine.references_wait = 0.0
+    engine.crawl_ids([A])
+    (tmp_path / 'STOP_RANGE').touch()
+    report = run_range(engine, [A], max_passes=1, retry_delay=0)
+    assert report['status'] == 'stopped' and engine.references_pending() == 1
+    release.set()
+    (tmp_path / 'STOP_RANGE').unlink()
+    assert run_range(engine, [A], max_passes=1, retry_delay=0)['status'] == 'complete'
+    assert calls == [('POST', [A])]
