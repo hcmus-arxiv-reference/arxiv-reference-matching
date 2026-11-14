@@ -312,3 +312,9 @@ def test_case_fallback_considers_both_include_directories(tmp_path, exact):
         assert result.status == "error"
         assert result.includes[-1]["target"] is None
         assert "Ambiguous case-insensitive" in result.issues[-1].message
+
+def test_inline_listing_options_and_braced_input(tmp_path):
+    source = r"\documentclass{x}\begin{document}\lstinline[columns=fixed]{\input{fake}}\end{document}"
+    bundle = assemble_source(tree(tmp_path, {"main.tex": source}))
+    assert bundle.status == "ready"
+    assert bundle.includes == []

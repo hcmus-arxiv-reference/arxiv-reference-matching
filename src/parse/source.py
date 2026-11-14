@@ -16,7 +16,7 @@ import re
 
 from src.common.corpus import verified_source
 
-ASSEMBLER_VERSION = "3"
+ASSEMBLER_VERSION = "4"
 _VERBATIM = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"}
 _DEFINITIONS = {"newcommand", "renewcommand", "providecommand", "DeclareRobustCommand",
                 "DeclareMathOperator", "newenvironment", "renewenvironment"}
@@ -150,6 +150,21 @@ def _scan(text: str, file: str, tokens: list[_Command] | None = None) -> _Scan:
             if name in {"verb", "lstinline"}:
                 if cursor < len(text) and text[cursor] == "*":
                     cursor += 1
+                if name == "lstinline" and text.startswith("[", cursor):
+                    _, cursor = _group(text, cursor, "[")
+                if name == "lstinline" and text.startswith("{", cursor):
+                    # Listings accepts braces as an alternative delimiter.
+                    depth = 1
+                    end = cursor + 1
+                    while end < len(text) and text[end] != "\n" and depth:
+                        depth += (text[end] == "{") - (text[end] == "}")
+                        end += 1
+                    if depth:
+                        raise ValueError("Unclosed inline verbatim")
+                    cursor = end
+                    if tokens is not None and active:
+                        tokens.append(_Command("literal", start, cursor))
+                    continue
                 if cursor >= len(text) or text[cursor].isspace():
                     raise ValueError("Missing verbatim delimiter")
                 end = text.find(text[cursor], cursor + 1)

@@ -113,3 +113,19 @@ $$x$$ \[y\]
     assert result["ready_tex_versions"] == result["tex_versions"] == 1
     assert result["headings_by_kind"] == {"section": 1}
     assert result["structure_failures"] == []
+
+def test_heading_wrappers_and_formatting_command():
+    from scripts.compare_structure import custom_tokens, headings
+    from src.parse.source import SourceBundle
+    from src.parse.structure import build_structure
+    from src.parse.types import validate_B
+
+    text = r"""\begin{document}
+\titlespacing*{\section}{0pt}{0pt}{0pt}
+\begin{CJK}{UTF8}{gbsn}\section{Body}\end{CJK}
+\begin{appendix}\section{Extra}\end{appendix}
+\end{document}"""
+    tree, _ = build_structure(SourceBundle(status="ready", text=text), "2508.02872", 1)
+    validate_B(tree, text)
+    assert [n.title_raw for n in headings(tree.root)] == ["Body", "Extra"]
+    assert len(custom_tokens(text)) == 3

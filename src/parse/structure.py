@@ -11,6 +11,8 @@ from src.parse.types import (
     SECTION_DEPTH, BibSource, Block, Section, StructureTree, _is_references_heading,
 )
 
+STRUCTURE_VERSION = "2"
+
 
 def _clean(text, tokens):
     """Blank comments while preserving offsets and literal examples."""
@@ -153,6 +155,9 @@ def build_structure(bundle: SourceBundle, arxiv_id: str, version: int,
         if t.start < cursor or t.start >= stop:
             continue
         heading = t.name in SECTION_DEPTH and t.name != "document"
+        # A control word used as an argument (e.g. titlespacing) has no title.
+        if heading and not text[t.end:].lstrip().startswith(("{", "[", "*")):
+            continue
         if ref_start is not None:
             if t.name != "appendix" and not (heading and SECTION_DEPTH[t.name] <= ref_depth):
                 continue
@@ -177,6 +182,8 @@ def build_structure(bundle: SourceBundle, arxiv_id: str, version: int,
             cursor = t.end + int(text.startswith("\n", t.end))
             drop("appendix_marker", t.start, cursor)
         elif t.name in {"begin", "opaque_env", "$$", "["}:
+            if t.name == "begin" and t.argument in {"CJK", "CJK*", "appendix", "appendices"}:
+                continue
             end = t.end if t.name == "opaque_env" else ends.get(t.start)
             if end is None:
                 continue

@@ -2,6 +2,7 @@
 import argparse
 from collections import Counter
 import json
+import re
 from pathlib import Path
 from time import perf_counter
 
@@ -18,13 +19,18 @@ def measure_sample(plan, corpus):
     started = perf_counter()
     statuses, codes, headings = Counter(), Counter(), Counter()
     failures = []
+    checked = set()
+    leaked = set()
     without_section = tex = ready = parsed = 0
 
-    def count(section, counts):
+    def count(section, counts, aid):
         for child in section.children:
             if isinstance(child, Section):
                 counts[child.kind] += 1
-                count(child, counts)
+                title = re.sub(r"\\[A-Za-z]+|[^A-Za-z ]", " ", child.title_raw).lower().split()
+                if " ".join(title) in {"references", "reference", "bibliography", "works cited", "literature cited"}:
+                    leaked.add(aid)
+                count(child, counts, aid)
 
     seen = set()
     for paper in plan["publications"]:
@@ -53,13 +59,16 @@ def measure_sample(plan, corpus):
                 continue
             try:
                 tree, bib = build_structure(source, aid, version, directory)
+                counts = Counter()
+                count(tree.root, counts, aid)
+                checked.add(aid)
                 validate_B(tree, source.text)
                 validate_B_prime(bib)
             except (ValueError, OSError, RecursionError) as error:
                 failures.append({"arxiv_id": aid, "version": version, "error": str(error)})
                 complete = False
                 continue
-            count(tree.root, per_paper)
+            per_paper.update(counts)
             parsed += 1
         headings.update(per_paper)
         without_section += has_tex and complete and not per_paper["section"]
@@ -68,6 +77,8 @@ def measure_sample(plan, corpus):
             "tex_versions": tex, "ready_tex_versions": ready,
             "ready_tex_fraction": ready / tex if tex else None,
             "structure_versions_validated": parsed, "structure_failures": failures,
+            "publications_with_tex_tree_checked": len(checked),
+            "publications_with_references_heading": sorted(leaked),
             "headings_by_kind": dict(headings),
             "fully_parsed_tex_publications_without_section": without_section,
             "elapsed_seconds": round(perf_counter() - started, 3)}
