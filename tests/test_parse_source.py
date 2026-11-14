@@ -1,5 +1,6 @@
 """Synthetic source trees: no downloaded TeX is committed."""
 from pathlib import Path
+import json
 
 import pytest
 
@@ -140,7 +141,7 @@ def test_endinput_and_child_end_document(tmp_path):
 @pytest.mark.parametrize("control", [r"\renewcommand{\input}[1]{}",
                                      r"\def\input#1{}", r"\includeonly{\chosen}",
                                      r"\endinput\input{missing}",
-                                     r"\AtBeginDocument{\fancyfoot[L]{Preprint}}"])
+                                     r"\AtBeginDocument{\input{deferred}}"])
 def test_compilation_command_redefinitions_and_dynamic_filters_are_flagged(tmp_path, control):
     result = assemble_source(tree(tmp_path, {"main.tex": r"\documentclass{article}" + control}))
     assert result.status in {"needs_review", "error"}
@@ -181,3 +182,139 @@ def test_receipt_required_and_no_tex_distinguished_from_missing(tmp_path):
     assert result.status == "empty_non_tex" and not result.files and result.text == ""
     (source.path / "rogue.tex").write_text(r"\documentclass{article}")
     assert assemble_source(source.path, require_receipt=True).status == "error"
+
+
+@pytest.mark.parametrize("body", [
+    r"$a \iff b$\input{yes}",
+    r"\AtBeginDocument{\fancyfoot[L]{Preprint}}\input{yes}",
+    "\\AtBeginDocument{% \\input{ignored}\n}\\input{yes}",
+    r"\newif\ifdraft\newcommand{\choice}{\ifdraft A\else B\fi}\input{yes}",
+    r"\def\choice{\ifmmode A\else B\fi}\input{yes}",
+])
+def test_issue30_math_hooks_and_macro_conditions(tmp_path, body):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": r"\documentclass{article}" + body, "yes.tex": "YES",
+    }))
+    assert result.status == "ready"
+    assert result.files == ["main.tex", "yes.tex"]
+    assert result.text.endswith("YES")
+
+
+@pytest.mark.parametrize("body", [
+    r"\input{later}", r"\InputIfFileExists{later.tex}{}{}",
+    r"\import{parts/}{later.tex}", r"\catcode`\@=11",
+])
+def test_deferred_input_is_not_expanded_early(tmp_path, body):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": r"\documentclass{article}\AtBeginDocument{" + body + "}",
+        "later.tex": "DEFERRED",
+    }))
+    assert result.status == "needs_review"
+    assert result.files == ["main.tex"]
+    assert not result.includes
+
+
+def test_missing_bbl_is_preserved_as_warning(tmp_path):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": r"\documentclass{article}\input{refs.bbl}\input{yes}",
+        "yes.tex": "YES",
+    }))
+    assert result.status == "needs_review"
+    assert [issue.code for issue in result.issues] == ["missing_bbl"]
+    assert result.includes[0]["status"] == "missing_bbl"
+    assert result.text.endswith(r"\input{refs.bbl}YES")
+
+
+def test_bbl_path_escape_still_fails(tmp_path):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": r"\documentclass{article}\input{../refs.bbl}",
+    }))
+    assert result.status == "error"
+
+
+def test_multiple_roots_choose_only_complete_document(tmp_path):
+    root = tree(tmp_path, {
+        "main.tex": r"\documentclass{article}\begin{document}BODY\end{document}",
+        "template.tex": r"\documentclass{article}% \\begin{document}",
+    })
+    result = assemble_source(root)
+    assert result.status == "ready"
+    assert result.root == "main.tex"
+    assert result.unused_tex_files == ["template.tex"]
+    assert result.to_dict() == assemble_source(root).to_dict()
+
+
+def test_two_complete_roots_remain_ambiguous(tmp_path):
+    body = r"\documentclass{article}\begin{document}BODY\end{document}"
+    result = assemble_source(tree(tmp_path, {"a.tex": body, "b.tex": body}))
+    assert result.status == "error"
+    assert result.issues[0].code == "ambiguous_root"
+
+
+def test_root_with_document_in_input_is_not_discarded(tmp_path):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": r"\documentclass{article}\input{body}",
+        "body.tex": r"\begin{document}MAIN\end{document}",
+        "supplement.tex": r"\documentclass{article}\begin{document}SUPPLEMENT\end{document}",
+    }))
+    assert result.status == "error"
+    assert result.issues[0].code == "ambiguous_root"
+
+
+def test_present_bbl_outside_tex_inventory_is_not_reported_missing(tmp_path):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": r"\documentclass{article}\input{refs.bbl}",
+        "refs.bbl": r"\bibitem{one} Author. Title.",
+    }))
+    assert result.status == "error"
+    assert [issue.code for issue in result.issues] == ["include_error"]
+
+
+@pytest.mark.parametrize("case", [
+    "multi-file-input", "comments-and-verbatim", "levels-skip", "appendix-ack-refs",
+])
+def test_source_golden(case, tmp_path):
+    fixture = Path(__file__).parent / "fixtures" / "m2" / case / "source.json"
+    golden = json.loads(fixture.read_text(encoding="utf-8"))
+    root = tree(tmp_path, golden["files"])
+    result = assemble_source(root)
+    actual = result.to_dict()
+    assert {key: actual[key] for key in golden["expected"]} == golden["expected"]
+    assert actual == assemble_source(root).to_dict()
+    assert "".join(result.text[s.output_start:s.output_end] for s in result.spans) == result.text
+    for span in result.spans:
+        assert result.text[span.output_start:span.output_end] == golden["files"][span.file][span.source_start:span.source_end]
+
+
+@pytest.mark.parametrize("command", ["input", "include"])
+def test_unique_case_insensitive_include(tmp_path, command):
+    root = tree(tmp_path, {"main.tex": "\\documentclass{article}\n\\" + command + "{sec/1_intro}",
+                           "Sec/1_Intro.tex": "Introduction"})
+    result = assemble_source(root)
+    assert result.status == "ready"
+    assert result.text.endswith("Introduction")
+    assert result.includes[0]["target"] == "Sec/1_Intro.tex"
+    assert [(i.code, i.severity, i.line) for i in result.issues] == [
+        ("include_case_mismatch", "info", 2)]
+
+
+@pytest.mark.parametrize("exact", [False, True])
+def test_case_fallback_considers_both_include_directories(tmp_path, exact):
+    root = tree(tmp_path, {"main.tex": r"\documentclass{article}\input{sub/body}",
+                           "sub/body.tex": r"\input{part}", "Part.tex": "ROOT",
+                           "sub/part.tex" if exact else "sub/PART.tex": "LOCAL"})
+    result = assemble_source(root)
+    if exact:
+        assert result.status == "ready"
+        assert result.includes[-1]["target"] == "sub/part.tex"
+        assert not any(i.code == "include_case_mismatch" for i in result.issues)
+    else:
+        assert result.status == "error"
+        assert result.includes[-1]["target"] is None
+        assert "Ambiguous case-insensitive" in result.issues[-1].message
+
+def test_inline_listing_options_and_braced_input(tmp_path):
+    source = r"\documentclass{x}\begin{document}\lstinline[columns=fixed]{\input{fake}}\end{document}"
+    bundle = assemble_source(tree(tmp_path, {"main.tex": source}))
+    assert bundle.status == "ready"
+    assert bundle.includes == []

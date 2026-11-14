@@ -1,0 +1,14 @@
+{
+  "files": {
+    "main.tex": "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nBody \\cite{one}.\n\\section*{Acknowledgements}\nThanks.\n\\section*{References}\n\\begin{thebibliography}{1}\n\\bibitem{one} A. Author. Title. 2020.\n\\end{thebibliography}\n\\appendix\n\\section{Proof}\nProof body.\n\\end{document}\n"
+  },
+  "expected": {
+    "status": "ready",
+    "root": "main.tex",
+    "text": "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nBody \\cite{one}.\n\\section*{Acknowledgements}\nThanks.\n\\section*{References}\n\\begin{thebibliography}{1}\n\\bibitem{one} A. Author. Title. 2020.\n\\end{thebibliography}\n\\appendix\n\\section{Proof}\nProof body.\n\\end{document}",
+    "files": [
+      "main.tex"
+    ],
+    "unused_tex_files": []
+  }
+}
