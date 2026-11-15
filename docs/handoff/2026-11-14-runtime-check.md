@@ -134,7 +134,8 @@ khi chạy hết Range.
 
 ## 4. Chưa làm, chưa kiểm
 
-- Tag `m1-bench-v3` (Bảo duyệt 15/11) trên nhánh này; `REF` mặc định của notebook là tag đó.
+- Tag `m1-bench-v4` (Bảo duyệt 15/11) trên nhánh này; `REF` mặc định của notebook là tag đó.
+  `m1-bench-v4` = `m1-bench-v3` + ghi S2 404 thành `s2_status: not_found` (data contract C10).
   Chưa PR, chưa review, chưa merge vào `main`: link notebook `blob/main/` vẫn là bản cũ.
 - Chưa chạy hết một Range trên Colab; lượt thử chỉ 2 đoạn (978/5.000 bài).
 - Lô S2 bị 429 quá 30 phút thì các bài trong lô ghi lỗi 429 và được gom lại ở lượt sau
