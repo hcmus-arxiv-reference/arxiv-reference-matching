@@ -124,10 +124,12 @@ def check_run(requests: list[dict], timings: list[dict], *, link: Link | None = 
     s2_wait = sum(t.get("references_wait_seconds", 0.0) for t in timings)
     arxiv_requests = [r for r in requests if r.get("service") == "arxiv" and r.get("event") == "request"]
     arxiv_busy = sum(r.get("paced", 0.0) + r.get("seconds", 0.0) for r in arxiv_requests)
-    arxiv_busy += sum(r.get("delay", 0.0) for r in requests
-                      if r.get("service") == "arxiv" and r.get("event") == "backoff")
+    arxiv_backoff = sum(r.get("delay", 0.0) for r in requests
+                        if r.get("service") == "arxiv" and r.get("event") == "backoff")
+    api_requests = [r for r in arxiv_requests if r.get("endpoint") == "api"]
     s2_requests = [r for r in requests if r.get("service") == "s2" and r.get("event") == "request"]
     s2_backoff = [r for r in requests if r.get("service") == "s2" and r.get("event") == "backoff"]
+    arxiv_busy += arxiv_backoff
     run_link = link_from_requests(requests)
     used = link or run_link
     result = {
@@ -137,6 +139,11 @@ def check_run(requests: list[dict], timings: list[dict], *, link: Link | None = 
         "arxiv": {"requests": len(arxiv_requests),
                   "source_files": len(arxiv_sources(requests)),
                   "busy_seconds": round(arxiv_busy, 1),
+                  "status_429": sum(1 for r in arxiv_requests if r.get("status") == 429),
+                  "api_requests": len(api_requests),
+                  "api_not_ok": sum(1 for r in api_requests if r.get("status") != 200),
+                  "backoff_seconds": round(arxiv_backoff, 1),
+                  "backoff_share": round(arxiv_backoff / wall, 3) if wall else None,
                   "link_from_run": asdict(run_link) if run_link else None},
         "s2": {"requests": len(s2_requests),
                "status_429": sum(1 for r in s2_requests if r.get("status") == 429),
@@ -179,6 +186,10 @@ def describe(result: dict) -> str:
         lines.append(f"Băng thông arXiv {link['bandwidth_bps'] / 1e6:.2f} MB/s, độ trễ "
                      f"{link['latency_seconds']:.2f} s ({link['files']} file"
                      f"{'' if link['latency_measured'] else ', độ trễ mặc định'}).")
+    arxiv = result["arxiv"]
+    lines.append(f"arXiv: {arxiv['requests']} request, {arxiv['status_429']} lần 429; API Discovery "
+                 f"{arxiv['api_not_ok']}/{arxiv['api_requests']} lần không phải 200; chờ backoff "
+                 f"{arxiv['backoff_seconds']} s ({(arxiv['backoff_share'] or 0) * 100:.1f}% wall time).")
     s2 = result["s2"]
     lines.append(f"S2: {s2['requests']} request, {s2['status_429']} lần 429, chờ backoff "
                  f"{s2['backoff_seconds']} s; arXiv phải chờ S2 {s2['arxiv_wait_seconds']} s "
@@ -188,5 +199,8 @@ def describe(result: dict) -> str:
                      f"Mô hình giải thích {(result['explained_share'] or 0) * 100:.0f}% wall time.")
         lines.append(f"Ước cả Range: {result['range_hours_at_measured_rate']} giờ theo tốc độ đo, "
                      f"{result['range_hours_predicted']} giờ theo mô hình.")
+    if result["verdict"] == "KHÔNG ĐẠT" and (arxiv["backoff_share"] or 0) > MAX_S2_WAIT_SHARE:
+        lines.append("Lý do chính: arXiv giới hạn request (429/5xx) trong lượt này; phần chờ đó nằm "
+                     "ngoài mô hình. Xem dòng arxiv/backoff trong manifests/requests.jsonl.")
     lines.append(f"KẾT LUẬN: {result['verdict']}")
     return "\n".join(lines)

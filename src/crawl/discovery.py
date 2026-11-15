@@ -7,13 +7,19 @@ from __future__ import annotations
 import json
 import re
 from urllib.parse import urlencode, urlsplit
+from urllib.error import URLError
 import xml.etree.ElementTree as ET
 
 from src.common.corpus import Publication  # Compatibility re-export.
-from .http_client import HttpClient, HttpStatusError
+from .http_client import RETRY_STATUSES, HttpClient, HttpStatusError
 from .storage import require_id
 
 ATOM = "http://www.w3.org/2005/Atom"
+# Pauses before retrying a whole Discovery batch that arXiv throttled (429/5xx or
+# timeouts after HttpClient's own retries). Colab 15/11: the API answered 43 of 55
+# queries with 429 while /src/ downloads ran normally; falling back to one query
+# per ID multiplied the throttled requests by the batch size.
+BATCH_THROTTLE_PAUSES = (60.0, 120.0, 240.0, 300.0, 300.0)
 ARXIV = "http://arxiv.org/schemas/atom"
 
 
@@ -86,8 +92,10 @@ class BatchedDiscovery(ArxivDiscovery):
     """Discovery theo lô: prefetch base-ID Atom entries, up to 100 IDs per query.
 
     Contributed by Liễu (langtucod0n), originally in merge parent 0d19257.
-    The shared parser still fills all revision dates. Missing or failed batch
-    entries fall back to individual queries; a missing batch result is never
+    The shared parser still fills all revision dates. Missing entries and
+    malformed batches fall back to individual queries; a throttled batch
+    (429/5xx, timeouts) is retried whole instead (``_prefetch_chunk``). A
+    missing batch result is never
     sufficient evidence that a Publication does not exist. All arXiv requests,
     including revision lookups/source downloads, share one client and the
     process-wide rate limiter. batch_size=0 disables batching. Each batch sets
@@ -101,36 +109,87 @@ class BatchedDiscovery(ArxivDiscovery):
             raise ValueError("discover_batch must be between 0 and 100")
         self.batch_size = batch_size
         self.prefetched: dict[str, bytes] = {}
+        self.throttled: set[str] = set()
 
     def prefetch(self, identifiers) -> None:
         ids = list(dict.fromkeys(require_id(i) for i in identifiers))
+        self.throttled.difference_update(ids)    # a new pass asks again
         ids = [i for i in ids if i not in self.prefetched]
         if not self.batch_size:
             return
         for start in range(0, len(ids), self.batch_size):
-            chunk = ids[start:start + self.batch_size]
+            self._prefetch_chunk(ids[start:start + self.batch_size])
+
+    def _prefetch_chunk(self, chunk: list[str]) -> None:
+        """One batch query; a throttled batch is retried whole, never split per ID.
+
+        After ``BATCH_THROTTLE_PAUSES`` run out, one ID is queried alone. If it
+        answers, only the batch query fails and the other IDs fall back to one
+        query each. Otherwise the IDs are marked throttled: their Discovery fails
+        at once with HTTP 429 (no request), the Runner records the error and the
+        next pass batches them again.
+        """
+        pauses = iter(BATCH_THROTTLE_PAUSES)
+        while True:
             try:
-                # arXiv returns 10 entries unless max_results is set, even for id_list.
-                query = urlencode({"id_list": ",".join(chunk), "max_results": len(chunk)})
-                response = self.client.get(f"{self.endpoint}?{query}")
-                if response.status != 200:
-                    raise HttpStatusError(response.status, "arXiv batch metadata")
-                root = ET.fromstring(response.body)
-                found = {}
-                for entry in root.findall(f"{{{ATOM}}}entry"):
-                    feed = ET.Element(f"{{{ATOM}}}feed")
-                    feed.append(entry)
-                    body = ET.tostring(feed, encoding="utf-8")
-                    pub = parse_feed(body)
-                    if pub.arxiv_id not in chunk or pub.arxiv_id in found:
-                        raise ValueError("Unexpected or duplicate batch publication")
-                    found[pub.arxiv_id] = body
-                self.prefetched.update(found)
+                self.prefetched.update(self._fetch_batch(chunk))
+                return
+            except (HttpStatusError, URLError, TimeoutError, ConnectionError) as error:
+                status = getattr(error, "status", None)
+                if isinstance(error, HttpStatusError) and status not in RETRY_STATUSES:
+                    self._fallback(error, chunk)
+                    return
+                pause = next(pauses, None)
+                if pause is None:
+                    if self._single_answers(chunk[0]):
+                        self._fallback(error, chunk)
+                        return
+                    self.throttled.update(chunk)
+                    print(json.dumps({"event": "batch_discovery_throttled", "status": status,
+                                      "error_type": type(error).__name__, "size": len(chunk)}), flush=True)
+                    return
+                self.client._backoff(pause, status=status,
+                                     error=None if status else type(error).__name__)
             except Exception as error:
-                print(json.dumps({"event": "batch_discovery_fallback",
-                                  "error_type": type(error).__name__, "size": len(chunk)}), flush=True)
+                self._fallback(error, chunk)
+                return
+
+    def _fetch_batch(self, chunk: list[str]) -> dict[str, bytes]:
+        # arXiv returns 10 entries unless max_results is set, even for id_list.
+        query = urlencode({"id_list": ",".join(chunk), "max_results": len(chunk)})
+        response = self.client.get(f"{self.endpoint}?{query}")
+        if response.status != 200:
+            raise HttpStatusError(response.status, "arXiv batch metadata")
+        root = ET.fromstring(response.body)
+        found = {}
+        for entry in root.findall(f"{{{ATOM}}}entry"):
+            feed = ET.Element(f"{{{ATOM}}}feed")
+            feed.append(entry)
+            body = ET.tostring(feed, encoding="utf-8")
+            pub = parse_feed(body)
+            if pub.arxiv_id not in chunk or pub.arxiv_id in found:
+                raise ValueError("Unexpected or duplicate batch publication")
+            found[pub.arxiv_id] = body
+        return found
+
+    def _single_answers(self, identifier: str) -> bool:
+        """Query one ID of a throttled batch; keep its answer when it comes."""
+        try:
+            self.prefetched[identifier] = ArxivDiscovery._fetch(self, identifier)
+            return True
+        except (HttpStatusError, URLError, TimeoutError, ConnectionError):
+            return False
+
+    @staticmethod
+    def _fallback(error: Exception, chunk: list[str]) -> None:
+        """Malformed or rejected batch: its IDs are discovered one by one."""
+        print(json.dumps({"event": "batch_discovery_fallback",
+                          "error_type": type(error).__name__, "size": len(chunk)}), flush=True)
 
     def _fetch(self, identifier: str) -> bytes:
         if identifier in self.prefetched:
             return self.prefetched.pop(identifier)
+        if identifier in self.throttled:
+            self.throttled.discard(identifier)
+            raise HttpStatusError(429, "arXiv metadata (batch throttled, not requested)")
         return super()._fetch(identifier)

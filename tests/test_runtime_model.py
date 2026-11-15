@@ -136,3 +136,30 @@ def test_speedtest_measures_the_downloads():
     assert result["link"]["bandwidth_bps"] == pytest.approx(8_000_000 / 8.0)
     assert result["files"] == [{"bytes": 8_000_000, "seconds": 8.5}]
     assert result["range_hours_predicted"] > 7.0
+
+
+def test_speedtest_reports_a_throttled_discovery_api():
+    now, sent = [0.0], []
+
+    def transport(request, _):
+        sent.append(request.full_url)
+        now[0] += 1.0
+        if "/api/query" in request.full_url:
+            return HttpResponse(429, {}, b"")
+        return HttpResponse(200, {}, b"x" * 8_000_000)
+
+    http = HttpClient("offline", transport=transport, sleeper=lambda s: now.__setitem__(0, now[0] + s),
+                      clock=lambda: now[0], name="arxiv")
+    result = predict_runtime.speedtest(("2508.03249v1",), client=http)
+    assert result["api"] == {"requests": 3, "ok": 0, "status_429": 3, "median_seconds": 1.0, "throttled": True}
+    assert sum("/api/query" in u for u in sent) == 3          # no retries while probing
+    assert http.max_retries == 4 and http.on_request is not None   # client restored
+
+
+def test_probe_counts_timeouts_as_throttled():
+    def transport(request, _):
+        raise TimeoutError("slow")
+
+    http = HttpClient("offline", transport=transport, sleeper=lambda _: None, name="arxiv")
+    api = predict_runtime.probe_api(http, ["2508.03249"], probes=2)
+    assert api["requests"] == 2 and api["ok"] == 0 and api["throttled"]

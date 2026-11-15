@@ -58,9 +58,32 @@ Cần nhánh có trên GitHub (`git push -u origin feat/predictable-runtime`).
 | KHÔNG ĐẠT, chờ S2 > 5% | S2 vẫn giữ arXiv | Xem `references_wait_seconds` trong `timings.jsonl` và dòng `s2` trong `requests.jsonl` |
 | KHÔNG ĐẠT, lệch > 15% mà S2 thấp | Có chi phí ngoài mô hình | Xem `explained_share`; so `paced + seconds` của request arXiv với `timings.jsonl` |
 
+## 3b. Lượt thử Colab 15/11 (Bảo, `b60f3b6`): KHÔNG ĐẠT vì API Discovery của arXiv
+
+Đoạn `run_001`, 03:57–04:44 UTC, 2.827 s. Số đo từ checkpoint (`requests.jsonl`):
+
+| | Số đo |
+|---|---|
+| Speedtest `/src/` | 7,30 MB/s → dự đoán 7,7 giờ/Range; file 5 MB tải trong 0,17 s |
+| `/api/query` (Discovery) | 55 request: 5 lần 200, 43 lần 429, 2 lần 503, 5 lần timeout 60 s |
+| Backoff arXiv | 1.733 s (61% wall time) |
+| S2 | 1 request, 200; arXiv chờ S2 0 s |
+| Kết quả | thăm 11, hoàn chỉnh 4 Publication (14 bài/giờ) |
+
+- Lô Discovery 50 ID bị 429 → Engine cũ hỏi từng ID → mỗi ID lại 429 và backoff tới 240 s.
+- Từ Mac lúc 05:31 UTC cùng ngày: API 3/3 lần 200 (trung vị 0,16 s). **Nguyên nhân 429 chưa rõ.**
+  Bảo xác nhận không phải do IP. Chưa kiểm: có thành viên khác crawl cùng lúc không, có ai dùng
+  chung `CONTACT_EMAIL` (nằm trong User-Agent) hay S2 key không.
+- Sửa (commit sau `b60f3b6`): lô Discovery bị 429/5xx/timeout được thử lại **cả lô** sau
+  60/120/240/300/300 s; hết lượt chờ thì thử một ID, ID đó qua mới hỏi từng ID, không qua thì
+  các ID ghi lỗi 429 không gửi request và được gom lại ở lượt sau. `speedtest` hỏi thử API 3 lần,
+  thoát mã 3 nếu bị giới hạn; ô Đo tốc độ khi đó dừng **trước khi crawl**. `check` in số 429 và
+  phần wall time chờ backoff của arXiv.
+- Notebook: tách ô Gắn Drive / hàm lưu / thư mục lượt, định nghĩa / chạy crawl, thống kê / validator.
+
 ## 4. Chưa làm, chưa kiểm
 
 - Chưa push, chưa PR, chưa review. Chưa đặt tag. `REF` mặc định trong notebook vẫn `m1-bench-v2`.
-- Chưa chạy trên Colab. Chưa chạy lại trên Mac sau `afd5974`.
+- Bản sửa Discovery và notebook đã tách chưa chạy trên Colab. Chưa chạy lại trên Mac sau `afd5974`.
 - Lô S2 bị 429 quá 30 phút thì các bài trong lô ghi lỗi 429 và được gom lại ở lượt sau
   (`--max-passes 3 --retry-delay 600` trong notebook).

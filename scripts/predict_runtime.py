@@ -3,12 +3,15 @@
 Hai lệnh, đều chạy khi KHÔNG có crawler nào khác đang chạy trên máy này:
 
     # Trước khi crawl: tải 2 Version mẫu qua export.arxiv.org (cách >= 3,1 giây),
-    # đo băng thông và in số giờ dự đoán cho một Range.
+    # đo băng thông, in số giờ dự đoán cho một Range, rồi hỏi thử API Discovery
+    # (/api/query) vài lần xem arXiv có đang trả 429 cho máy này không.
     python -m scripts.predict_runtime speedtest --out speedtest.json
 
     # Sau một hay nhiều đoạn crawl: so tốc độ thực tế với dự đoán.
     python -m scripts.predict_runtime check --data-dir <DATA_DIR> --speedtest speedtest.json
 
+``speedtest`` thoát mã 3 khi API Discovery bị giới hạn (429/5xx/timeout): crawl
+lúc đó sẽ chậm hơn dự đoán nhiều (Colab 15/11: 43/55 query bị 429).
 ``check`` đọc ``manifests/requests.jsonl`` (log từng request của ``src.crawl.cli``)
 và ``manifests/timings.jsonl``. Mã thoát 0 khi ĐẠT, 1 khi KHÔNG ĐẠT, 2 khi chưa đủ số liệu.
 """
@@ -19,6 +22,9 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 
+import statistics
+from urllib.parse import urlencode
+
 from src.common.config import get_settings
 from src.crawl.http_client import HttpClient
 from src.crawl.runtime_model import (BAO_RANGE, GAP_SECONDS, Link, check_run, describe,
@@ -27,6 +33,7 @@ from src.crawl.runtime_model import (BAO_RANGE, GAP_SECONDS, Link, check_run, de
 
 # Hai Version trong Range Bảo, khoảng 8 và 6 MB; trên Mac 13/11 mất 6,1 và 4,4 giây.
 SPEEDTEST_VERSIONS = ("2508.03249v1", "2508.06509v1")
+API_PROBES = 3   # query Discovery nhỏ, cách >= 3,1 giây, không thử lại
 
 
 def speedtest(versions=SPEEDTEST_VERSIONS, *, client: HttpClient | None = None) -> dict:
@@ -44,7 +51,30 @@ def speedtest(versions=SPEEDTEST_VERSIONS, *, client: HttpClient | None = None) 
         raise RuntimeError("Không đo được: không có file nào tải xong")
     hours = predict_seconds(load_sample_sizes(), link, BAO_RANGE) / 3600
     files = [{"bytes": r["bytes"], "seconds": r["seconds"]} for r in records if r.get("event") == "request"]
-    return {"link": asdict(link), "files": files, "range_hours_predicted": round(hours, 1)}
+    return {"link": asdict(link), "files": files, "range_hours_predicted": round(hours, 1),
+            "api": probe_api(client, [v.split("v")[0] for v in versions])}
+
+
+def probe_api(client: HttpClient, ids, probes: int = API_PROBES) -> dict:
+    """Hỏi API Discovery ``probes`` lần, không thử lại, đếm câu trả lời không phải 200."""
+    records: list[dict] = []
+    saved = client.on_request, client.max_retries
+    client.on_request, client.max_retries = records.append, 0
+    query = urlencode({"id_list": ",".join(ids), "max_results": len(ids)})
+    try:
+        for _ in range(probes):
+            try:
+                client.get(f"https://export.arxiv.org/api/query?{query}")
+            except OSError:
+                pass   # timeout hay lỗi mạng: đã ghi vào records
+    finally:
+        client.on_request, client.max_retries = saved
+    sent = [r for r in records if r.get("event") == "request"]
+    ok = [r for r in sent if r.get("status") == 200]
+    return {"requests": len(sent), "ok": len(ok),
+            "status_429": sum(1 for r in sent if r.get("status") == 429),
+            "median_seconds": round(statistics.median(r["seconds"] for r in sent), 2) if sent else None,
+            "throttled": len(ok) < len(sent)}
 
 
 def main(argv=None) -> int:
@@ -66,6 +96,12 @@ def main(argv=None) -> int:
         files = ", ".join(f"{f['bytes'] / 1e6:.1f} MB trong {f['seconds']:.1f}s" for f in result["files"])
         print(f"Băng thông arXiv {link['bandwidth_bps'] / 1e6:.2f} MB/s ({files}).")
         print(f"Dự đoán một Range (5.000 ID, cỡ Range Bảo): {result['range_hours_predicted']} giờ.")
+        api = result["api"]
+        print(f"API Discovery: {api['ok']}/{api['requests']} lần 200, {api['status_429']} lần 429, "
+              f"trung vị {api['median_seconds']} s.")
+        if api["throttled"]:
+            print("CHÚ Ý: arXiv đang giới hạn API Discovery (429/5xx/timeout); crawl lúc này sẽ chậm hơn "
+                  "dự đoán nhiều. Chờ 10–15 phút rồi đo lại.")
     else:
         link = None
         if args.speedtest:
@@ -80,7 +116,7 @@ def main(argv=None) -> int:
         args.out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     if args.command == "check":
         return {"ĐẠT": 0, "KHÔNG ĐẠT": 1}.get(result["verdict"], 2)
-    return 0
+    return 3 if result["api"]["throttled"] else 0
 
 
 if __name__ == "__main__":
