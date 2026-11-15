@@ -27,7 +27,7 @@ from urllib.parse import urlencode
 
 from src.common.config import get_settings
 from src.crawl.http_client import HttpClient
-from src.crawl.runtime_model import (BAO_RANGE, GAP_SECONDS, Link, check_run, describe,
+from src.crawl.runtime_model import (BAO_RANGE, BAO_RANGE_SNAPSHOT, GAP_SECONDS, Link, check_run, describe,
                                      link_from_requests, load_sample_sizes, predict_seconds,
                                      read_jsonl)
 
@@ -49,9 +49,12 @@ def speedtest(versions=SPEEDTEST_VERSIONS, *, client: HttpClient | None = None) 
     link = link_from_requests(records)
     if link is None:
         raise RuntimeError("Không đo được: không có file nào tải xong")
-    hours = predict_seconds(load_sample_sizes(), link, BAO_RANGE) / 3600
+    sizes = load_sample_sizes()
+    hours = predict_seconds(sizes, link, BAO_RANGE_SNAPSHOT) / 3600
+    hours_api = predict_seconds(sizes, link, BAO_RANGE) / 3600
     files = [{"bytes": r["bytes"], "seconds": r["seconds"]} for r in records if r.get("event") == "request"]
     return {"link": asdict(link), "files": files, "range_hours_predicted": round(hours, 1),
+            "range_hours_predicted_api_discovery": round(hours_api, 1),
             "api": probe_api(client, [v.split("v")[0] for v in versions])}
 
 
@@ -95,7 +98,8 @@ def main(argv=None) -> int:
         link = result["link"]
         files = ", ".join(f"{f['bytes'] / 1e6:.1f} MB trong {f['seconds']:.1f}s" for f in result["files"])
         print(f"Băng thông arXiv {link['bandwidth_bps'] / 1e6:.2f} MB/s ({files}).")
-        print(f"Dự đoán một Range (5.000 ID, cỡ Range Bảo): {result['range_hours_predicted']} giờ.")
+        print(f"Dự đoán một Range (5.000 ID, cỡ Range Bảo): {result['range_hours_predicted']} giờ với snapshot "
+              f"metadata, {result['range_hours_predicted_api_discovery']} giờ nếu Discovery qua API.")
         api = result["api"]
         print(f"API Discovery: {api['ok']}/{api['requests']} lần 200, {api['status_429']} lần 429, "
               f"trung vị {api['median_seconds']} s.")

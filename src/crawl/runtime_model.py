@@ -50,6 +50,8 @@ class RangeShape:
 # Range Bảo (2508.02872–2508.07871), đếm trên bản crawl Mac: 7.811 Version,
 # 873 lần tra ngày Version, 100 lô Discovery 50 ID.
 BAO_RANGE = RangeShape(5000, 7811, 873 + 100)
+# Discovery và ngày Version từ snapshot metadata (src/crawl/snapshot.py): chỉ còn /src/.
+BAO_RANGE_SNAPSHOT = RangeShape(5000, 7811, 0)
 
 
 @dataclass(frozen=True)
