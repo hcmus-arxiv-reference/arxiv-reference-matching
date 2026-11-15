@@ -209,8 +209,7 @@ cho báo cáo.
    hàm `validate_A/B/B'/C/D()`. Mở PR sớm để ba bạn review. Đây là việc chặn cả nhóm.
 2. Tạo bộ mẫu phát triển: plan 100 Publication lấy ngẫu nhiên có seed từ Range Bảo, kèm lệnh
    tải từ HF (`download_dir` trong `src/common/hf_io.py`).
-   Công cụ và lệnh: [`m2-sample.md`](m2-sample.md). **Task 12/11 chưa hoàn chỉnh:** hiện
-   chỉ có plan mock 100 bài; plan và lượt tải HF thật chưa được xác minh.
+   Công cụ và lệnh: [`m2-sample.md`](m2-sample.md), plan thật: [`configs/m2-sample-100.json`](../configs/m2-sample-100.json).
 3. Pipeline cho một Publication, **đúng thứ tự**:
    1. đổi `\cite{k}` theo `key_map`;
    2. `normalize` từng node;
