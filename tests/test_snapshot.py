@@ -2,6 +2,7 @@
 import gzip
 import json
 from unittest.mock import Mock
+from urllib.parse import parse_qs, urlsplit
 import zipfile
 
 import pytest
@@ -9,10 +10,37 @@ import pytest
 from scripts import extract_snapshot as extract_cli
 from src.common.corpus import Publication
 from src.common.schema import read_table
+from src.crawl.discovery import BatchedDiscovery
+from src.crawl.http_client import HttpClient, HttpResponse
+from src.crawl.pipeline import CrawlPipeline
+from src.crawl.source import ArxivSourceDownloader
 from src.crawl.runner import run_range
 from src.crawl.snapshot import (SnapshotDiscovery, detex, extract_snapshot, iter_records,
                                 load_snapshot, parse_record, tex_to_unicode)
-from tests.test_lieu_crawler import make_pipeline
+
+
+def make_pipeline(tmp_path):
+    """Engine on fake HTTP: the API answers any id_list with one-Version entries.
+
+    Kept here, not imported from another test module: on Colab a site package
+    named ``tests`` shadows this directory (``from tests.x import`` fails).
+    """
+    calls = []
+
+    def transport(request, _):
+        calls.append(request.full_url)
+        if "/api/query?" in request.full_url:
+            ids = parse_qs(urlsplit(request.full_url).query)["id_list"][0].split(",")
+            entries = "".join(f"<entry><id>http://arxiv.org/abs/{i}v1</id><title>T</title>"
+                              f"<published>2025-08-04T00:00:00Z</published></entry>" for i in ids)
+            return HttpResponse(200, {}, f'<feed xmlns="http://www.w3.org/2005/Atom">{entries}</feed>'.encode())
+        return HttpResponse(200, {}, b"\\documentclass{article}")
+    client = HttpClient("offline", transport=transport, sleeper=lambda _: None, max_retries=0)
+    refs = Mock()
+    refs.references.return_value = []
+    pipeline = CrawlPipeline(BatchedDiscovery(client), ArxivSourceDownloader(client, tmp_path / "raw"),
+                             tmp_path, refs)
+    return pipeline, calls, refs
 
 
 def record(identifier, versions=2, **extra):
