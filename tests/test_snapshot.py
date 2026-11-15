@@ -11,7 +11,7 @@ from src.common.corpus import Publication
 from src.common.schema import read_table
 from src.crawl.runner import run_range
 from src.crawl.snapshot import (SnapshotDiscovery, detex, extract_snapshot, iter_records,
-                                load_snapshot, parse_record)
+                                load_snapshot, parse_record, tex_to_unicode)
 from tests.test_lieu_crawler import make_pipeline
 
 
@@ -108,3 +108,26 @@ def test_prefetch_only_forwards_missing_ids():
     assert discovery.batch_size == 50
     discovery.prefetch(["2508.02872"])
     assert fallback.prefetch.call_count == 1
+
+
+# Pairs seen on Range Bảo (15/11): snapshot TeX -> what the arXiv API returned.
+@pytest.mark.parametrize("tex, api", [
+    (r"Model for $\alpha$-Decay Energy", "Model for $α$-Decay Energy"),
+    (r"discrete Fr\'echet distance", "discrete Fréchet distance"),
+    (r"$D^+\to \pi^0\pi^+\eta $", r"$D^+\to π^0π^+η$"),
+    (r"Sub- {\mu} W Battery-Less", "Sub- μ W Battery-Less"),
+    (r"$P_{\Psi s}^{\Lambda}(4459)$", "$P_{Ψs}^Λ(4459)$"),
+    (r"non supervis{\'e}es", "non supervis{é}es"),
+    (r"Spectral Tur\'{a}n problem for $\mathcal{K}_{3,3}$", r"Spectral Turán problem for $\mathcal{K}_{3,3}$"),
+    (r"Generalized Erd\H{o}s-Straus", "Generalized Erdős-Straus"),
+    (r"a function involving $\varphi$", r"a function involving $\varphi$"),
+    (r"$(k,\ell)$-median", r"$(k,\ell)$-median"),
+])
+def test_tex_to_unicode_matches_the_api(tex, api):
+    assert tex_to_unicode(tex) == api
+
+
+def test_parse_record_converts_title_and_venue():
+    pub = parse_record(record("2508.03155", title=r"Model for $\alpha$-Decay",
+                              **{"journal-ref": r"Ann. Henri Poincar\'e (2026)"}))
+    assert pub.title == "Model for $α$-Decay" and pub.venue == "Ann. Henri Poincaré (2026)"

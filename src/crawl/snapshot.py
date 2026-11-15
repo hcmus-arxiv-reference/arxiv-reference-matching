@@ -60,6 +60,38 @@ def detex(text: str) -> str:
     return unicodedata.normalize("NFC", " ".join(text.split()))
 
 
+_GREEK = {name: chr(code) for name, code in (
+    ("alpha", 0x3B1), ("beta", 0x3B2), ("gamma", 0x3B3), ("delta", 0x3B4), ("epsilon", 0x3B5),
+    ("zeta", 0x3B6), ("eta", 0x3B7), ("theta", 0x3B8), ("iota", 0x3B9), ("kappa", 0x3BA),
+    ("lambda", 0x3BB), ("mu", 0x3BC), ("nu", 0x3BD), ("xi", 0x3BE), ("pi", 0x3C0), ("rho", 0x3C1),
+    ("sigma", 0x3C3), ("tau", 0x3C4), ("upsilon", 0x3C5), ("phi", 0x3C6), ("chi", 0x3C7),
+    ("psi", 0x3C8), ("omega", 0x3C9), ("Gamma", 0x393), ("Delta", 0x394), ("Theta", 0x398),
+    ("Lambda", 0x39B), ("Xi", 0x39E), ("Pi", 0x3A0), ("Sigma", 0x3A3), ("Upsilon", 0x3A5),
+    ("Phi", 0x3A6), ("Psi", 0x3A8), ("Omega", 0x3A9))}   # the API keeps \\varphi etc. as TeX
+_GREEK_NAMES = "|".join(sorted(_GREEK, key=len, reverse=True))
+# "{\\mu}" -> "μ" (the braces go); "\\mu x" -> "μx" (one following space goes), as the API shows.
+_GREEK_RE = re.compile(r"\{\\(%s)\}|\\(%s)(?![a-zA-Z]) ?" % (_GREEK_NAMES, _GREEK_NAMES))
+
+
+def tex_to_unicode(text: str | None) -> str | None:
+    """Accents and Greek letters to Unicode, other TeX (math, braces) kept, like the arXiv API.
+
+    The API shows ``$\\alpha$-Decay`` as ``$α$-Decay`` and ``Fr\\'echet`` as ``Fréchet``;
+    the snapshot keeps the TeX. Compared on Range Bảo, 15/11/2026.
+    """
+    if text is None:
+        return None
+    def accent(match: re.Match) -> str:
+        base = match[2] or match[3]
+        if base.startswith("\\"):
+            base = _LETTERS.get(base[1:], base[1:])
+        return base + _ACCENTS[match[1]]
+    text = _ACCENT_RE.sub(accent, text)
+    text = _GREEK_RE.sub(lambda m: _GREEK[m[1] or m[2]], text)
+    text = _LETTER_RE.sub(lambda m: _LETTERS[m[1]], text)
+    return unicodedata.normalize("NFC", " ".join(text.split()))
+
+
 def _iso(rfc2822: str) -> str:
     return parsedate_to_datetime(rfc2822).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -85,8 +117,8 @@ def parse_record(record: dict) -> Publication:
         name = detex(" ".join(p for p in (first, last, suffix) if p))
         if name:
             authors.append(name)
-    publication = Publication(arxiv_id, _clean(record.get("title")), authors, dates[0], dates[1:],
-                              _clean(record.get("journal-ref")), len(dates))
+    publication = Publication(arxiv_id, tex_to_unicode(_clean(record.get("title"))), authors, dates[0],
+                              dates[1:], tex_to_unicode(_clean(record.get("journal-ref"))), len(dates))
     validate_publication(publication, arxiv_id)
     return publication
 

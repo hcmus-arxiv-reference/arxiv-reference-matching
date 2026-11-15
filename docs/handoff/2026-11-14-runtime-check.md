@@ -97,6 +97,17 @@ Discovery và ngày từng Version lấy từ snapshot Kaggle `Cornell-Universit
 
 `latest_update_date` của snapshot là mốc chốt độ phủ Version, ghi vào báo cáo.
 
+**Kết quả 15/11** (snapshot Kaggle ngày 15/11, `latest_update_date` 2026-11-13, sha256 `d30041a8…`):
+trích đủ 25.000/25.000 ID trong 14 giây, file 2,7 MB. So với 5.000 metadata crawl qua API trên Mac:
+
+| Trường | Khác | Nguyên nhân |
+|---|---|---|
+| Ngày nộp v1 | 0 | |
+| Số Version, ngày sửa | 33 | Bài sửa sau lần crawl Mac (snapshot mới hơn) |
+| Tên bài | 13 | 10 do Version mới; 3 chi tiết TeX nhỏ (sau khi đổi dấu và chữ Hy Lạp sang Unicode như API; trước đó 120) |
+| `venue` | 13 | 12 bài mới có `journal-ref`; 1 bài đổi `journal-ref` |
+| Tác giả | 14 | Snapshot giữ hậu tố "Jr.", "III" (API cắt hoặc để "Ryan,"); còn lại do Version mới |
+
 ## 4. Chưa làm, chưa kiểm
 
 - Chưa push, chưa PR, chưa review. Chưa đặt tag. `REF` mặc định trong notebook vẫn `m1-bench-v2`.
