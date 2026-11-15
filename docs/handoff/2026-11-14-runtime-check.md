@@ -81,6 +81,22 @@ Cần nhánh có trên GitHub (`git push -u origin feat/predictable-runtime`).
   phần wall time chờ backoff của arXiv.
 - Notebook: tách ô Gắn Drive / hàm lưu / thư mục lượt, định nghĩa / chạy crawl, thống kê / validator.
 
+## 3c. Kế hoạch 15/11: Discovery từ snapshot metadata arXiv
+
+Thầy (15/11) chỉ quy định đầu vào/đầu ra, không giới hạn phương pháp; Bảo chốt ưu tiên thời gian.
+Discovery và ngày từng Version lấy từ snapshot Kaggle `Cornell-University/arxiv` thay cho
+`/api/query` (khoảng 973 request mỗi Range, nguồn của 429 ở lượt thử 15/11).
+
+1. Bảo tải `archive.zip` từ Kaggle (khoảng 1,5 GB) về `~/Downloads`.
+2. `python -m scripts.extract_snapshot --snapshot ~/Downloads/archive.zip --member all --out <file>.json.gz`
+   (25.000 ID của 5 Range, vài MB; header có sha256 snapshot và `latest_update_date`).
+3. So extract với 5.000 metadata đã crawl qua API của Range Bảo (title, authors, ngày, số Version).
+4. Upload extract lên HF dataset (đề xuất `inputs/arxiv-snapshot.json.gz`, tham số
+   `METADATA_SNAPSHOT` của notebook) — **cần Bảo duyệt tên đường dẫn**.
+5. Chạy thử Colab lại; dự đoán khoảng 6,7 giờ/Range (chỉ còn `/src/`).
+
+`latest_update_date` của snapshot là mốc chốt độ phủ Version, ghi vào báo cáo.
+
 ## 4. Chưa làm, chưa kiểm
 
 - Chưa push, chưa PR, chưa review. Chưa đặt tag. `REF` mặc định trong notebook vẫn `m1-bench-v2`.
