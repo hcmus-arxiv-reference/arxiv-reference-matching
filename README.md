@@ -28,14 +28,14 @@ Báo cáo (Jupyter Book):
     Publication hoàn chỉnh; 59 Publication còn thiếu, phần lớn do arXiv trả HTTP 404
     ([lượt thử](docs/m1-standalone-trial.md)).
   - Benchmark chính thức: mỗi thành viên chạy notebook Colab trên Range của mình ở tag
-    `m1-bench-v2`, hạn 17/11/2026. Kết quả được chép vào repo báo cáo.
+    `m1-bench-v3`, hạn 17/11/2026. Kết quả được chép vào repo báo cáo.
 - **M2 – Parsing:** mới có lớp gom source của một Version
   ([mô tả](docs/milestone2-source.md)) và kiểu cột M2 trong `src/common/schema.py`.
   Chưa có parser cây phân cấp hay BibTeX. Phân công và interface:
   [m2-cong-viec](docs/m2-cong-viec.md), [m2-interfaces](docs/m2-interfaces.md).
 - **M3 – Matching:** chưa bắt đầu.
-- Tag đã chốt: `m1-crawl-v1` (Engine M1), `m1-bench-v2` (code benchmark Colab;
-  `m1-bench-v1` đã thay thế).
+- Tag đã chốt: `m1-crawl-v1` (Engine M1), `m1-bench-v3` (code benchmark Colab;
+  `m1-bench-v1`, `m1-bench-v2` đã thay thế).
 
 ## Cài đặt và kiểm thử
 

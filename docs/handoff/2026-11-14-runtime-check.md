@@ -134,8 +134,8 @@ khi chạy hết Range.
 
 ## 4. Chưa làm, chưa kiểm
 
-- Nhánh đã push tới `65f5b20`; chưa PR, chưa review, chưa merge. Chưa đặt tag `m1-bench-v3`.
-  `REF` mặc định trong notebook vẫn `m1-bench-v2`.
+- Tag `m1-bench-v3` (Bảo duyệt 15/11) trên nhánh này; `REF` mặc định của notebook là tag đó.
+  Chưa PR, chưa review, chưa merge vào `main`: link notebook `blob/main/` vẫn là bản cũ.
 - Chưa chạy hết một Range trên Colab; lượt thử chỉ 2 đoạn (978/5.000 bài).
 - Lô S2 bị 429 quá 30 phút thì các bài trong lô ghi lỗi 429 và được gom lại ở lượt sau
   (`--max-passes 3 --retry-delay 600` trong notebook).
