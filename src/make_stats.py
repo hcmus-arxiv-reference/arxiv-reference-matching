@@ -43,6 +43,7 @@ CSV_COLUMNS = [
     "id", "status", "n_versions", "versions_with_tex", "versions_non_tex",
     "versions_unavailable", "bytes_downloaded", "bytes_before", "bytes_after",
     "n_refs", "n_refs_with_arxiv_id", "n_references", "seconds", "discovery_seconds",
+    "s2_status",
 ]
 SOURCE_OK = {"success", "non_tex"}
 
@@ -137,8 +138,14 @@ def publication_row(data_dir, records, arxiv_id):
     references = records.get((arxiv_id, None, "references"))
     ref_status = references.get("status") if references else "not_attempted"
     statuses.append(ref_status)
-    if ref_status == "success":
-        payload = _read_json(data_dir / "references" / f"{key(arxiv_id)}.json")
+    payload = (_read_json(data_dir / "references" / f"{key(arxiv_id)}.json")
+               if ref_status in ("success", "unavailable") else None)
+    s2_not_found = ref_status == "unavailable" and payload is not None and payload.get("s2_status") == "not_found"
+    if s2_not_found:
+        # S2 404: the Publication is done, but there is no S2 citation metadata to average.
+        row["s2_status"] = "not_found"
+    elif ref_status == "success":
+        row["s2_status"] = "found"
         if payload is not None:
             citations = CitationList.from_raw(arxiv_id, payload["rows"])
             row["n_refs"] = citations.total
@@ -146,9 +153,9 @@ def publication_row(data_dir, records, arxiv_id):
             row["n_refs_with_arxiv_id"] = citations.with_arxiv_id
             row["n_references"] = len(citations.references)  # rows of the references table
     row.update(n_versions=versions, versions_with_tex=tex, versions_non_tex=non_tex,
-               versions_unavailable=statuses.count("unavailable"), bytes_after=size,
+               versions_unavailable=statuses[:-1].count("unavailable"), bytes_after=size,
                bytes_downloaded=downloaded, bytes_before=before)
-    if all(s in SOURCE_OK for s in statuses[:-1]) and ref_status == "success":
+    if all(s in SOURCE_OK for s in statuses[:-1]) and (ref_status == "success" or s2_not_found):
         row["status"] = "done"
     elif "error" in statuses:
         row["status"] = "error"
@@ -221,6 +228,7 @@ def summarize(rows, requested=None):
         "avg_refs_with_arxiv_id_per_paper": avg([r["n_refs_with_arxiv_id"] for r in with_refs]),
         "avg_references_per_paper": avg([r.get("n_references") for r in with_refs]),
         "papers_with_ref_metadata": len(with_refs),
+        "papers_s2_not_found": sum(r.get("s2_status") == "not_found" for r in rows),
         "ref_metadata_rate": ratio(len(with_refs), len(discovered)),
         # Timing from manifests/timings.jsonl, over every visited Publication (any status).
         "papers_timed": len(timed),

@@ -54,7 +54,7 @@ Không có lần nộp dữ liệu trung gian **[Đề]**; H1 và H2 là chuyể
 |---|---|---|
 | Máy crawl | `data/raw/<key>/v<n>/` | `.tex`/`.bib` giữ đường dẫn tương đối gốc, `source.json` (receipt) |
 | Máy crawl | `data/metadata/<key>.json` | metadata Publication (`format: 1`) |
-| Máy crawl | `data/references/<key>.json` | dòng S2 **thô**, gồm cả reference không có arXiv ID **[Đề]** |
+| Máy crawl | `data/references/<key>.json` | dòng S2 **thô**, gồm cả reference không có arXiv ID **[Đề]**; `s2_status: "not_found"` khi S2 trả 404 (mục 3.3) |
 | Máy crawl | `data/manifests/crawl.jsonl` | Manifest, chỉ để resume |
 | HF (private) | `raw/<member>/<key>/v<n>/` | `.tex`/`.bib`, `source.json`, `metadata.json`, `references.json` (hai file sau lặp lại ở mỗi Version) |
 | HF (private) | `tables/<member>/{papers,references}.parquet` | bảng Crawling của một Range |
@@ -89,6 +89,22 @@ Publication **hoàn chỉnh** khi:
    dòng `papers` qua `validate()`;
 2. mọi Version `v1..v<versions>` đều là Version đã xác minh;
 3. file references hợp lệ: `format: 1`, `arxiv_id` khớp, ánh xạ sang dòng `references` không lỗi.
+   File hợp lệ có một trong hai dạng:
+   - **S2 có bài** (`s2_status` vắng hoặc `"found"`): `rows` là Danh sách trích dẫn S2, có thể rỗng.
+     Manifest ghi `references` = `success`.
+   - **S2 không có bài** (`s2_status: "not_found"`): Semantic Scholar trả HTTP 404 cho
+     `arXiv:<id>`, `rows` bắt buộc rỗng. Manifest ghi `references` = `unavailable`,
+     `http_status: 404`, cùng checksum với file.
+
+S2 404 là **lỗi thật phía Semantic Scholar**, không phải lỗi crawl: hỏi lại vẫn 404, nên Engine
+ghi một lần rồi không hỏi lại (tương tự Version mà arXiv trả 404 được ghi `unavailable`). Phân biệt
+với "S2 có bài nhưng 0 trích dẫn" vì hai trường hợp khác nhau về nguồn gốc. Publication S2 không
+có bài vẫn hoàn chỉnh: có dòng `papers`, không có dòng `references`. Báo cáo đếm riêng
+(`publications_s2_not_found` của validator, `s2_not_found` của `report_m1`, cột `s2_status` của
+`make_stats`) và không tính vào trung bình số trích dẫn mỗi bài. Lỗi S2 khác (429, 5xx, mạng)
+vẫn là `error` và được thử lại ở lượt sau. Ví dụ thực tế: `2508.03220` (Range Bảo, chỉ có PDF),
+S2 trả `Paper with id arXiv:2508.03220 not found`, kiểm lại trực tiếp ngày 15/11/2026
+**[Đã chốt C10, 2026-11-15]**.
 
 Chỉ Publication hoàn chỉnh mới được Export ghi vào `papers`/`references` và được upload.
 Ngoại lệ: chế độ `references=False` của `run_crawl` bỏ điều kiện 3 và không xuất bảng
@@ -202,3 +218,6 @@ của từng bài arXiv **[Đã chốt C7, 2026-11-05]**.
 - Đổi cột, kiểu, khóa hoặc enum: sửa `src/common/schema.py` và mục tương ứng ở đây trong
   cùng một commit, sau khi nhóm trưởng duyệt (`AGENTS.md` mục 4.4).
 - Khi một mục **[Mở]** được chốt: chuyển sang **[Đã chốt]**, ghi ngày, xóa dòng ở mục 6.
+- 2026-11-15 (C10, Bảo duyệt): thêm `s2_status: "not_found"` cho file references và status
+  `unavailable` của task `references` khi S2 trả 404 (mục 3.3). File cũ không có trường này
+  vẫn hợp lệ và giữ nguyên checksum.

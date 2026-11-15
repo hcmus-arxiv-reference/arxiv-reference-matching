@@ -11,6 +11,10 @@
   nằm ở `src/common/references.py` (`CitationList`): "có arXiv ID" luôn đếm dòng thô,
   **trước** khử trùng lặp; số Reference là số dòng bảng `references`.
   _Tránh_: gọi dòng không có arXiv ID là Reference.
+- **S2 không có bài:** Semantic Scholar trả HTTP 404 cho một Publication. Đây là lỗi thật
+  phía S2, ghi bằng file references `s2_status: "not_found"` (rỗng) và task `references` =
+  `unavailable`; Publication vẫn hoàn chỉnh. Xem `docs/data-contract.md` mục 3.3.
+  _Tránh_: gọi là lỗi crawl, hay gộp với "S2 có bài nhưng 0 trích dẫn".
 - **BibTeX entry:** mục trích dẫn sau chuẩn hóa và khử trùng lặp.
 - **Element:** nút của cây phân cấp tài liệu.
 - **Version đã xác minh:** thư mục Version có receipt `source.json` hợp lệ, danh sách và

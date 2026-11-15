@@ -154,11 +154,19 @@ def test_throttled_batch_is_not_repeated_one_by_one_and_is_batched_again_next_pa
     assert engine.status(A).complete and engine.status(B).complete
 
 
-def test_publication_unknown_to_s2_is_recorded_as_404(tmp_path):
+def test_publication_unknown_to_s2_is_recorded_as_s2_not_found(tmp_path):
+    """S2 404 is a real S2-side gap: recorded once, never asked again (data-contract 3.3)."""
     engine, calls = make(tmp_path, lambda ids: [None for _ in ids])
-    assert engine.crawl_ids([A])['errors'] == 1
+    stats = engine.crawl_ids([A])
+    assert stats['errors'] == 0 and stats['references_s2_not_found'] == 1
     assert calls == [('POST', [A])]
-    assert (reference_task(engine, A).status, reference_task(engine, A).http_status) == ('error', 404)
+    assert (reference_task(engine, A).status, reference_task(engine, A).http_status) == ('unavailable', 404)
+    payload = json.loads((tmp_path / 'references' / '2508-02872.json').read_text())
+    assert payload == {'format': 1, 'arxiv_id': A, 'rows': [], 's2_status': 'not_found'}
+    state = engine.status(A)
+    assert state.complete and not state.references.s2_found
+    engine.crawl_ids([A])                    # next pass: the verified cache is reused
+    assert calls == [('POST', [A])]
 
 
 def test_possibly_truncated_list_is_paginated(tmp_path, monkeypatch):

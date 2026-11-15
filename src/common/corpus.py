@@ -17,7 +17,7 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from src.common.references import CitationList, reference_rows  # reference_rows: compatibility re-export.
+from src.common.references import S2_FOUND, S2_NOT_FOUND, CitationList, reference_rows  # reference_rows: compatibility re-export.
 from src.common.schema import from_records, publication_key, require_id
 
 SOURCE_OK = frozenset({"success", "non_tex"})
@@ -196,6 +196,14 @@ class FileCorpus:
         payload = json.loads(body)
         if payload["format"] != 1 or payload["arxiv_id"] != arxiv_id:
             raise ValueError("Wrong references cache")
+        # Absent means "found" (files written before 15/11/2026 have no s2_status).
+        s2_status = payload.get("s2_status", S2_FOUND)
+        if s2_status == S2_NOT_FOUND:
+            if payload["rows"] != []:
+                raise ValueError("S2 not_found cache must have no rows")
+            return CitationList.not_found(arxiv_id)
+        if s2_status != S2_FOUND:
+            raise ValueError(f"Unknown s2_status {s2_status!r}")
         return CitationList.from_raw(arxiv_id, payload["rows"])
 
     def publication(self, arxiv_id: str) -> PublicationState:

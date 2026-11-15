@@ -20,7 +20,7 @@ from .discovery import ArxivDiscovery
 from .corpus import CorpusReader
 from .export import PublicationBundle, export_publications
 from .manifest import Manifest, TaskRecord
-from src.common.references import CitationList
+from src.common.references import S2_NOT_FOUND, CitationList
 from .http_client import RETRY_STATUSES, HttpStatusError
 from .semantic_scholar import BATCH_ROW_LIMIT, SemanticScholarClient
 from .source import ArxivSourceDownloader
@@ -419,7 +419,7 @@ class CrawlPipeline:
 
     def _crawl(self, ids, *, refresh, upcoming=()):
         stats = {"success": 0, "non_tex": 0, "unavailable": 0, "errors": 0, "skipped": 0,
-                 "references_success": 0}
+                 "references_success": 0, "references_s2_not_found": 0}
         batch_started = self.clock()
         if refresh and hasattr(self.discovery, "prefetch"):
             self.discovery.prefetch(ids)
@@ -503,6 +503,19 @@ class CrawlPipeline:
                 self._record(arxiv_id, None, "references", "success", local_path=str(path),
                              checksum=hashlib.sha256(path.read_bytes()).hexdigest())
             stats["references_success"] += 1
+        except HttpStatusError as error:
+            if error.status != 404:
+                self._failure(arxiv_id, None, "references", error)
+                stats["errors"] += 1
+                return
+            # S2 has no record of this Publication: a real S2-side gap, not a crawl
+            # failure. Asking again gives the same 404, so record it and move on
+            # (docs/data-contract.md 3.3; seen on 2508.03220, 15/11/2026).
+            path = self._references_path(arxiv_id)
+            write_json(path, {"format": 1, "arxiv_id": arxiv_id, "rows": [], "s2_status": S2_NOT_FOUND})
+            self._record(arxiv_id, None, "references", "unavailable", local_path=str(path),
+                         http_status=404, checksum=hashlib.sha256(path.read_bytes()).hexdigest())
+            stats["references_s2_not_found"] = stats.get("references_s2_not_found", 0) + 1
         except Exception as error:
             self._failure(arxiv_id, None, "references", error)
             stats["errors"] += 1
