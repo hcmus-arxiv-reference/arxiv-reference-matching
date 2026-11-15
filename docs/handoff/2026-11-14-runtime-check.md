@@ -108,9 +108,34 @@ trích đủ 25.000/25.000 ID trong 14 giây, file 2,7 MB. So với 5.000 metada
 | `venue` | 13 | 12 bài mới có `journal-ref`; 1 bài đổi `journal-ref` |
 | Tác giả | 14 | Snapshot giữ hậu tố "Jr.", "III" (API cắt hoặc để "Ryan,"); còn lại do Version mới |
 
+## 3d. Lượt thử Colab 15/11 lần 2 (Bảo, `65f5b20`, snapshot): ĐẠT
+
+RUN_ID `2026-11-15T064334Z_5f66486`, 2 đoạn (5.468 s), Colab 2 CPU, 12,7 GiB RAM, có S2 key.
+Snapshot phủ 5.000/5.000 ID của Range. pytest exit 0 (sau khi sửa tại chỗ lỗi `tests` bị che, đã có ở `65f5b20`).
+
+| Chỉ số | Giá trị |
+|---|---|
+| Publication đã thăm | 978 (957 hoàn chỉnh, 12 chờ lượt thử lại) |
+| Tốc độ đo | 643,9 bài/giờ, tức 7,8 giờ/Range |
+| Mô hình dự đoán | 736,5 bài/giờ, tức 6,8 giờ/Range; lệch −12,6% (ngưỡng 15%) |
+| Mô hình giải thích | 97% wall time |
+| arXiv | 1.542 request (1.519 file `/src/`), 2 lần 429, backoff 46 s (0,8%) |
+| API Discovery | 0 request (trước đó 55 request, 43 lần 429) |
+| Discovery | 11,9 s cho cả lượt |
+| S2 | 16 request lô, 5 lần 429, backoff 248 s; arXiv chờ S2 20 s (0,4%) |
+| Bài/giờ trung vị | 3,2 s/bài; chậm nhất 141,8 s |
+| RAM | đỉnh 345 MB |
+| Disk | 408 MB cho 978 bài (ước khoảng 2,1 GB/Range) |
+| Checkpoint | 115 MiB cho 978 bài (ước khoảng 0,6 GB/Range, Drive giữ 2 bản) |
+
+Validator báo `references_invalid` cho `2508.03220`: bài nằm trong 12 ID chờ lượt thử lại
+(`pending_ids`), crawl chưa xong nên file references chưa có. Không phải dữ liệu hỏng; kiểm lại
+khi chạy hết Range.
+
 ## 4. Chưa làm, chưa kiểm
 
-- Chưa push, chưa PR, chưa review. Chưa đặt tag. `REF` mặc định trong notebook vẫn `m1-bench-v2`.
-- Bản sửa Discovery và notebook đã tách chưa chạy trên Colab. Chưa chạy lại trên Mac sau `afd5974`.
+- Nhánh đã push tới `65f5b20`; chưa PR, chưa review, chưa merge. Chưa đặt tag `m1-bench-v3`.
+  `REF` mặc định trong notebook vẫn `m1-bench-v2`.
+- Chưa chạy hết một Range trên Colab; lượt thử chỉ 2 đoạn (978/5.000 bài).
 - Lô S2 bị 429 quá 30 phút thì các bài trong lô ghi lỗi 429 và được gom lại ở lượt sau
   (`--max-passes 3 --retry-delay 600` trong notebook).
