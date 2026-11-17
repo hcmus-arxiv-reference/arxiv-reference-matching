@@ -1,0 +1,93 @@
+{
+  "arxiv_id": "2508.02877",
+  "version": 1,
+  "root": {
+    "node": "Section",
+    "kind": "document",
+    "title_raw": "",
+    "starred": false,
+    "span": [
+      41,
+      130
+    ],
+    "children": [
+      {
+        "node": "Section",
+        "kind": "subsection",
+        "title_raw": "First",
+        "starred": false,
+        "span": [
+          41,
+          98
+        ],
+        "children": [
+          {
+            "node": "Block",
+            "type": "text",
+            "env": null,
+            "raw": "Body.\n",
+            "span": [
+              60,
+              66
+            ]
+          },
+          {
+            "node": "Section",
+            "kind": "paragraph",
+            "title_raw": "Detail",
+            "starred": false,
+            "span": [
+              66,
+              98
+            ],
+            "children": [
+              {
+                "node": "Block",
+                "type": "text",
+                "env": null,
+                "raw": "Detail body.\n",
+                "span": [
+                  85,
+                  98
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Section",
+        "kind": "subsection",
+        "title_raw": "Second",
+        "starred": true,
+        "span": [
+          98,
+          130
+        ],
+        "children": [
+          {
+            "node": "Block",
+            "type": "text",
+            "env": null,
+            "raw": "Last body.\n",
+            "span": [
+              119,
+              130
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "dropped": [
+    {
+      "reason": "preamble",
+      "span": [
+        0,
+        41
+      ]
+    }
+  ],
+  "issues": [],
+  "structure_version": "1"
+}

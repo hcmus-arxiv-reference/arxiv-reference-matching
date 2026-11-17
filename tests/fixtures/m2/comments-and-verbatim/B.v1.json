@@ -1,0 +1,69 @@
+{
+  "arxiv_id": "2508.02876",
+  "version": 1,
+  "root": {
+    "node": "Section",
+    "kind": "document",
+    "title_raw": "",
+    "starred": false,
+    "span": [
+      41,
+      163
+    ],
+    "children": [
+      {
+        "node": "Block",
+        "type": "text",
+        "env": null,
+        "raw": "                 \n\\verb|\\input{missing}|\n",
+        "span": [
+          41,
+          82
+        ]
+      },
+      {
+        "node": "Block",
+        "type": "env",
+        "env": "verbatim",
+        "raw": "\\begin{verbatim}\\section{Fake}\\input{missing}\\end{verbatim}",
+        "span": [
+          82,
+          141
+        ]
+      },
+      {
+        "node": "Section",
+        "kind": "section",
+        "title_raw": "Real",
+        "starred": false,
+        "span": [
+          142,
+          163
+        ],
+        "children": [
+          {
+            "node": "Block",
+            "type": "text",
+            "env": null,
+            "raw": "Body.\n",
+            "span": [
+              157,
+              163
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "dropped": [
+    {
+      "reason": "preamble",
+      "span": [
+        0,
+        41
+      ]
+    }
+  ],
+  "issues": [],
+  "structure_version": "1"
+}

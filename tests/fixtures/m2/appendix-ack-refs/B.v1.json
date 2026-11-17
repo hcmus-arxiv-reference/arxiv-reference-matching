@@ -1,0 +1,107 @@
+{
+  "arxiv_id": "2508.02878",
+  "version": 1,
+  "root": {
+    "node": "Section",
+    "kind": "document",
+    "title_raw": "",
+    "starred": false,
+    "span": [
+      41,
+      257
+    ],
+    "children": [
+      {
+        "node": "Section",
+        "kind": "section",
+        "title_raw": "Intro",
+        "starred": false,
+        "span": [
+          41,
+          74
+        ],
+        "children": [
+          {
+            "node": "Block",
+            "type": "text",
+            "env": null,
+            "raw": "Body \\cite{one}.\n",
+            "span": [
+              57,
+              74
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Section",
+        "kind": "section",
+        "title_raw": "Acknowledgements",
+        "starred": true,
+        "span": [
+          74,
+          110
+        ],
+        "children": [
+          {
+            "node": "Block",
+            "type": "text",
+            "env": null,
+            "raw": "Thanks.\n",
+            "span": [
+              102,
+              110
+            ]
+          }
+        ]
+      },
+      {
+        "node": "Section",
+        "kind": "section",
+        "title_raw": "Proof",
+        "starred": false,
+        "span": [
+          229,
+          257
+        ],
+        "children": [
+          {
+            "node": "Block",
+            "type": "text",
+            "env": null,
+            "raw": "Proof body.\n",
+            "span": [
+              245,
+              257
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "dropped": [
+    {
+      "reason": "preamble",
+      "span": [
+        0,
+        41
+      ]
+    },
+    {
+      "reason": "references",
+      "span": [
+        110,
+        219
+      ]
+    },
+    {
+      "reason": "appendix_marker",
+      "span": [
+        219,
+        229
+      ]
+    }
+  ],
+  "issues": [],
+  "structure_version": "1"
+}
