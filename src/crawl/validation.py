@@ -10,6 +10,7 @@ from src.common.config import ArxivRange, SegmentedRange
 from .manifest import TaskRecord
 from src.common.references import CitationList
 from .source import verified_source
+from src.common.corpus import SOURCE_OK
 from .storage import key
 
 
@@ -136,7 +137,7 @@ def validate_crawl(data_dir: str | Path, benchmark_path: str | Path) -> dict[str
         for version in range(1, count + 1):
             record = latest.get((arxiv_id, version, "source"))
             source = verified_source(root / "raw" / key(arxiv_id) / f"v{version}")
-            if (record is None or record.status not in {"success", "non_tex"} or source is None
+            if (record is None or record.status not in SOURCE_OK or source is None
                     or source.status != record.status or source.checksum != record.checksum):
                 complete_sources = False
                 continue

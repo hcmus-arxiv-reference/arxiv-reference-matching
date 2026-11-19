@@ -20,7 +20,10 @@ from typing import Any
 from src.common.references import S2_FOUND, S2_NOT_FOUND, CitationList, reference_rows  # reference_rows: compatibility re-export.
 from src.common.schema import from_records, publication_key, require_id
 
-SOURCE_OK = frozenset({"success", "non_tex"})
+# Statuses of a verified Version. "unavailable": arXiv answered 404/410 for /src/;
+# the Version is real and keeps an empty record like "non_tex" (C11, instructor Q23.2).
+SOURCE_OK = frozenset({"success", "non_tex", "unavailable"})
+SOURCE_EMPTY = frozenset({"non_tex", "unavailable"})
 
 
 @dataclass(frozen=True)
@@ -89,7 +92,11 @@ def verified_source(path: Path) -> SourceResult | None:
         bib = tuple(sorted(n for n in files if n.lower().endswith(".bib")))
         if (receipt["status"] == "success") != bool(tex):
             return None
-        return SourceResult(receipt["status"], path, receipt["checksum"], tex, bib, cached=True)
+        if receipt["status"] == "unavailable" and (files or receipt["checksum"] != ""):
+            return None
+        http_status = receipt.get("http_status", 200) if receipt["status"] == "unavailable" else 200
+        return SourceResult(receipt["status"], path, receipt["checksum"], tex, bib,
+                            http_status=http_status, cached=True)
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
@@ -121,6 +128,11 @@ class VersionState:
     def non_tex(self) -> bool:
         return self.verified and self.source is not None and self.source.status == "non_tex"
 
+    @property
+    def unavailable(self) -> bool:
+        """Verified Version that arXiv answers 404/410 for (empty record, C11)."""
+        return self.verified and self.source is not None and self.source.status == "unavailable"
+
 
 @dataclass(frozen=True)
 class PublicationState:
@@ -145,6 +157,10 @@ class PublicationState:
     @property
     def non_tex_versions(self) -> int:
         return sum(v.non_tex for v in self.versions)
+
+    @property
+    def unavailable_versions(self) -> int:
+        return sum(v.unavailable for v in self.versions)
 
     @property
     def sources_complete(self) -> bool:

@@ -136,30 +136,38 @@ class ArxivSourceDownloader:
             return cached
         response = self.client.get(f"https://export.arxiv.org/src/{arxiv_id}v{version}",
                                    resume=True, on_event=self._event_sink(arxiv_id, version))
-        if response.status in {404, 410}:
-            return SourceResult("unavailable", path, "", (), (), response.status)
-        if response.status != 200:
+        # 404/410: arXiv has no source for this Version (all 48 such Versions of Range
+        # Bảo are withdrawn). It is still a real Version, so it gets an empty receipt
+        # like a PDF-only one and is not asked again (C11, instructor Q23.2).
+        unavailable = response.status in {404, 410}
+        if not unavailable and response.status != 200:
             raise HttpStatusError(response.status, "arXiv source")
         content_type = next((v for k, v in response.headers.items() if k.lower() == "content-type"), "").lower()
-        if "text/html" in content_type or "application/json" in content_type:
+        if not unavailable and ("text/html" in content_type or "application/json" in content_type):
             raise ValueError("Source endpoint returned an error document")
-        checksum = hashlib.sha256(response.body).hexdigest()
+        checksum = "" if unavailable else hashlib.sha256(response.body).hexdigest()
         path.parent.mkdir(parents=True, exist_ok=True)
         if any(p.is_symlink() for p in (path, *path.parents)):
             raise ValueError("Symlink in source destination")
         temporary = Path(tempfile.mkdtemp(prefix=".source-", dir=path.parent))
         backup = path.with_name(f".{path.name}.previous")
         try:
-            tex, bib = extract_source(response.body, temporary)
-            status = "success" if tex else "non_tex"
-            write_json(temporary / "source.json", {
-                "format": 1, "arxiv_id": arxiv_id, "version": version,
-                "status": status, "checksum": checksum,
-                "files": {n: _digest(temporary / n) for n in tex + bib},
-                # Size evaluation (M1 report): network bytes vs. content before selection.
-                "downloaded_bytes": len(response.body),
-                "content_bytes": content_bytes(response.body),
-            })
+            if unavailable:
+                tex, bib, status = [], [], "unavailable"
+                write_json(temporary / "source.json", {
+                    "format": 1, "arxiv_id": arxiv_id, "version": version, "status": status,
+                    "http_status": response.status, "checksum": checksum, "files": {}})
+            else:
+                tex, bib = extract_source(response.body, temporary)
+                status = "success" if tex else "non_tex"
+                write_json(temporary / "source.json", {
+                    "format": 1, "arxiv_id": arxiv_id, "version": version,
+                    "status": status, "checksum": checksum,
+                    "files": {n: _digest(temporary / n) for n in tex + bib},
+                    # Size evaluation (M1 report): network bytes vs. content before selection.
+                    "downloaded_bytes": len(response.body),
+                    "content_bytes": content_bytes(response.body),
+                })
             if backup.exists():
                 # A prior process stopped after moving the old cache aside.
                 if not path.exists():
@@ -179,4 +187,4 @@ class ArxivSourceDownloader:
         finally:
             if temporary.exists():
                 shutil.rmtree(temporary)
-        return SourceResult(status, path, checksum, tuple(tex), tuple(bib))
+        return SourceResult(status, path, checksum, tuple(tex), tuple(bib), response.status)

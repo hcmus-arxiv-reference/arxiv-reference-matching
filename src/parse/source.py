@@ -288,6 +288,10 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
         if verified.status == "non_tex":
             result.status = "empty_non_tex"
             return result
+        if verified.status == "unavailable":
+            # arXiv 404/410 Version: an empty record, logged apart from PDF-only (C11).
+            result.status = "empty_unavailable"
+            return result
         receipt = (base / "source.json").read_bytes()
     paths = sorted(p for p in base.rglob("*") if p.is_file() and p.suffix.lower() == ".tex")
     texts: dict[str, str] = {}

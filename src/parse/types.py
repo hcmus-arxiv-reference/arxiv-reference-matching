@@ -39,7 +39,7 @@ BLOCK_TYPES: tuple[str, ...] = ("text", "env", "display_math")
 LEAF_KINDS: tuple[str, ...] = ("sentence", "formula", "figure")
 LIST_KINDS: tuple[str, ...] = ("itemize", "item")
 
-_SOURCE_STATUSES = {"ready", "needs_review", "error", "empty_non_tex"}
+_SOURCE_STATUSES = {"ready", "needs_review", "error", "empty_non_tex", "empty_unavailable"}
 _ISSUE_SEVERITIES = {"warning", "error"}
 _REFERENCES_TITLES = {
     "references",
@@ -435,15 +435,17 @@ def validate_A(bundle: SourceBundle, *, raise_on_error: bool = True) -> list[str
         if type(issue.line) is not int or issue.line < 1:
             errors.append(f"[A] issues[{idx}].line phải >= 1")
 
-    if bundle.status == "empty_non_tex":
+    if bundle.status in {"empty_non_tex", "empty_unavailable"}:
+        # Both are empty records: PDF-only Version, or arXiv 404/410 Version (C11).
+        status = bundle.status
         if bundle.text != "":
-            errors.append("[A] status='empty_non_tex' nhưng text khác rỗng")
+            errors.append(f"[A] status='{status}' nhưng text khác rỗng")
         if bundle.root is not None:
-            errors.append("[A] status='empty_non_tex' nhưng root không phải None")
+            errors.append(f"[A] status='{status}' nhưng root không phải None")
         if bundle.files:
-            errors.append("[A] status='empty_non_tex' nhưng files không rỗng")
+            errors.append(f"[A] status='{status}' nhưng files không rỗng")
         if bundle.spans:
-            errors.append("[A] status='empty_non_tex' nhưng spans không rỗng")
+            errors.append(f"[A] status='{status}' nhưng spans không rỗng")
     elif bundle.status == "error":
         if not any(isinstance(i, Issue) and i.severity == "error" for i in bundle.issues):
             errors.append("[A] status='error' nhưng không có Issue nào mang severity='error'")

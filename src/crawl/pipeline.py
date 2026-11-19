@@ -15,7 +15,7 @@ from typing import Iterator, Sequence
 
 from filelock import FileLock
 from src.common.config import ArxivRange
-from src.common.corpus import PublicationState
+from src.common.corpus import SOURCE_OK, PublicationState
 from .discovery import ArxivDiscovery
 from .corpus import CorpusReader
 from .export import PublicationBundle, export_publications
@@ -141,7 +141,7 @@ class CrawlPipeline:
             {"kind": record.kind, "version": record.version, "status": record.status,
              "http_status": record.http_status, "error_reason": record.error_reason}
             for record in self.manifest.records_for(arxiv_id)
-            if record.status not in {"success", "non_tex"}
+            if record.status not in SOURCE_OK
         ]
 
     def _metadata_path(self, arxiv_id: str) -> Path:

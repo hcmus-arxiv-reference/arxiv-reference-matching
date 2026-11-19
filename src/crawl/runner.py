@@ -15,7 +15,7 @@ import shutil
 import time
 from typing import Protocol, Sequence
 
-from src.common.corpus import PublicationState
+from src.common.corpus import SOURCE_OK, PublicationState
 from src.common.json_io import write_json
 
 
@@ -72,7 +72,7 @@ def publication_issues(manifest, identifier):
         {"kind": record.kind, "version": record.version, "status": record.status,
          "http_status": record.http_status, "error_reason": record.error_reason}
         for record in manifest.records_for(identifier)
-        if record.status not in {"success", "non_tex"}
+        if record.status not in SOURCE_OK
     ]
 
 

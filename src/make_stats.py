@@ -14,8 +14,10 @@ crawler đang ghi (dòng cuối chưa ghi xong bị bỏ qua). Không kiểm che
 đã xác minh checksum dùng `scripts.report_m1` hoặc `src.crawl.validation`.
 
 Trạng thái Publication:
-    done           metadata, mọi Version (success/non_tex) và references đều success
-    unavailable    có Version arXiv trả HTTP 404 (unavailable), không có lỗi khác
+    done           metadata, mọi Version (success/non_tex/unavailable có receipt rỗng) và
+                   references đều xong. Version arXiv trả 404 có receipt `unavailable` vẫn
+                   là Version thật, bản ghi rỗng (C11, thầy trả lời câu 23.2)
+    unavailable    có Version arXiv trả 404 nhưng chưa có receipt (dữ liệu crawl trước C11)
     error          có task lỗi (discovery, source hoặc references)
     incomplete     còn task chưa chạy
     not_attempted  chưa có bản ghi discovery
@@ -45,7 +47,7 @@ CSV_COLUMNS = [
     "n_refs", "n_refs_with_arxiv_id", "n_references", "seconds", "discovery_seconds",
     "s2_status",
 ]
-SOURCE_OK = {"success", "non_tex"}
+SOURCE_OK = {"success", "non_tex"}       # Version có nội dung tải về
 
 
 def load_last_per_id(log_path):
@@ -119,9 +121,14 @@ def publication_row(data_dir, records, arxiv_id):
     for version in range(1, versions + 1):
         rec = records.get((arxiv_id, version, "source"))
         status = rec.get("status") if rec else "not_attempted"
+        directory = data_dir / "raw" / key(arxiv_id) / f"v{version}"
+        if status == "unavailable":
+            # C11: counts as done only with its empty receipt; size fields do not apply.
+            receipt = _read_json(directory / "source.json") or {}
+            statuses.append("unavailable_ok" if receipt.get("status") == "unavailable" else status)
+            continue
         statuses.append(status)
         if status in SOURCE_OK:
-            directory = data_dir / "raw" / key(arxiv_id) / f"v{version}"
             receipt = _read_json(directory / "source.json") or {}
             if downloaded is not None and "downloaded_bytes" in receipt and "content_bytes" in receipt:
                 downloaded += receipt["downloaded_bytes"]
@@ -153,9 +160,10 @@ def publication_row(data_dir, records, arxiv_id):
             row["n_refs_with_arxiv_id"] = citations.with_arxiv_id
             row["n_references"] = len(citations.references)  # rows of the references table
     row.update(n_versions=versions, versions_with_tex=tex, versions_non_tex=non_tex,
-               versions_unavailable=statuses[:-1].count("unavailable"), bytes_after=size,
+               versions_unavailable=sum(s in ("unavailable", "unavailable_ok") for s in statuses[:-1]),
+               bytes_after=size,
                bytes_downloaded=downloaded, bytes_before=before)
-    if all(s in SOURCE_OK for s in statuses[:-1]) and (ref_status == "success" or s2_not_found):
+    if all(s in SOURCE_OK or s == "unavailable_ok" for s in statuses[:-1]) and (ref_status == "success" or s2_not_found):
         row["status"] = "done"
     elif "error" in statuses:
         row["status"] = "error"
