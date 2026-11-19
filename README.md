@@ -26,16 +26,17 @@ Báo cáo (Jupyter Book):
   đóng góp của Liễu (`langtucod0n`), nay là cách cài đặt mặc định.
   - Range của Bảo (`2508.02872`–`2508.07871`): snapshot 25/10 có 4.941/5.000
     Publication hoàn chỉnh; 59 Publication còn thiếu, phần lớn do arXiv trả HTTP 404
-    ([lượt thử](docs/m1-standalone-trial.md)).
+    ([lượt thử](docs/m1-standalone-trial.md)). Từ C11 (19/11) Version 404 có bản ghi rỗng:
+    chạy bù trên bản sao 59 bài đó cho 59/59 hoàn chỉnh.
   - Benchmark chính thức: mỗi thành viên chạy notebook Colab trên Range của mình ở tag
-    `m1-bench-v4`, hạn 17/11/2026. Kết quả được chép vào repo báo cáo.
+    `m1-bench-v5` (Range đã chạy với v4 chỉ cần chạy bù v5). Kết quả được chép vào repo báo cáo.
 - **M2 – Parsing:** mới có lớp gom source của một Version
   ([mô tả](docs/milestone2-source.md)) và kiểu cột M2 trong `src/common/schema.py`.
   Chưa có parser cây phân cấp hay BibTeX. Phân công và interface:
   [m2-cong-viec](docs/m2-cong-viec.md), [m2-interfaces](docs/m2-interfaces.md).
 - **M3 – Matching:** chưa bắt đầu.
-- Tag đã chốt: `m1-crawl-v1` (Engine M1), `m1-bench-v4` (code benchmark Colab;
-  `m1-bench-v1` đến `m1-bench-v3` đã thay thế).
+- Tag đã chốt: `m1-crawl-v1` (Engine M1), `m1-bench-v5` (code benchmark Colab;
+  `m1-bench-v1` đến `m1-bench-v4` đã thay thế).
 
 ## Cài đặt và kiểm thử
 
