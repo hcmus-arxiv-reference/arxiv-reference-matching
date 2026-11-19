@@ -11,7 +11,7 @@ from src.parse.types import (
     SECTION_DEPTH, BibSource, Block, Section, StructureTree, _is_references_heading,
 )
 
-STRUCTURE_VERSION = "2"
+STRUCTURE_VERSION = "3"
 
 
 def _clean(text, tokens):
@@ -75,6 +75,7 @@ def build_structure(bundle: SourceBundle, arxiv_id: str, version: int,
     cursor = start
     ref_start = ref_depth = None
     envs = []
+    bibliography_wrappers = set()
     ends = {}
     items = {}
     math = {}
@@ -92,6 +93,9 @@ def build_structure(bundle: SourceBundle, arxiv_id: str, version: int,
         if t.name == "begin":
             envs.append(t)
             if t.argument == "thebibliography":
+                # Keep the surrounding text, but descend through every wrapper
+                # so its Block cannot absorb the bibliography before we drop it.
+                bibliography_wrappers.update(env.start for env in envs[:-1])
                 bibliography = t
                 item_start = None
         elif t.name == "end" and envs and t.argument == envs[-1].argument:
@@ -170,7 +174,8 @@ def build_structure(bundle: SourceBundle, arxiv_id: str, version: int,
             depth = SECTION_DEPTH[t.name]
             close(depth, t.start)
             cursor = end + int(text.startswith("\n", end))
-            if _is_references_heading(title):
+            # Standard article/book classes use these macros as the whole title.
+            if _is_references_heading(title) or title.strip() in {r"\refname", r"\bibname"}:
                 ref_start, ref_depth = t.start, depth
             else:
                 node = Section(t.name, title, star, (t.start, stop))
@@ -182,7 +187,9 @@ def build_structure(bundle: SourceBundle, arxiv_id: str, version: int,
             cursor = t.end + int(text.startswith("\n", t.end))
             drop("appendix_marker", t.start, cursor)
         elif t.name in {"begin", "opaque_env", "$$", "["}:
-            if t.name == "begin" and t.argument in {"CJK", "CJK*", "appendix", "appendices"}:
+            if t.start in bibliography_wrappers or (
+                t.name == "begin" and t.argument in {"CJK", "CJK*", "appendix", "appendices"}
+            ):
                 continue
             end = t.end if t.name == "opaque_env" else ends.get(t.start)
             if end is None:
