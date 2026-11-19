@@ -67,16 +67,25 @@ Manifest (ADR 0002: file là nguồn gốc).
 Một thư mục Version là **Version đã xác minh** khi `verified_source()` chấp nhận nó:
 
 - `source.json` có `format: 1`, `arxiv_id` và `version` khớp tên thư mục;
-- `status` là `success` hoặc `non_tex`;
+- `status` là `success`, `non_tex` hoặc `unavailable`;
 - danh sách `.tex`/`.bib` trên đĩa khớp đúng danh sách trong receipt, checksum từng file khớp,
   không symlink, không đường dẫn thoát thư mục;
-- `success` khi và chỉ khi có ít nhất một `.tex`.
+- `success` khi và chỉ khi có ít nhất một `.tex`;
+- `unavailable` thì `files` rỗng, `checksum` rỗng, có `http_status` (404 hoặc 410) và thư mục
+  không có `.tex`/`.bib` nào.
 
 Version `non_tex` (chỉ PDF, docx) là Version đã xác minh nhưng không có TeX. M2 vẫn phải ghi
 nhận nó như một bản ghi rỗng **[Đề]**. Vì root không có dòng `hierarchy`, Version rỗng không
 có dòng nào trong các bảng; bản ghi rỗng nằm trong log parse theo từng Version, với `status`
-∈ {`parsed`, `empty_non_tex`, `failed`, `missing`}. Báo cáo độ phủ Version đọc từ log này
+∈ {`parsed`, `empty_non_tex`, `empty_unavailable`, `failed`, `missing`}. Báo cáo độ phủ Version đọc từ log này
 **[Đã chốt C4, 2026-11-05]**.
+
+Version `unavailable` là Version mà `export.arxiv.org/src/<id>v<n>` trả HTTP 404/410: metadata
+vẫn liệt kê nó nhưng arXiv không có source. Thầy trả lời câu 23.2 (đọc ngày 19/11/2026): đánh dấu
+"không tải được, lỗi 404" nhưng **vẫn giữ bản ghi rỗng như Version chỉ có PDF**, vì đó vẫn là
+Version thật, và không cần tìm nguồn khác. Engine ghi receipt rỗng một lần, không hỏi lại; M2 ghi
+log `empty_unavailable`. Ví dụ: Range Bảo có 48 Version như vậy (44 Publication), lịch sử nộp bài
+trên trang abs đều đánh dấu `(withdrawn)`, như `2508.03014` v2 **[Đã chốt C11, 2026-11-19]**.
 
 Lúc crawl, Runner và Export kiểm thêm: Manifest có bản ghi Version đó với cùng `status` và
 cùng `checksum`. Phép kiểm này chỉ có trên máy crawl.
@@ -97,7 +106,7 @@ Publication **hoàn chỉnh** khi:
      `http_status: 404`, cùng checksum với file.
 
 S2 404 là **lỗi thật phía Semantic Scholar**, không phải lỗi crawl: hỏi lại vẫn 404, nên Engine
-ghi một lần rồi không hỏi lại (tương tự Version mà arXiv trả 404 được ghi `unavailable`). Phân biệt
+ghi một lần rồi không hỏi lại (tương tự Version mà arXiv trả 404, mục 3.2). Phân biệt
 với "S2 có bài nhưng 0 trích dẫn" vì hai trường hợp khác nhau về nguồn gốc. Publication S2 không
 có bài vẫn hoàn chỉnh: có dòng `papers`, không có dòng `references`. Báo cáo đếm riêng
 (`publications_s2_not_found` của validator, `s2_not_found` của `report_m1`, cột `s2_status` của
@@ -221,3 +230,8 @@ của từng bài arXiv **[Đã chốt C7, 2026-11-05]**.
 - 2026-11-15 (C10, Bảo duyệt): thêm `s2_status: "not_found"` cho file references và status
   `unavailable` của task `references` khi S2 trả 404 (mục 3.3). File cũ không có trường này
   vẫn hợp lệ và giữ nguyên checksum.
+- 2026-11-19 (C11, theo câu trả lời 23.2 của thầy, Bảo duyệt): Version arXiv trả 404/410 có
+  receipt `status: "unavailable"` rỗng và là Version đã xác minh (mục 3.2), nên Publication có
+  Version như vậy vẫn hoàn chỉnh. Log parse thêm `empty_unavailable`. Dữ liệu crawl trước C11
+  chỉ có bản ghi Manifest, không có receipt: chạy lại Engine trên thư mục dữ liệu đó để ghi
+  receipt (chỉ hỏi lại các URL 404), rồi xuất lại bảng.
