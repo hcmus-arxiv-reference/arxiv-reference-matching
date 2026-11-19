@@ -1,10 +1,10 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Parser chạy song song với crawl, đọc corpus từ file
 
-Đề xuất ngày 19/11/2026, chờ nhóm trưởng duyệt. Giữ nguyên ADR 0001 (một Engine `src/crawl/`),
+Đề xuất và được nhóm trưởng duyệt ngày 19/11/2026. Giữ nguyên ADR 0001 (một Engine `src/crawl/`),
 ADR 0002 (file là nguồn gốc) và ADR 0003 (ranh giới Runner, CorpusReader, Export).
 
 ## Bối cảnh
