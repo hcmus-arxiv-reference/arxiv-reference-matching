@@ -10,7 +10,7 @@ Nguồn yêu cầu: đề M3, mục *Data Labelling* và *Data Modeling*
 
 | Loại | Yêu cầu của đề | Chia cho mỗi người |
 |---|---|---|
-| Gán tay | ≥ 25 Publication; mỗi bài ≥ 20 BibTeX entry được gán; tổng ≥ 500 entry | Liễu, Nghiêm, Minh mỗi người 5 bài; Bảo 10 bài (gán thay Hải, vì Hải dồn sức cho bảng `bibtex`) |
+| Gán tay | ≥ 25 Publication; mỗi bài ≥ 20 BibTeX entry được gán; tổng ≥ 500 entry | Liệu, Nghiêm, Minh mỗi người 5 bài; Bảo 10 bài (gán thay Hải, vì Hải dồn sức cho bảng `bibtex`) |
 | Gán tự động | ≥ 10% số Publication ngoài pool gán tay, và ≥ 10 bài | Matcher chung, Nghiêm phụ trách (mục 7) |
 | Test | 5 bài gán tay + 5 bài gán tự động | xem mục 8 |
 | Valid | 5 bài gán tay + 5 bài gán tự động | xem mục 8 |
@@ -119,7 +119,7 @@ Một entry **khớp** với một Reference khi cả hai chỉ **cùng một c�
 Được mở `https://arxiv.org/abs/<ref_arxiv_id>` bằng trình duyệt để xem tiêu đề, tác giả và năm
 đầy đủ. Không viết script tải hàng loạt từ arxiv.org.
 
-Không chắc thì vẫn **điền đáp án tốt nhất**, đặt `confidence = unsure` và ghi lý do. Liễu (phụ
+Không chắc thì vẫn **điền đáp án tốt nhất**, đặt `confidence = unsure` và ghi lý do. Liệu (phụ
 trách M3) xem lại toàn bộ dòng `unsure`.
 
 ## 5. Định dạng file nhãn (chốt C8)
@@ -188,12 +188,12 @@ Script kiểm:
 Không còn lỗi thì `--out` ghi ra file sạch chỉ gồm 6 cột nhãn. File này là file để upload.
 
 **Kiểm chéo:** mỗi người gán lại, độc lập, **1 bài** của người kế tiếp theo vòng
-Bảo → Liễu → Nghiêm → Minh → Bảo. Không xem nhãn gốc trước khi gán. Ghi vào
+Bảo → Liệu → Nghiêm → Minh → Bảo. Không xem nhãn gốc trước khi gán. Ghi vào
 `labels/crosscheck/<member>.csv`, cùng định dạng. Kết quả dùng cho hai việc:
 
 - Tính **tỉ lệ đồng thuận** giữa hai người gán (4 bài, khoảng 100–300 entry). Đây là số liệu cho
   báo cáo và poster: nó cho thấy nhãn tay đáng tin tới đâu.
-- Chỗ hai người gán khác nhau thì Liễu quyết, rồi sửa trong `labels/manual/`.
+- Chỗ hai người gán khác nhau thì Liệu quyết, rồi sửa trong `labels/manual/`.
 
 ## 7. Nhãn tự động
 
