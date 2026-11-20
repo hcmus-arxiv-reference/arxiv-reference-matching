@@ -45,7 +45,8 @@ giữ thông qua `key_map`.
 ### Gán những entry nào
 
 Gán **mọi entry thật sự được trích dẫn** (`\cite`, `\citep`, `\citet`, …) trong văn bản của bài.
-Không gán entry chỉ nằm trong `.bib` mà không được cite. Nhiều bài dùng chung một file `.bib`
+Không gán entry chỉ nằm trong `.bib` mà không được cite. Bảng `bibtex` cũng chỉ giữ entry được
+cite (C12, `docs/data-contract.md` mục 4.2), nên mỗi nhãn đều có đúng một dòng tương ứng. Nhiều bài dùng chung một file `.bib`
 lớn của cả lab: trên bộ mẫu 100 bài, M2 đếm được 155.529 entry sau khử trùng lặp, trung bình
 khoảng 1.500 entry mỗi bài, phần lớn không được cite.
 
