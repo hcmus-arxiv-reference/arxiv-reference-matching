@@ -54,7 +54,8 @@ def test_measure_counts_entries_across_versions_and_includes_non_tex(tmp_path):
     assert report["versions_without_bibliography"] == 1
     assert report["checks"]["repeatable_bib_results"] == 1
     assert report["checks"]["bib_source_passed"] == 3
-    assert report["checks"]["bib_result_failed"] == 1
+    assert report["checks"].get("bib_result_failed", 0) == 0
+    assert report["checks"]["bib_result_passed"] == 1
 
     plan = make_plan(tmp_path, size=1)
     plan_path = tmp_path / "sample.json"

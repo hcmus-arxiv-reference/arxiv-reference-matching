@@ -561,7 +561,6 @@ def merge_bibtex(arxiv_id: str, sources: list[BibSource]) -> BibResult:
             if target is not None:
                 mapping[key] = target
             else:
-                mapping[key] = key
                 unresolved.append({"version": version, "key": key,
                                    "reason": "missing_entry"})
         key_map[str(version)] = mapping

@@ -106,10 +106,20 @@ def test_missing_key_and_invalid_year_are_logged_without_fabricated_entries():
     assert all(entry["year"] is None for entry in result.entries)
     assert result.raw_years == {"real": "forthcoming"}
     assert result.stats["invalid_years"] == [{"version": 1, "key": "real", "value": "forthcoming"}]
-    assert result.key_map["1"]["missing"] == "missing"
+    assert result.key_map["1"] == {"real": "real"}
     assert result.stats["unresolved"] == 1
     assert result.stats["unresolved_keys"] == [{"version": 1, "key": "missing", "reason": "missing_entry"}]
     assert {entry["citation_key"] for entry in result.entries} == {"real", "other"}
+    assert validate_D(result, [v1, v2]) == []
+
+
+def test_all_missing_citations_are_logged_without_dangling_mappings():
+    sources = [_source(1, cites=["ghost", "ghost"])]
+    result = merge_bibtex(ARXIV_ID, sources)
+    assert validate_D(result, sources) == []
+    assert result.entries == [] and result.key_map == {"1": {}}
+    assert result.stats["unresolved"] == 1
+    assert result.stats["unresolved_keys"] == [{"version": 1, "key": "ghost", "reason": "missing_entry"}]
 
 
 def test_conflicting_strong_ids_do_not_merge_via_same_title_year():
