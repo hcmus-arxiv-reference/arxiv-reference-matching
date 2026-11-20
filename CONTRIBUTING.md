@@ -26,8 +26,8 @@ Corpus M1 nằm trên dataset Hugging Face private của nhóm: `raw/<member>/<k
 thô, `tables/<member>/` cho bảng. Cần được mời vào organization trên Hugging Face mới đọc được.
 
 - Viết code và test: **dùng golden fixture** trong `tests/fixtures/m2/`, không cần corpus.
-- Đánh giá trên bộ mẫu 100 bài: tải theo plan mà Minh tạo (lệnh ghi trong `docs/m2-cong-viec.md`
-  khi có).
+- Đánh giá trên bộ mẫu 100 bài: dùng plan và lệnh tại [`docs/m2-sample.md`](docs/m2-sample.md).
+  Plan hiện có là mock; tạo plan từ corpus Bảo thật trước khi tải HF hoặc báo cáo kết quả.
 - Dữ liệu tải về để trong `data/`. Thư mục này đã nằm trong `.gitignore`.
 
 ## 3. Nhánh

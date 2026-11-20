@@ -12,19 +12,35 @@ không có receipt phục vụ fixture tự viết. Có receipt nhưng không h�
 thì API cũng từ chối, không tự hạ mức kiểm tra.
 
 - Tìm `documentclass` ngoài comment, verbatim, thân định nghĩa macro và
-  nhánh điều kiện vô hiệu. Nhiều root phải chọn `--root`; không tự lấy file
-  đầu tiên. Không có root là lỗi, không suy ra đó là Version `non_tex`.
+  nhánh điều kiện vô hiệu. Khi có nhiều root, chỉ tự chọn nếu đúng một ứng viên
+  có cả begin/end document đang hoạt động. Vẫn mơ hồ thì phải chọn `--root`;
+  không tự lấy file đầu tiên. Không có root là lỗi, không suy ra `non_tex`.
+  Không loại ứng viên còn lại nếu có begin/end document, input/include hoặc
+  chẩn đoán: ứng viên đó có thể đưa thân bài sang file con hoặc dùng macro.
 - Theo `input`/`include` literal đệ quy, có hoặc không có đuôi `.tex`.
   `input` chấp nhận tên không ngoặc; tên có khoảng trắng dùng ngoặc nhọn.
   Ưu tiên đường dẫn tương đối thư mục root (working directory của TeX).
   Nếu chỉ có đường dẫn tương đối file gọi thì dùng fallback và ghi thông
   tin `relative_to_includer`. Không chạy TeX hoặc truy cập hệ thống TeX.
+  Từ v3, nếu cả hai vị trí đều không khớp chính xác, so đường dẫn đầy đủ
+  với inventory TeX sau khi bỏ phân biệt hoa/thường. Một kết quả duy nhất
+  được dùng và ghi `include_case_mismatch` mức info kèm dòng gọi. Nhiều
+  kết quả thì báo `include_error` để người đọc kiểm tra.
 - Bỏ include nằm trong comment/verbatim khỏi đường duyệt. Comment vẫn
   giữ trong văn bản gộp để bảo toàn vị trí nguồn; lớp dựng cây sau phải
   xử lý comment như nội dung không được biên dịch, không sinh Sentence.
 - Hỗ trợ `iftrue`/`iffalse`, `includeonly` literal, dừng ở `end{document}`
   và `endinput` không có token theo sau trên cùng dòng. Các cấu trúc
   chưa hỗ trợ có diagnostic, không được tự xem là đã parse thành công.
+- Assembler v2 không nhận nhầm `\iff` thành điều kiện. `\newif` chỉ khai báo,
+  điều kiện trong thân macro không được thực thi; điều kiện tùy biến thực sự
+  sử dụng vẫn có cảnh báo, chưa mô phỏng giá trị cờ true/false.
+- Hook `AtBeginDocument`/`AtEndDocument` được giữ nguyên, không mở include
+  tại thời điểm đăng ký hook. Chỉ cảnh báo khi thân hook chứa lệnh có thể đổi
+  đường biên dịch; comment trong đối số không gây cảnh báo giả.
+- Input `.bbl` thiếu được giữ nguyên và ghi `missing_bbl` mức warning
+  (`needs_review`), không biến thành lỗi thiếu TeX. Kiểm đường dẫn/symlink
+  vẫn áp dụng; file có thật nhưng ngoài inventory TeX vẫn bị từ chối.
 - Phát hiện thiếu file, vòng lặp theo stack đang mở, đường dẫn thoát
   thư mục Version, symlink, root lồng, lỗi ngoặc, giới hạn độ sâu và độ
   dài đầu ra. Include lặp hợp lệ vẫn xuất hiện nhiều lần trong văn bản.

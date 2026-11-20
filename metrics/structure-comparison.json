@@ -1,0 +1,284 @@
+{
+  "dataset_revision": "68417da5f3f5ad7300d68716b409d0c7aa3ec6de",
+  "errors": [],
+  "heading_correct": 468,
+  "heading_expected": 476,
+  "labeled_token_counts": {
+    "custom_tokens": {
+      "correct": 469,
+      "extra": 0,
+      "missed": 7
+    },
+    "walker_tokens": {
+      "correct": 476,
+      "extra": 1,
+      "missed": 0
+    }
+  },
+  "labels_sha256": "4aa77b72ca4a7c32f773c9aa80b7813c2432777701911081dfff04343e52c83d",
+  "parser_commit": "fe2aad7",
+  "plan_sha256": "66db7a57274c842b63fda7a8540a177eb7fbb3c7f1edced87a2b7c5953fa66f3",
+  "publications": 100,
+  "pylatexenc": "2.10",
+  "reviewed_versions": [
+    {
+      "arxiv_id": "2508.03223",
+      "correct": 6,
+      "expected": 6,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.03296",
+      "correct": 18,
+      "expected": 18,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.03476",
+      "correct": 0,
+      "expected": 0,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.03491",
+      "correct": 69,
+      "expected": 69,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.03534",
+      "correct": 12,
+      "expected": 12,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.03585",
+      "correct": 3,
+      "expected": 3,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.03773",
+      "correct": 24,
+      "expected": 24,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.03777",
+      "correct": 10,
+      "expected": 17,
+      "extra": [],
+      "missing": [
+        [
+          45645,
+          "paragraph"
+        ],
+        [
+          48721,
+          "paragraph"
+        ],
+        [
+          52233,
+          "paragraph"
+        ],
+        [
+          75020,
+          "paragraph"
+        ],
+        [
+          78916,
+          "paragraph"
+        ],
+        [
+          101682,
+          "section"
+        ],
+        [
+          102012,
+          "paragraph"
+        ]
+      ]
+    },
+    {
+      "arxiv_id": "2508.03830",
+      "correct": 0,
+      "expected": 0,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.04031",
+      "correct": 14,
+      "expected": 14,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.04154",
+      "correct": 0,
+      "expected": 0,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.04359",
+      "correct": 7,
+      "expected": 7,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.04474",
+      "correct": 25,
+      "expected": 25,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.04503",
+      "correct": 32,
+      "expected": 32,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.04924",
+      "correct": 13,
+      "expected": 13,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.05066",
+      "correct": 8,
+      "expected": 8,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.05101",
+      "correct": 7,
+      "expected": 7,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.05227",
+      "correct": 9,
+      "expected": 9,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.05443",
+      "correct": 27,
+      "expected": 27,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.05456",
+      "correct": 13,
+      "expected": 13,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.05701",
+      "correct": 3,
+      "expected": 3,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.05840",
+      "correct": 21,
+      "expected": 21,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.05843",
+      "correct": 40,
+      "expected": 40,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.06512",
+      "correct": 0,
+      "expected": 0,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.06626",
+      "correct": 19,
+      "expected": 19,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.06728",
+      "correct": 14,
+      "expected": 15,
+      "extra": [],
+      "missing": [
+        [
+          11240,
+          "section"
+        ]
+      ]
+    },
+    {
+      "arxiv_id": "2508.06757",
+      "correct": 16,
+      "expected": 16,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.06784",
+      "correct": 15,
+      "expected": 15,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.07421",
+      "correct": 19,
+      "expected": 19,
+      "extra": [],
+      "missing": []
+    },
+    {
+      "arxiv_id": "2508.07645",
+      "correct": 24,
+      "expected": 24,
+      "extra": [],
+      "missing": []
+    }
+  ],
+  "seconds": {
+    "custom_tokens": 2.452,
+    "walker_tokens": 51.366
+  },
+  "seed": 20261112,
+  "totals": {
+    "common": 2723,
+    "compared_versions": 135,
+    "custom_only": 0,
+    "empty_non_tex": 7,
+    "error": 6,
+    "needs_review": 13,
+    "ready": 122,
+    "walker_only": 24
+  }
+}

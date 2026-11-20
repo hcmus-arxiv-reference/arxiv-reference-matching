@@ -1,0 +1,202 @@
+[
+  {
+    "id": "basic_01",
+    "input": "We propose a method. It works well.",
+    "expected": ["We propose a method.", "It works well."]
+  },
+  {
+    "id": "question_01",
+    "input": "Does it work? We test it.",
+    "expected": ["Does it work?", "We test it."]
+  },
+  {
+    "id": "exclamation_01",
+    "input": "This is important! We investigate further.",
+    "expected": ["This is important!", "We investigate further."]
+  },
+  {
+    "id": "no_final_punctuation_01",
+    "input": "The experiment ends here",
+    "expected": ["The experiment ends here"]
+  },
+  {
+    "id": "decimal_01",
+    "input": "The value is 3.14. It is positive.",
+    "expected": ["The value is 3.14.", "It is positive."]
+  },
+  {
+    "id": "decimal_negative_01",
+    "input": "The error is -0.25. It is small.",
+    "expected": ["The error is -0.25.", "It is small."]
+  },
+  {
+    "id": "decimal_multiple_01",
+    "input": "Values range from 0.05 to 2.75. We report the mean.",
+    "expected": ["Values range from 0.05 to 2.75.", "We report the mean."]
+  },
+  {
+    "id": "decimal_scientific_01",
+    "input": "The tolerance is 1.5e-3. We keep it fixed.",
+    "expected": ["The tolerance is 1.5e-3.", "We keep it fixed."]
+  },
+  {
+    "id": "abbreviation_ie_01",
+    "input": "We use one metric, i.e. accuracy. It is easy to interpret.",
+    "expected": ["We use one metric, i.e. accuracy.", "It is easy to interpret."]
+  },
+  {
+    "id": "abbreviation_eg_01",
+    "input": "Several methods, e.g. regression, are available. We compare them.",
+    "expected": ["Several methods, e.g. regression, are available.", "We compare them."]
+  },
+  {
+    "id": "abbreviation_etal_01",
+    "input": "We follow Smith et al. in this study. The results agree.",
+    "expected": ["We follow Smith et al. in this study.", "The results agree."]
+  },
+  {
+    "id": "abbreviation_etc_01",
+    "input": "We store means, counts, etc. in a file. The file is small.",
+    "expected": ["We store means, counts, etc. in a file.", "The file is small."]
+  },
+  {
+    "id": "reference_fig_01",
+    "input": "See Fig. 1 for details. The trend is clear.",
+    "expected": ["See Fig. 1 for details.", "The trend is clear."]
+  },
+  {
+    "id": "reference_eq_01",
+    "input": "We apply Eq. 2 to the data. The result follows.",
+    "expected": ["We apply Eq. 2 to the data.", "The result follows."]
+  },
+  {
+    "id": "reference_sec_01",
+    "input": "See Sec. 3 for the proof. We summarize it here.",
+    "expected": ["See Sec. 3 for the proof.", "We summarize it here."]
+  },
+  {
+    "id": "reference_tab_01",
+    "input": "Tab. 2 lists the scores. Our method performs well.",
+    "expected": ["Tab. 2 lists the scores.", "Our method performs well."]
+  },
+  {
+    "id": "abbreviation_vs_01",
+    "input": "We compare A vs. B on this task. A is faster.",
+    "expected": ["We compare A vs. B on this task.", "A is faster."]
+  },
+  {
+    "id": "abbreviation_cf_01",
+    "input": "This agrees with earlier work, cf. Smith for details. We extend it.",
+    "expected": ["This agrees with earlier work, cf. Smith for details.", "We extend it."]
+  },
+  {
+    "id": "reference_section_decimal_01",
+    "input": "See Sec. 3.2 for details. We use that procedure.",
+    "expected": ["See Sec. 3.2 for details.", "We use that procedure."]
+  },
+  {
+    "id": "abbreviation_etal_cite_01",
+    "input": "We follow Smith et al.~\\cite{smith20}. The results agree.",
+    "expected": ["We follow Smith et al.~\\cite{smith20}.", "The results agree."]
+  },
+  {
+    "id": "url_domain_01",
+    "input": "Visit https://example.org for details. The code is available.",
+    "expected": ["Visit https://example.org for details.", "The code is available."]
+  },
+  {
+    "id": "url_path_01",
+    "input": "Download https://example.org/files/data.csv for analysis. We use this file.",
+    "expected": ["Download https://example.org/files/data.csv for analysis.", "We use this file."]
+  },
+  {
+    "id": "url_query_01",
+    "input": "Use https://example.org/search?q=test for the query. Results are cached.",
+    "expected": ["Use https://example.org/search?q=test for the query.", "Results are cached."]
+  },
+  {
+    "id": "url_sentence_end_01",
+    "input": "Code is at https://example.org/code. We release it publicly.",
+    "expected": ["Code is at https://example.org/code.", "We release it publicly."]
+  },
+  {
+    "id": "url_command_01",
+    "input": "See \\url{https://example.org/a.b?q=1.2}. The resource is public.",
+    "expected": ["See \\url{https://example.org/a.b?q=1.2}.", "The resource is public."]
+  },
+  {
+    "id": "inline_math_decimal_01",
+    "input": "We use $x=3.14$ here. The value is fixed.",
+    "expected": ["We use $x=3.14$ here.", "The value is fixed."]
+  },
+  {
+    "id": "inline_math_period_01",
+    "input": "The expression $a. b$ is preserved. We continue.",
+    "expected": ["The expression $a. b$ is preserved.", "We continue."]
+  },
+  {
+    "id": "inline_math_question_01",
+    "input": "The expression $x?y$ is symbolic. We keep it.",
+    "expected": ["The expression $x?y$ is symbolic.", "We keep it."]
+  },
+  {
+    "id": "inline_math_factorial_01",
+    "input": "We compute $n!$ exactly. The result is large.",
+    "expected": ["We compute $n!$ exactly.", "The result is large."]
+  },
+  {
+    "id": "inline_math_parentheses_01",
+    "input": "We use \\(x=3.14\\) here. The value is fixed.",
+    "expected": ["We use \\(x=3.14\\) here.", "The value is fixed."]
+  },
+  {
+    "id": "inline_math_parentheses_period_01",
+    "input": "The expression \\(a. b\\) stays intact. We continue.",
+    "expected": ["The expression \\(a. b\\) stays intact.", "We continue."]
+  },
+  {
+    "id": "inline_math_multiple_01",
+    "input": "We set $x=1.2$ and $y=3.4$. Their sum is positive.",
+    "expected": ["We set $x=1.2$ and $y=3.4$.", "Their sum is positive."]
+  },
+  {
+    "id": "command_period_01",
+    "input": "We use \\textbf{First. Second.} as a label. It is bold.",
+    "expected": ["We use \\textbf{First. Second.} as a label.", "It is bold."]
+  },
+  {
+    "id": "command_question_01",
+    "input": "The label is \\emph{Why?} in the figure. We explain it.",
+    "expected": ["The label is \\emph{Why?} in the figure.", "We explain it."]
+  },
+  {
+    "id": "command_exclamation_01",
+    "input": "The label is \\textbf{Stop!} in the figure. We explain it.",
+    "expected": ["The label is \\textbf{Stop!} in the figure.", "We explain it."]
+  },
+  {
+    "id": "command_nested_01",
+    "input": "We use \\textbf{A \\emph{nested. label} here}. It is preserved.",
+    "expected": ["We use \\textbf{A \\emph{nested. label} here}.", "It is preserved."]
+  },
+  {
+    "id": "command_href_01",
+    "input": "See \\href{https://example.org/a.b}{Project. Home} for details. We continue.",
+    "expected": ["See \\href{https://example.org/a.b}{Project. Home} for details.", "We continue."]
+  },
+  {
+    "id": "command_cite_key_01",
+    "input": "We use this method \\cite{smith.2020}. It is effective.",
+    "expected": ["We use this method \\cite{smith.2020}.", "It is effective."]
+  },
+  {
+    "id": "mixed_math_reference_01",
+    "input": "Fig. 2 shows $x=3.14$, i.e. our chosen value. It remains fixed.",
+    "expected": ["Fig. 2 shows $x=3.14$, i.e. our chosen value.", "It remains fixed."]
+  },
+  {
+    "id": "mixed_command_math_01",
+    "input": "We use \\textbf{Score. A} with $p=0.05$. Is this sufficient?",
+    "expected": ["We use \\textbf{Score. A} with $p=0.05$.", "Is this sufficient?"]
+  }
+]

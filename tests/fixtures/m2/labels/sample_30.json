@@ -1,0 +1,314 @@
+{
+  "schema_version": 1,
+  "seed": 20261111,
+  "range_member": "bao",
+  "total_publications": 30,
+  "assignment": {
+    "lieu_primary": [
+      "2508.03223",
+      "2508.03296",
+      "2508.03476",
+      "2508.03491",
+      "2508.03534",
+      "2508.03585",
+      "2508.03773",
+      "2508.03777",
+      "2508.03830",
+      "2508.04031",
+      "2508.04154",
+      "2508.04359",
+      "2508.04474",
+      "2508.04503",
+      "2508.04924"
+    ],
+    "nghiem_primary": [
+      "2508.05066",
+      "2508.05101",
+      "2508.05227",
+      "2508.05443",
+      "2508.05456",
+      "2508.05701",
+      "2508.05840",
+      "2508.05843",
+      "2508.06512",
+      "2508.06626",
+      "2508.06728",
+      "2508.06757",
+      "2508.06784",
+      "2508.07421",
+      "2508.07645"
+    ]
+  },
+  "items": [
+    {
+      "arxiv_id": "2508.03223",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "nghiem",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.03296",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "nghiem",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.03476",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "nghiem",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.03491",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "nghiem",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.03534",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "nghiem",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.03585",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "nghiem",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.03773",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "nghiem",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.03777",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "nghiem",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.03830",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "nghiem",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.04031",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "nghiem",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.04154",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "nghiem",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.04359",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "nghiem",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.04474",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "nghiem",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.04503",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "nghiem",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.04924",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "nghiem",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.05066",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "lieu",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.05101",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "lieu",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.05227",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "lieu",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.05443",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "lieu",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.05456",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "lieu",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.05701",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "lieu",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.05840",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "lieu",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.05843",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "lieu",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.06512",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "lieu",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.06626",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "lieu",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.06728",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "lieu",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.06757",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "lieu",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.06784",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "lieu",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.07421",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "lieu",
+      "headings": [],
+      "sentence_spans": []
+    },
+    {
+      "arxiv_id": "2508.07645",
+      "version": 1,
+      "heading_annotator": "lieu",
+      "sentence_annotator": "nghiem",
+      "cross_reviewer": "lieu",
+      "headings": [],
+      "sentence_spans": []
+    }
+  ]
+}
