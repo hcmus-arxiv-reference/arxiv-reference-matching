@@ -113,6 +113,37 @@ $$x$$ \[y\]
     assert result["ready_tex_versions"] == result["tex_versions"] == 1
     assert result["headings_by_kind"] == {"section": 1}
     assert result["structure_failures"] == []
+    assert result["all_tex_versions_checked_without_references"]
+
+    # A second TeX Version has a valid receipt but no document root.
+    broken = receipt.parent.parent / "v2"
+    broken.mkdir()
+    content = b"No document class here."
+    (broken / "part.tex").write_bytes(content)
+    record = json.loads(receipt.read_bytes())
+    record.update(version=2, files={"part.tex": sha256(content).hexdigest()})
+    (broken / "source.json").write_text(json.dumps(record))
+    plan["publications"][0]["versions"].append({
+        "version": 2, "status": "success",
+        "receipt_sha256": sha256((broken / "source.json").read_bytes()).hexdigest(),
+    })
+    partial = measure_sample(plan, tmp_path)
+    assert partial["publications_with_references_heading"] == []
+    assert not partial["all_tex_versions_checked_without_references"]
+
+
+@pytest.mark.parametrize("title", [r"\refname", r"\bibname"])
+def test_bibliography_title_macro_stops_at_next_peer_heading(title):
+    from src.parse.source import SourceBundle
+    from src.parse.structure import build_structure
+    from src.parse.types import validate_B
+
+    text = (r"\begin{document}\section{Results}Body.\section*{" + title
+            + r"}Citations.\section{Appendix}Extra.\end{document}")
+    tree, _ = build_structure(SourceBundle(status="ready", text=text), "2508.02872", 1)
+    validate_B(tree, text)
+    assert [node.title_raw for node in tree.root.children] == ["Results", "Appendix"]
+    assert any(drop["reason"] == "references" for drop in tree.dropped)
 
 def test_heading_wrappers_and_formatting_command():
     from scripts.compare_structure import custom_tokens, headings
@@ -129,3 +160,20 @@ def test_heading_wrappers_and_formatting_command():
     validate_B(tree, text)
     assert [n.title_raw for n in headings(tree.root)] == ["Body", "Extra"]
     assert len(custom_tokens(text)) == 3
+
+
+def test_nested_bibliography_is_extracted_before_wrapper_becomes_a_block():
+    from src.parse.source import SourceBundle
+    from src.parse.structure import build_structure
+    from src.parse.types import validate_B, validate_B_prime
+
+    text = (r"\begin{document}\section{Methods}\begin{small}Before \cite{a}."
+            r"\begin{center}\begin{thebibliography}{9}\bibitem{a}Entry."
+            r"\end{thebibliography}\end{center}After.\end{small}\end{document}")
+    tree, bib = build_structure(SourceBundle(status="ready", text=text), "2508.02872", 1)
+    validate_B(tree, text)
+    validate_B_prime(bib)
+    blocks = "".join(block.raw for block in tree.root.children[0].children)
+    assert "Before" in blocks and "After" in blocks and "Entry." not in blocks
+    assert bib.bibitems_raw == [r"\bibitem{a}Entry."]
+    assert bib.cite_keys_used == ["a"]

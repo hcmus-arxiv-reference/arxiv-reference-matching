@@ -13,7 +13,7 @@ def tree(tmp_path, files):
     for name, text in files.items():
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        path.write_bytes(text.encode("utf-8"))
     return tmp_path
 
 
@@ -78,6 +78,32 @@ def test_unknown_conditionals_are_reported_without_guessing_branch(tmp_path):
     assert result.status == "needs_review"
     assert result.files == ["main.tex", "yes.tex"]
     assert [i.code for i in result.issues] == ["unsupported_conditional"]
+
+
+def test_ifthenelse_resumes_after_both_braced_alternatives(tmp_path):
+    source = (r"\documentclass{article}\begin{document}\iftrue"
+              r"\ifthenelse{\equal{a}{b}}{\input{missing}}{\input{other}}\fi"
+              r"\input{yes}\end{document}")
+    result = assemble_source(tree(tmp_path, {"main.tex": source, "yes.tex": "YES"}))
+    assert result.status == "needs_review"
+    assert [i.code for i in result.issues] == ["unsupported_conditional"]
+    assert result.files == ["main.tex", "yes.tex"]
+    assert result.text.endswith(r"YES\end{document}")
+
+
+@pytest.mark.parametrize("condition,expected", [
+    (r"\ifnum -2<1\relax", "yes.tex"), (r"\ifnum 10=2 ", "no.tex"),
+    (r"\ifnum 1>0\more ", None),
+])
+def test_literal_integer_comparison(tmp_path, condition, expected):
+    source = r"\documentclass{article}" + condition + r"\input{yes}\else\input{no}\fi"
+    result = assemble_source(tree(tmp_path, {"main.tex": source, "yes.tex": "Y", "no.tex": "N"}))
+    if expected:
+        assert result.status == "ready"
+        assert result.files == ["main.tex", expected]
+    else:
+        assert result.status == "needs_review"
+        assert result.files == ["main.tex"]
 
 
 @pytest.mark.parametrize("name,body", [
@@ -251,6 +277,16 @@ def test_two_complete_roots_remain_ambiguous(tmp_path):
     assert result.issues[0].code == "ambiguous_root"
 
 
+def test_standalone_diagram_and_single_article_root(tmp_path):
+    document = r"\begin{document}BODY\end{document}"
+    files = {"diagrams/map.tex": r"\documentclass[tikz]{standalone}" + document,
+             "submission.tex": r"\documentclass{article}" + document}
+    result = assemble_source(tree(tmp_path, files))
+    assert (result.status, result.root) == ("ready", "submission.tex")
+    files["supp.tex"] = r"\documentclass{article}" + document
+    assert assemble_source(tree(tmp_path, files)).issues[0].code == "ambiguous_root"
+
+
 def test_root_with_document_in_input_is_not_discarded(tmp_path):
     result = assemble_source(tree(tmp_path, {
         "main.tex": r"\documentclass{article}\input{body}",
@@ -268,6 +304,15 @@ def test_present_bbl_outside_tex_inventory_is_not_reported_missing(tmp_path):
     }))
     assert result.status == "error"
     assert [issue.code for issue in result.issues] == ["include_error"]
+
+
+def test_dotted_input_stem_matches_tex_only_when_literal_file_absent(tmp_path):
+    files = {"main.tex": r"\documentclass{article}\input{sec.2}", "sec.2.tex": "Body"}
+    result = assemble_source(tree(tmp_path, files))
+    assert result.status == "ready"
+    assert result.files == ["main.tex", "sec.2.tex"]
+    (tmp_path / "sec.2").write_bytes(b"other content")
+    assert assemble_source(tmp_path).issues[0].code == "include_error"
 
 
 @pytest.mark.parametrize("case", [
