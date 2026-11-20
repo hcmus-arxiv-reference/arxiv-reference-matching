@@ -138,11 +138,6 @@ Ngoại lệ: chế độ `references=False` của `run_crawl` bỏ điều ki�
 
 - Một dòng cho mỗi BibTeX entry sau khi đổi `\bibitem` và khử trùng lặp giữa các Version;
   hợp các trường của entry trùng, không bỏ thông tin **[Đề]**.
-- Bảng chỉ giữ group có ít nhất một `(version, key)` thuộc `cite_keys_used` của Version
-  tương ứng. Lọc sau khi gộp để vẫn kế thừa trường qua `crossref` và từ các bản entry
-  không được cite. `stats.groups_before_filter` là số group sau khử trùng lặp trước lọc,
-  `stats.groups_filtered_out` là số group bị loại, `stats.entry_after` là số dòng được xuất
-  **[Đã chốt C12, 20/11/2026, issue #32]**.
 - `\cite` dùng key bị bỏ phải được đổi sang key đã chọn **[Đề]**, nên khử trùng lặp BibTeX
   phải xong **trước** khi chốt `content` của Element chứa `\cite`.
 - `citation_key` là khóa nối nhãn của M3. Quy tắc chọn key phải tất định, nếu không nhãn tay
