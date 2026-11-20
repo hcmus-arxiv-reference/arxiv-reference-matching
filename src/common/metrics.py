@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
 import time
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
@@ -72,3 +74,20 @@ def append_jsonl(path: str | Path, record: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+class JsonlLog:
+    """Ghi thêm từng dòng JSON từ nhiều luồng, kèm thời điểm UTC ``at``.
+
+    Dùng làm ``on_request`` của ``HttpClient``: luồng tải arXiv và luồng
+    Semantic Scholar ghi chung một file mà các dòng không xen nhau.
+    """
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+        self._lock = threading.Lock()
+
+    def __call__(self, record: dict) -> None:
+        line = {"at": datetime.now(timezone.utc).isoformat(timespec="milliseconds"), **record}
+        with self._lock:
+            append_jsonl(self.path, line)
