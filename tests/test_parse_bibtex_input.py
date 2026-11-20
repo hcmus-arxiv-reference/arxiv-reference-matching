@@ -13,7 +13,7 @@ def test_bibtex_macros_crossref_and_author_lists():
     rows = {row.key: row.fields for row in rows}
     assert rows["child"]["year"] == 2019
     assert rows["child"]["journal"] == "Journal of Examples"
-    assert rows["child"]["authors"] == ["J. Smith", "{Research and Development}"]
+    assert rows["child"]["authors"] == ["J. Smith", "Research and Development"]
     assert rows["child"]["doi"] is None and len(rows) == 2
 
 

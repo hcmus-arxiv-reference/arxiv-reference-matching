@@ -15,6 +15,7 @@ import unicodedata
 import bibtexparser
 from bibtexparser import middlewares
 from bibtexparser.model import DuplicateBlockKeyBlock, Entry
+from pylatexenc.latex2text import LatexNodes2Text
 
 from src.common.schema import require_id
 from .normalize import _group_end, _space_end, normalize
@@ -23,7 +24,8 @@ if TYPE_CHECKING:
     from src.parse.types import BibResult, BibSource
 
 
-BIBTEX_VERSION = "3"
+BIBTEX_VERSION = "4"
+_BIB_TEXT = LatexNodes2Text(math_mode="verbatim")
 _DOI = re.compile(r"\b10\.\d{4,9}/[^\s{}<>\"\\]+", re.I)
 _URL = re.compile(r"https?://[^\s{}<>\"\\]+", re.I)
 _ARXIV = r"(?:\d{4}\.\d{4,5}|[a-z][a-z.\-]*/\d{7})"
@@ -84,19 +86,30 @@ def _candidate(version: int, key: str, origin: str, fields: dict) -> _Candidate:
     year = int(raw_year) if raw_year and re.fullmatch(r"[12]\d{3}", raw_year) else None
     authors = fields.get("author")
     if isinstance(authors, list):
-        authors = [a.strip() for a in authors if a.strip()] or None
+        authors = [text for author in authors if (text := _clean_bib_text(author))] or None
     else:
         authors = None
     doi = _first_match(_DOI, _value(fields, "doi") or _value(fields, "url") or "")
     return _Candidate(version, key, origin, {
         "entry_type": _value(fields, "entry_type"),
-        "title": _value(fields, "title"),
+        "title": _clean_bib_text(_value(fields, "title")),
         "authors": authors,
         "year": year,
         "doi": doi.casefold() if doi else None,
-        "journal": _value(fields, "journal"),
+        "journal": _clean_bib_text(_value(fields, "journal") or _value(fields, "booktitle")),
         "url": _value(fields, "url"),
     }, _arxiv_ref(fields), raw_year if year is None else None)
+
+
+def _clean_bib_text(text: str | None) -> str | None:
+    """Decode prose accents/grouping from both sources, preserving math verbatim.
+
+    pylatexenc is installed by bibtexparser 2.1.0. Conversion documentation:
+    https://pylatexenc.readthedocs.io/en/latest/latex2text/
+    """
+    if text is None:
+        return None
+    return " ".join(_BIB_TEXT.latex_to_text(normalize("sentence", text)).split()) or None
 
 
 def _expression_parts(value: str) -> list[str]:
@@ -187,6 +200,9 @@ def _bib_candidates(version: int, bib_files: dict[str, str], issues: list[dict])
     by_key = {}
     rows = []
     for entry in entries:
+        if not entry.key.strip():
+            issues.append({"version": version, "code": "empty_key", "line": entry.start_line})
+            continue
         fields = {name.casefold(): field.value for name, field in entry.fields_dict.items()}
         fields["entry_type"] = entry.entry_type.casefold()
         by_key.setdefault(entry.key, fields)
@@ -206,7 +222,7 @@ def _bib_candidates(version: int, bib_files: dict[str, str], issues: list[dict])
             inherited = by_key[parent]
             # Parent identity fields (title, DOI, authors, URL) belong to the
             # container. Copying them could merge the child with its parent.
-            for name in ("year", "journal"):
+            for name in ("year", "journal", "booktitle"):
                 if not fields.get(name) and inherited.get(name):
                     fields[name] = inherited[name]
             parent = _value(inherited, "crossref")
@@ -393,7 +409,12 @@ def _title_key(title: str) -> str:
 
 
 def _groups(entries: list[_Candidate], issues: list[dict]) -> list[list[_Candidate]]:
-    """Join strong identifiers first, then allow unambiguous title/year joins."""
+    """Merge duplicate Version/key pairs, identifiers, then compatible same keys.
+
+    Across Versions a reused key requires compatible DOI/arXiv identifiers and
+    token Jaccard similarity >= 0.5 when both titles exist. Remaining entries
+    can join by exact normalized title/year when identifiers agree.
+    """
     parent = list(range(len(entries)))
     identifiers = [{"doi": {e.fields["doi"]} - {None}, "arxiv": {e.ref_arxiv} - {None}} for e in entries]
 
@@ -410,7 +431,11 @@ def _groups(entries: list[_Candidate], issues: list[dict]) -> list[list[_Candida
             for name in ("doi", "arxiv"):
                 identifiers[a][name].update(identifiers[b][name])
 
-    strong, weak = {}, defaultdict(list)
+    version_keys = {}
+    for i, entry in enumerate(entries):
+        join(version_keys.setdefault((entry.version, entry.key), i), i)
+
+    strong, weak, same_keys = {}, defaultdict(list), defaultdict(list)
     for i, entry in enumerate(entries):
         for name, value in (("doi", entry.fields["doi"]), ("arxiv", entry.ref_arxiv)):
             if value:
@@ -418,6 +443,25 @@ def _groups(entries: list[_Candidate], issues: list[dict]) -> list[list[_Candida
         title, year = entry.fields["title"], entry.fields["year"]
         if title and year and (normalized := _title_key(title)):
             weak[(normalized, year)].append(i)
+        same_keys[entry.key].append(i)
+
+    for indices in same_keys.values():
+        representatives = []
+        for i in indices:
+            for previous in representatives:
+                a, b = root(previous), root(i)
+                if a == b:
+                    break
+                if any(len(identifiers[a][name] | identifiers[b][name]) > 1 for name in ("doi", "arxiv")):
+                    continue
+                left = set(_title_key(entries[previous].fields["title"] or "").split())
+                right = set(_title_key(entries[i].fields["title"] or "").split())
+                if left and right and len(left & right) / len(left | right) < 0.5:
+                    continue
+                join(a, b)
+                break
+            else:
+                representatives.append(i)
 
     for (title, year), indices in sorted(weak.items()):
         roots = sorted({root(i) for i in indices})
@@ -436,12 +480,13 @@ def _groups(entries: list[_Candidate], issues: list[dict]) -> list[list[_Candida
 
 
 def merge_bibtex(arxiv_id: str, sources: list[BibSource]) -> BibResult:
-    """Return full bibtex rows and a Version-scoped citation key map.
+    """Return cited BibTeX groups and a Version-scoped citation key map.
 
     Fill missing fields from other copies. On conflict, use the newest
     nonempty value, then the lexicographically smallest source key. Prefer a
     .bib value to a bibitem value on the same Version/key. Record conflicts
-    and unresolved citations in stats for the integration log.
+    and unresolved citations in stats for the integration log. C12 filters
+    groups after merging, keeping all fields from their uncited copies.
     """
     from src.parse.types import BibResult
 
@@ -469,9 +514,15 @@ def merge_bibtex(arxiv_id: str, sources: list[BibSource]) -> BibResult:
                 issues.append({"version": version, "code": "invalid_bibitem"})
 
     rows, conflicts, invalid_years, raw_years = [], [], [], {}
-    key_targets = defaultdict(set)
+    key_targets = {}
+    cited = {(source.version, key) for source in sources for key in source.cite_keys_used}
+    groups = _groups(candidates, issues)
+    filtered = 0
     used, reserved = set(), {entry.key for entry in candidates}
-    for group in _groups(candidates, issues):
+    for group in groups:
+        if not any((entry.version, entry.key) in cited for entry in group):
+            filtered += 1
+            continue
         preferred = group[0].key
         canonical = preferred
         suffix = 2
@@ -496,7 +547,7 @@ def merge_bibtex(arxiv_id: str, sources: list[BibSource]) -> BibResult:
                                   "chosen_version": winner.version, "alternatives": alternatives})
         rows.append(row)
         for entry in group:
-            key_targets[(entry.version, entry.key)].add(canonical)
+            key_targets[(entry.version, entry.key)] = canonical
             if entry.raw_year is not None:
                 if row["year"] is None:
                     raw_years.setdefault(canonical, entry.raw_year)
@@ -506,18 +557,19 @@ def merge_bibtex(arxiv_id: str, sources: list[BibSource]) -> BibResult:
     for version, source in sorted(by_version.items()):
         mapping = {}
         for key in dict.fromkeys(source.cite_keys_used):
-            targets = key_targets[(version, key)]
-            if len(targets) == 1:
-                mapping[key] = next(iter(targets))
+            target = key_targets.get((version, key))
+            if target is not None:
+                mapping[key] = target
             else:
                 mapping[key] = key
                 unresolved.append({"version": version, "key": key,
-                                   "reason": "ambiguous" if targets else "missing_entry"})
+                                   "reason": "missing_entry"})
         key_map[str(version)] = mapping
 
     return BibResult(arxiv_id=arxiv_id, entries=sorted(rows, key=lambda row: row["citation_key"]),
         key_map=key_map, raw_years=raw_years, bibtex_version=BIBTEX_VERSION, stats={
             "entry_before": len(candidates), "entry_after": len(rows),
+            "groups_before_filter": len(groups), "groups_filtered_out": filtered,
             "from_bib": sum(e.origin == "bib" for e in candidates),
             "from_bibitem": sum(e.origin == "bibitem" for e in candidates),
             "unresolved": len(unresolved), "unresolved_keys": unresolved,
