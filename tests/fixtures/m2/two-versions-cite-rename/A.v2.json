@@ -1,0 +1,25 @@
+{
+  "status": "ready",
+  "root": "main.tex",
+  "text": "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nWe follow Smith et al.~\\cite{Smith2020}.\nThe loss is $L = \\|x\\|^2$ here.\n\\bibliography{refs}\n\\end{document}",
+  "files": [
+    "main.tex"
+  ],
+  "unused_tex_files": [],
+  "spans": [
+    {
+      "output_start": 0,
+      "output_end": 164,
+      "file": "main.tex",
+      "source_start": 0,
+      "source_end": 164,
+      "line": 1
+    }
+  ],
+  "issues": [],
+  "includes": [],
+  "checksums": {
+    "main.tex": "47025199f5cd4ecf2ef603d105a9dac536d82b39c796f7dde57b22e45d12c470"
+  },
+  "assembler_version": "1"
+}

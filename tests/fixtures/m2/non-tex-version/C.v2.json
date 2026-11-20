@@ -1,0 +1,48 @@
+{
+  "arxiv_id": "2508.02874",
+  "version": 2,
+  "root": {
+    "node": "Section",
+    "kind": "document",
+    "title_raw": "",
+    "starred": false,
+    "span": [
+      41,
+      79
+    ],
+    "children": [
+      {
+        "node": "Section",
+        "kind": "section",
+        "title_raw": "Method",
+        "starred": false,
+        "span": [
+          41,
+          79
+        ],
+        "children": [
+          {
+            "node": "Leaf",
+            "kind": "sentence",
+            "raw": "We propose a method.",
+            "span": [
+              58,
+              78
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "dropped": [
+    {
+      "reason": "preamble",
+      "span": [
+        0,
+        41
+      ]
+    }
+  ],
+  "issues": [],
+  "leaves_version": "1"
+}

@@ -171,17 +171,25 @@ class HttpClient:
         Range request (see _get_resumable); on_event then receives small
         progress dicts without URLs, headers or payloads.
         """
+        return self._request(url, None, {}, resume, on_event)
+
+    def post(self, url: str, body: bytes, *, content_type: str = "application/json") -> HttpResponse:
+        """POST with the same pacing and bounded retries as a plain GET."""
+        return self._request(url, body, {"Content-Type": content_type}, False, None)
+
+    def _request(self, url: str, body: bytes | None, extra: dict[str, str], resume: bool,
+                 on_event: Callable[[dict], None] | None) -> HttpResponse:
         host = urlsplit(url).hostname or ""
         arxiv = host == "export.arxiv.org"
         if host == "arxiv.org" or (host.endswith(".arxiv.org") and not arxiv):
             raise ValueError("Crawler requests must use export.arxiv.org")
         interval = max(3.0, self.min_interval) if arxiv else self.min_interval
         shared = arxiv and self._real
-        headers = {"User-Agent": self.user_agent, "Accept": "*/*", **self.headers}
+        headers = {"User-Agent": self.user_agent, "Accept": "*/*", **self.headers, **extra}
         with (self._arxiv_lock if shared else self._lock):
             if resume:
                 return self._get_resumable(url, headers, interval, shared, on_event or (lambda _: None))
-            request = Request(url, headers=headers)
+            request = Request(url, data=body, headers=headers)
             for attempt in range(self.max_retries + 1):
                 try:
                     response = self._send(request, interval, shared)

@@ -1,0 +1,8 @@
+element_id,arxiv_id,kind,content
+2508-02872#sentence-840e6c0e1e1f04ec,2508.02872,sentence,We follow Smith et al.~\cite{Smith2020}.
+2508-02872#sentence-0899d06861f3f786,2508.02872,sentence,The loss is $L=\|x\|^2$ .
+2508-02872#section-47a4997604d2e16c,2508.02872,section,Intro
+2508-02872#document-90d0662bfb6acde5,2508.02872,document,
+2508-02872#sentence-39fc13e884c547b3,2508.02872,sentence,The loss is $L = \|x\|^2$ here.
+2508-02872#section-5b92a3cc4b4800fa,2508.02872,section,Intro
+2508-02872#document-71dc2135ba46e3b8,2508.02872,document,
