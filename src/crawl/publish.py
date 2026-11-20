@@ -10,6 +10,7 @@ import hashlib
 import json
 from pathlib import Path
 import tempfile
+import time
 
 from huggingface_hub import CommitOperationAdd, HfApi
 from src.common.config import Settings
@@ -21,13 +22,20 @@ from .storage import key
 from src.common.json_io import write_json
 
 
+class RemoteChanged(RuntimeError):
+    """The dataset moved on (another member committed) while a batch was being prepared."""
+
+
 class HuggingFacePublisher:
     """Upload only validated bundles; preserve other Publications and members."""
-    def __init__(self, settings: Settings, *, api=None):
+    ATTEMPTS = 4   # members upload to one dataset at the same time; a moved head is retried
+
+    def __init__(self, settings: Settings, *, api=None, sleep=time.sleep):
         settings.require_hf()
         table_path(settings.member, "papers")  # validate member before network
         self.settings = settings
         self.api = api if api is not None else HfApi(token=settings.hf_token)
+        self.sleep = sleep
 
     def _info(self):
         info = self.api.repo_info(repo_id=self.settings.hf_repo_id, repo_type="dataset",
@@ -46,7 +54,43 @@ class HuggingFacePublisher:
         return Path(self.api.hf_hub_download(repo_id=self.settings.hf_repo_id, repo_type="dataset",
                     filename=name, revision=revision))
 
+    def _remote(self, names, prefixes, revision: str) -> dict:
+        """Remote files among exact ``names`` plus every file under ``prefixes``.
+
+        Never use ``repo_info(...).siblings`` for this: the Hub lists at most
+        100,000 siblings. Past that, the member's tables were not seen, so each
+        batch replaced them instead of merging (tables/lieu kept 250 of 4,975
+        rows, 20/11/2026). Exact path queries have no such cap.
+        """
+        remote, names = {}, sorted(set(names))
+        for start in range(0, len(names), 200):
+            for item in self.api.get_paths_info(repo_id=self.settings.hf_repo_id, repo_type="dataset",
+                                                paths=names[start:start + 200], revision=revision):
+                if hasattr(item, "blob_id"):          # a file, not a folder
+                    remote[item.path] = item
+        for prefix in sorted(set(prefixes)):
+            for item in self.api.list_repo_tree(repo_id=self.settings.hf_repo_id, repo_type="dataset",
+                                                path_in_repo=prefix, recursive=True, revision=revision):
+                if hasattr(item, "blob_id"):
+                    remote[item.path] = item
+        return remote
+
     def publish(self, bundles: list[PublicationBundle], tables: dict[str, Path]) -> dict:
+        """Publish one batch; retry when another member committed in the meantime.
+
+        Each attempt re-reads the remote tables at the new head, so a retry merges
+        on top of the other commit instead of overwriting it.
+        """
+        for attempt in range(1, self.ATTEMPTS + 1):
+            try:
+                return self._publish_once(bundles, tables)
+            except RemoteChanged:
+                if attempt == self.ATTEMPTS:
+                    raise
+                self.sleep(5 * attempt)
+        raise AssertionError("unreachable")
+
+    def _publish_once(self, bundles: list[PublicationBundle], tables: dict[str, Path]) -> dict:
         """One commit contains source, metadata and merged tables for this batch.
 
         Errors leave local data ready for retry. Never delete remote files or
@@ -87,7 +131,11 @@ class HuggingFacePublisher:
                 elif "references" in tables:
                     raise ValueError("Missing raw references for exported table")
         info = self._info()
-        remote = {f.rfilename: f for f in info.siblings}
+        wanted = [*files, *(table_path(self.settings.member, name) for name in local)]
+        remote = self._remote(wanted, [], info.sha)
+        # A Version already on the Hub: list all of its files, to catch unexpected ones.
+        remote.update(self._remote([], [n.rsplit("/", 1)[0] for n in files
+                                        if n.endswith("/source.json") and n in remote], info.sha))
         # Raw Versions are immutable. A conflicting local corpus requires review.
         for name, path in files.items():
             if not name.endswith("/source.json"):
@@ -140,10 +188,16 @@ class HuggingFacePublisher:
                 # Recheck visibility; parent_commit also protects against lost updates.
                 latest = self._info()
                 if latest.sha != info.sha:
-                    raise RuntimeError("Dataset changed during preparation; retry upload")
-                commit = self.api.create_commit(repo_id=self.settings.hf_repo_id, repo_type="dataset",
-                    operations=operations, parent_commit=info.sha, num_threads=1,
-                    commit_message=f"crawl: {len(ids)} publications ({self.settings.member})")
+                    raise RemoteChanged("Dataset changed during preparation; retry upload")
+                try:
+                    commit = self.api.create_commit(repo_id=self.settings.hf_repo_id, repo_type="dataset",
+                        operations=operations, parent_commit=info.sha, num_threads=1,
+                        commit_message=f"crawl: {len(ids)} publications ({self.settings.member})")
+                except Exception as error:
+                    # The Hub answers 412 when parent_commit is no longer the head.
+                    if getattr(getattr(error, "response", None), "status_code", None) == 412:
+                        raise RemoteChanged("Dataset changed before commit; retry upload") from error
+                    raise
                 result = {"status": "uploaded", "publications": len(ids), "commit": commit.oid}
             # This is a receipt only. Every rerun still checks remote and local data.
             write_json(self.settings.data_dir / "manifests" / "last-upload.json",
