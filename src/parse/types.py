@@ -21,6 +21,7 @@ import re
 from typing import Any, Sequence
 
 from src.common.schema import from_records, make_element_id, require_id
+from src.parse.leaf_markup import PROSE_ENVS, WRAPPER, only_markup
 from src.parse.source import Issue, SourceBundle, Span
 
 TYPES_VERSION = "1"
@@ -854,6 +855,19 @@ def _strip_ws(text: str) -> str:
     return "".join(text.split())
 
 
+def _only_wrapper_gaps(block: Block, leaves: list[Leaf]) -> bool:
+    """Verify exact leaf slices and allow only markup or whitespace between them."""
+    cursor = 0
+    for leaf in leaves:
+        start, end = (offset - block.span[0] for offset in leaf.span)
+        if start < cursor or block.raw[start:end] != leaf.raw:
+            return False
+        if not only_markup(block.raw[cursor:start]):
+            return False
+        cursor = end
+    return only_markup(block.raw[cursor:])
+
+
 def _check_no_lost_text(
     struct_sec: Section, leaf_root: Section, path: str, errors: list[str]
 ) -> None:
@@ -868,6 +882,16 @@ def _check_no_lost_text(
             leaves = _collect_leaves_in_span(leaf_root, child.span[0], child.span[1])
             joined = _strip_ws("".join(leaf.raw for leaf in leaves))
             expected = _strip_ws(child.raw)
+            if joined == expected:
+                continue
+            prose = child.env in PROSE_ENVS or (
+                child.type == "text" and any(
+                    match.group("env") in PROSE_ENVS
+                    for match in WRAPPER.finditer(child.raw)
+                )
+            )
+            if prose and _only_wrapper_gaps(child, leaves):
+                continue
             if joined != expected:
                 errors.append(
                     f"[{cpath}] Mất hoặc lệch chữ khi tách Block tại span {child.span}: "
