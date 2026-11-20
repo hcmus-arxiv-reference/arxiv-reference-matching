@@ -19,7 +19,8 @@ from .corpus import CorpusReader
 from .export import PublicationBundle, export_publications
 from .manifest import Manifest, TaskRecord
 from src.common.references import CitationList
-from .semantic_scholar import SemanticScholarClient
+from .http_client import RETRY_STATUSES, HttpStatusError
+from .semantic_scholar import BATCH_ROW_LIMIT, SemanticScholarClient
 from .source import ArxivSourceDownloader
 from .storage import require_id
 from src.common.json_io import write_json
@@ -29,12 +30,16 @@ from src.common.metrics import append_jsonl
 class CrawlPipeline:
     """One writer per data directory. Source failures never overwrite discovery.
 
-    Default Stage implementations, both contributed by Liễu (langtucod0n):
-    batched Discovery when the discovery object has ``prefetch``
-    (``BatchedDiscovery``), and References fetched in one worker thread while
-    the main thread downloads that Publication's sources. Only the S2 network
-    call runs in the worker; cache checks, Manifest and cache writes stay on
-    the main thread, and a failed S2 request never marks a Publication done.
+    Default Stage implementations. Discovery theo lô when the discovery object
+    has ``prefetch`` (``BatchedDiscovery``, contributed by Liễu, langtucod0n).
+    References theo lô when the S2 client has ``references_batch``: one request
+    returns the S2 citation lists of the next Publications, so a Range needs
+    about ``n / batch_size`` S2 requests instead of one or more per Publication
+    (see ``_prefetch_references``). A Publication the batch did not cover is
+    fetched alone in one worker thread while the main thread downloads its
+    sources (Liễu's overlapped References). Cache checks, Manifest and cache
+    writes stay on the main thread, and a failed S2 request never marks a
+    Publication done.
 
     Locks: ``exclusive()`` holds ``.pipeline.lock`` for a whole run (one Runner
     per data directory). ``corpus_lock()`` holds ``.crawl.lock`` while caches,
@@ -63,6 +68,10 @@ class CrawlPipeline:
         self.clock = time.monotonic
         # IDs already sent in a Discovery batch by this Engine; see _prefetch_window.
         self._batched: set[str] = set()
+        # References theo lô: IDs already sent in a batch, and results not yet consumed
+        # (rows, None = unknown to S2, or the error that failed the whole batch).
+        self._refs_batched: set[str] = set()
+        self._refs_ready: dict[str, list[dict] | Exception | None] = {}
         self.manifest: Manifest | None = None
         # Loading may repair a torn final line, so it happens under the lock.
         with self.corpus_lock():
@@ -194,6 +203,50 @@ class CrawlPipeline:
                 missing.append(identifier)
         batch(missing)
 
+    def _references_verified(self, identifier) -> bool:
+        try:
+            self.corpus.load_references(identifier)
+            return True
+        except (OSError, ValueError, KeyError, TypeError):
+            return False
+
+    def _prefetch_references(self, ids, upcoming) -> None:
+        """Batch-fetch S2 citation lists of ``ids`` plus the next IDs the caller will crawl.
+
+        Mirrors ``_prefetch_window``: a batch starts only when one of ``ids`` was
+        never batched and lacks a verified references cache, and is filled
+        positionally from ``upcoming`` up to the client's ``batch_size``. Results
+        stay in memory until each Publication is crawled; nothing is written here.
+
+        A batch that fails with 429/5xx is kept as that error for every ID in
+        it: asking for the same Publications one by one would hit the same
+        limit and stall the arXiv downloads behind S2's backoff. Those IDs are
+        batched again on the next pass. Any other failure (unexpected payload,
+        4xx) falls back to one request per Publication.
+        """
+        # Looked up on the class so a client without the method, or a test double, opts out.
+        if self.references is None or not callable(getattr(type(self.references), "references_batch", None)):
+            return
+        size = getattr(self.references, "batch_size", 0)
+        if not isinstance(size, int) or size < 1:
+            return
+        if all(i in self._refs_batched or self._references_verified(i) for i in ids):
+            return
+        candidates = [*ids, *[i for i in upcoming if i not in ids]][:max(size, len(ids))]
+        window = [i for i in candidates if i not in self._refs_batched and not self._references_verified(i)]
+        for start in range(0, len(window), size):
+            chunk = window[start:start + size]
+            try:
+                self._refs_ready.update(self.references.references_batch(chunk))
+            except Exception as error:
+                throttled = isinstance(error, HttpStatusError) and error.status in RETRY_STATUSES
+                print(json.dumps({"event": "batch_references_failed" if throttled else "batch_references_fallback",
+                                  "error_type": type(error).__name__,
+                                  "http_status": getattr(error, "status", None), "size": len(chunk)}), flush=True)
+                if throttled:
+                    self._refs_ready.update(dict.fromkeys(chunk, error))
+            self._refs_batched.update(chunk)
+
     def _submit_references(self, pool, arxiv_id, refresh):
         """Future of new S2 rows (None result for a verified cache); None without S2."""
         if self.references is None:
@@ -206,7 +259,27 @@ class CrawlPipeline:
                 return cached
             except (OSError, ValueError, TypeError, KeyError):
                 pass
+            if arxiv_id in self._refs_ready:
+                return self._batched_references(pool, arxiv_id, self._refs_ready.pop(arxiv_id))
         return pool.submit(self._fetch_references, arxiv_id)
+
+    def _batched_references(self, pool, arxiv_id, ready):
+        """Future for one Publication of a finished batch."""
+        future = Future()
+        if isinstance(ready, Exception):
+            self._refs_batched.discard(arxiv_id)   # batch it again on the next pass
+            future.set_exception(ready)
+        elif ready is None:
+            # Same record as the single-Publication endpoint answering 404.
+            future.set_exception(HttpStatusError(404, "Semantic Scholar"))
+        elif len(ready) >= BATCH_ROW_LIMIT:
+            return pool.submit(self._fetch_references, arxiv_id)   # possibly truncated: paginate
+        else:
+            try:
+                future.set_result(CitationList.from_raw(arxiv_id, ready))
+            except ValueError as error:
+                future.set_exception(error)
+        return future
 
     def _fetch_references(self, arxiv_id):
         return CitationList.from_raw(arxiv_id, self.references.references(arxiv_id))
@@ -235,17 +308,25 @@ class CrawlPipeline:
         # The batch serves several IDs but is charged to the first one, the
         # Publication that triggered it, so per-Publication times sum to wall time.
         batch_seconds = self.clock() - batch_started
+        # The References batch is timed apart from Discovery (the report states
+        # Discovery time on its own) and charged to the same first Publication.
+        refs_started = self.clock()
+        if not refresh:
+            self._prefetch_references(ids, upcoming)
+        refs_seconds = self.clock() - refs_started
         with ThreadPoolExecutor(max_workers=1) as pool:
             for index, arxiv_id in enumerate(ids):
                 charged = batch_seconds if index == 0 else 0.0
+                refs_charged = refs_seconds if index == 0 else 0.0
                 timing = {"arxiv_id": arxiv_id,
                           "started_at": datetime.now(timezone.utc).isoformat(),
-                          "discovery_seconds": charged, "batch_discovery_seconds": charged}
+                          "discovery_seconds": charged, "batch_discovery_seconds": charged,
+                          "batch_references_seconds": refs_charged}
                 started = self.clock()
                 try:
                     self._crawl_publication(pool, arxiv_id, refresh, stats, timing)
                 finally:
-                    timing["seconds"] = charged + self.clock() - started
+                    timing["seconds"] = charged + refs_charged + self.clock() - started
                     self._log_timing(timing)
         return stats
 

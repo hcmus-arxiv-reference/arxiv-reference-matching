@@ -10,16 +10,20 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 
 from src.common.corpus import verified_source
 
-ASSEMBLER_VERSION = "1"
+ASSEMBLER_VERSION = "4"
 _VERBATIM = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"}
 _DEFINITIONS = {"newcommand", "renewcommand", "providecommand", "DeclareRobustCommand",
                 "DeclareMathOperator", "newenvironment", "renewenvironment"}
 _FLOW = re.compile(r"\\(?:input|include|documentclass|endinput|includeonly)\b")
+_UNSUPPORTED_CONTROL = {"catcode", "csname", "scantokens", "import", "subimport",
+                        "InputIfFileExists", "IfFileExists"}
+_DYNAMIC_FLOW = re.compile(r"\\(?:" + "|".join(sorted(_UNSUPPORTED_CONTROL)) + r")\b")
 
 
 @dataclass(frozen=True)
@@ -74,6 +78,7 @@ class _Scan:
     issues: list[Issue]
     stop: int
     ends_document: bool = False
+    begins_document: bool = False
 
 
 def _control(text: str, start: int) -> tuple[str, int]:
@@ -120,7 +125,7 @@ def _group(text: str, index: int, opening: str = "{") -> tuple[str, int]:
     raise ValueError("Unclosed argument")
 
 
-def _scan(text: str, file: str) -> _Scan:
+def _scan(text: str, file: str, tokens: list[_Command] | None = None) -> _Scan:
     """Lex control words, skipping comments, verbatim and definition bodies."""
     result = _Scan([], [], len(text))
     cursor = 0
@@ -133,6 +138,10 @@ def _scan(text: str, file: str) -> _Scan:
         if text[cursor] == "%":
             cursor = _space(text, cursor); continue
         if text[cursor] != "\\":
+            if tokens is not None and text.startswith("$$", cursor) and all(conditions):
+                tokens.append(_Command("$$", cursor, cursor + 2))
+                cursor += 2
+                continue
             cursor += 1; continue
         start = cursor
         name, cursor = _control(text, cursor)
@@ -141,12 +150,30 @@ def _scan(text: str, file: str) -> _Scan:
             if name in {"verb", "lstinline"}:
                 if cursor < len(text) and text[cursor] == "*":
                     cursor += 1
+                if name == "lstinline" and text.startswith("[", cursor):
+                    _, cursor = _group(text, cursor, "[")
+                if name == "lstinline" and text.startswith("{", cursor):
+                    # Listings accepts braces as an alternative delimiter.
+                    depth = 1
+                    end = cursor + 1
+                    while end < len(text) and text[end] != "\n" and depth:
+                        depth += (text[end] == "{") - (text[end] == "}")
+                        end += 1
+                    if depth:
+                        raise ValueError("Unclosed inline verbatim")
+                    cursor = end
+                    if tokens is not None and active:
+                        tokens.append(_Command("literal", start, cursor))
+                    continue
                 if cursor >= len(text) or text[cursor].isspace():
                     raise ValueError("Missing verbatim delimiter")
                 end = text.find(text[cursor], cursor + 1)
                 if end < 0 or "\n" in text[cursor:end]:
                     raise ValueError("Unclosed inline verbatim")
-                cursor = end + 1; continue
+                cursor = end + 1
+                if tokens is not None:
+                    tokens.append(_Command("literal", start, cursor))
+                continue
             if name in {"begin", "end"}:
                 environment, end = _group(text, cursor)
                 if name == "begin" and environment in _VERBATIM:
@@ -154,10 +181,17 @@ def _scan(text: str, file: str) -> _Scan:
                     position = text.find(closing, end)
                     if position < 0:
                         raise ValueError("Unclosed verbatim/comment environment")
-                    cursor = position + len(closing); continue
+                    cursor = position + len(closing)
+                    if tokens is not None and active:
+                        tokens.append(_Command("opaque_env", start, cursor, environment))
+                    continue
+                if tokens is not None and active:
+                    tokens.append(_Command(name, start, end, environment))
                 if name == "end" and environment == "document" and active:
                     result.stop, result.ends_document = end, True
                     break
+                if name == "begin" and environment == "document" and active:
+                    result.begins_document = True
                 cursor = end; continue
             if name in _DEFINITIONS or name in {"def", "gdef", "edef", "xdef"}:
                 if cursor < len(text) and text[cursor] == "*":
@@ -207,7 +241,7 @@ def _scan(text: str, file: str) -> _Scan:
                     else:
                         cursor += 1
                 continue
-            if name.startswith("if"):
+            if name.startswith("if") and name != "iff":
                 value = {"iftrue": True, "iffalse": False}.get(name)
                 if active and value is None:
                     issue("unsupported_conditional", start, f"\\{name}: neither branch is expanded")
@@ -224,9 +258,16 @@ def _scan(text: str, file: str) -> _Scan:
                 conditions.pop(); continue
             if not active:
                 continue
-            if name in {"catcode", "csname", "scantokens", "import", "subimport",
-                        "InputIfFileExists", "IfFileExists", "AtBeginDocument", "AtEndDocument"}:
+            if name in {"AtBeginDocument", "AtEndDocument"}:
+                body, cursor = _group(text, cursor)
+                # Hooks run later; never expand their inputs at registration time.
+                if _FLOW.search(body) or _DYNAMIC_FLOW.search(body):
+                    issue("unsupported_control", start, f"\\{name} can change the compilation path")
+                continue
+            if name in _UNSUPPORTED_CONTROL:
                 issue("unsupported_control", start, f"\\{name} can change the compilation path")
+            if tokens is not None:
+                tokens.append(_Command(name, start, cursor))
             if name == "endinput":
                 tail = text[cursor:].split("\n", 1)[0].split("%", 1)[0]
                 if tail.strip():
@@ -318,12 +359,23 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
             problem("invalid_root", root_file, "Explicit root must be an inventoried TeX file with documentclass")
             return result
         selected = root_file
-    elif len(candidates) != 1:
+    else:
+        complete = [name for name in candidates
+                    if scans[name].begins_document and scans[name].ends_document]
+        # A competing root may put its document body in an included file.
+        templates_only = all(
+            not scans[name].begins_document and not scans[name].ends_document
+            and not scans[name].issues
+            and not any(c.name in {"input", "include"} for c in scans[name].commands)
+            for name in candidates if name not in complete
+        )
+        if len(candidates) > 1 and len(complete) == 1 and templates_only:
+            candidates = complete
+        selected = candidates[0] if len(candidates) == 1 else None
+    if selected is None:
         problem("ambiguous_root" if candidates else "missing_root", "",
                 f"Expected one root; candidates: {candidates}")
         return result
-    else:
-        selected = candidates[0]
     result.root = selected
     working = (base / selected).parent
     include_only: set[str] | None = None
@@ -341,7 +393,7 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
                                  texts[name].count("\n", 0, start) + 1))
         chunks.append(chunk); size += len(chunk)
 
-    def resolve(argument, name):
+    def resolve(argument, name, line):
         if any(ch in argument for ch in "\\#{}~$"):
             raise ValueError("Dynamic filename is unsupported")
         requested = Path(argument)
@@ -350,17 +402,29 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
         if not requested.suffix:
             requested = requested.with_suffix(".tex")
         candidates = []
+        requested_paths = []
         for parent in (working, (base / name).parent):
             path = parent / requested
             if not path.resolve().is_relative_to(base):
                 raise ValueError("Include path escapes Version directory")
             if any(p.is_symlink() for p in (path, *path.parents)):
                 raise ValueError("Symlink in include path")
-            relative = path.resolve().relative_to(base).as_posix()
+            relative = Path(os.path.normpath(path)).relative_to(base).as_posix()
+            requested_paths.append(relative)
+            if path.is_file() and path.suffix.lower() != ".tex" and relative not in texts:
+                raise ValueError(f"Input is not an inventoried TeX file: {argument}")
             if relative in texts and relative not in candidates:
                 candidates.append(relative)
         if not candidates:
-            raise FileNotFoundError(f"Missing TeX input: {argument}")
+            folded = {relative.casefold() for relative in requested_paths}
+            matches = sorted(target for target in texts if target.casefold() in folded)
+            if not matches:
+                raise FileNotFoundError(f"Missing TeX input: {argument}")
+            if len(matches) > 1:
+                raise ValueError(f"Ambiguous case-insensitive input {argument}: {matches}")
+            chosen = matches[0]
+            problem("include_case_mismatch", name, f"Resolved {argument} to {chosen}", "info", line=line)
+            return chosen
         chosen = candidates[0]
         if (working / requested).resolve() != base / chosen:
             problem("relative_to_includer", name, f"Resolved {argument} relative to including file", "info")
@@ -402,14 +466,18 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
                         and command.argument.removesuffix(".tex") not in include_only):
                     entry["status"] = "excluded_by_includeonly"
                 else:
-                    target = resolve(command.argument, name)
+                    target = resolve(command.argument, name, line)
                     entry["target"] = target
                     stopped = expand(target, [*stack, name])
                     entry["status"] = "expanded"
                     if stopped:
                         return True
             except (ValueError, FileNotFoundError) as error:
-                problem("include_error", name, str(error), line=line)
+                if isinstance(error, FileNotFoundError) and Path(command.argument).suffix.lower() == ".bbl":
+                    entry["status"] = "missing_bbl"
+                    problem("missing_bbl", name, str(error), "warning", line=line)
+                else:
+                    problem("include_error", name, str(error), line=line)
                 emit(name, command.start, command.end)
             position = command.end
         emit(name, position, scan.stop)

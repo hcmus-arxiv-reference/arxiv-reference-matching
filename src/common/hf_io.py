@@ -108,8 +108,9 @@ def upload_dir(settings: Settings, local_dir: str | Path, path_in_repo: str, mes
     )
 
 
-def download_dir(settings: Settings, path_in_repo: str, local_dir: str | Path) -> Path:
-    """Tải một thư mục con của repo về local_dir (giữ nguyên cấu trúc đường dẫn)."""
+def download_dir(settings: Settings, path_in_repo: str, local_dir: str | Path,
+                 *, revision: str | None = None) -> Path:
+    """Tải thư mục con, giữ đường dẫn; revision tùy chọn cố định snapshot HF."""
     _repo_path(path_in_repo)
     from huggingface_hub import snapshot_download
 
@@ -120,6 +121,7 @@ def download_dir(settings: Settings, path_in_repo: str, local_dir: str | Path) -
         allow_patterns=f"{path_in_repo.rstrip('/')}/*",
         local_dir=str(local_dir),
         token=settings.hf_token,
+        **({"revision": revision} if revision is not None else {}),
     )
     return Path(local_dir) / path_in_repo
 

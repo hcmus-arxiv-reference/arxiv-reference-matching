@@ -1,0 +1,49 @@
+{
+  "arxiv_id": "2508.02875",
+  "version": 1,
+  "root": {
+    "node": "Section",
+    "kind": "document",
+    "title_raw": "",
+    "starred": false,
+    "span": [
+      41,
+      72
+    ],
+    "children": [
+      {
+        "node": "Section",
+        "kind": "section",
+        "title_raw": "Intro",
+        "starred": false,
+        "span": [
+          41,
+          72
+        ],
+        "children": [
+          {
+            "node": "Block",
+            "type": "text",
+            "env": null,
+            "raw": "Nested body.\n\n\n",
+            "span": [
+              57,
+              72
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "dropped": [
+    {
+      "reason": "preamble",
+      "span": [
+        0,
+        41
+      ]
+    }
+  ],
+  "issues": [],
+  "structure_version": "1"
+}

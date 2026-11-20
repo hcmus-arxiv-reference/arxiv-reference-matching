@@ -1,0 +1,14 @@
+{
+  "files": {
+    "main.tex": "\\documentclass{article}\n\\begin{document}\n\\subsection{First}\nBody.\n\\paragraph{Detail}\nDetail body.\n\\subsection*{Second}\nLast body.\n\\end{document}\n"
+  },
+  "expected": {
+    "status": "ready",
+    "root": "main.tex",
+    "text": "\\documentclass{article}\n\\begin{document}\n\\subsection{First}\nBody.\n\\paragraph{Detail}\nDetail body.\n\\subsection*{Second}\nLast body.\n\\end{document}",
+    "files": [
+      "main.tex"
+    ],
+    "unused_tex_files": []
+  }
+}
