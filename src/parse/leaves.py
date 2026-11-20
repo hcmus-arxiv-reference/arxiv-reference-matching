@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from .leaf_markup import LIST_ENVS, PROSE_ENVS, label_end
 from .sentences import sentence_spans
 from .types import (
     Block,
@@ -17,20 +18,19 @@ from .types import (
 
 LEAVES_VERSION = "1"
 
-LIST_ENVS = {"itemize", "enumerate", "description"}
 FIGURE_ENVS = {"figure", "figure*", "table", "table*"}
 MATH_ENVS = {
     "equation", "equation*", "align", "align*", "gather", "gather*",
     "multline", "multline*", "flalign", "flalign*", "displaymath",
+    "eqnarray", "eqnarray*", "alignat", "alignat*",
 }
 
 SPECIAL_RE = re.compile(
     r"\\begin\s*\{(?P<env>"
-    r"itemize|enumerate|description|"
-    r"figure\*?|table\*?|"
-    r"equation\*?|align\*?|gather\*?|"
-    r"multline\*?|flalign\*?|displaymath"
-    r")\}|(?P<delimiter>\\\[|\$\$)"
+    + "|".join(re.escape(name) for name in sorted(
+        LIST_ENVS | FIGURE_ENVS | MATH_ENVS | PROSE_ENVS
+    ))
+    + r")\}|(?P<delimiter>\\\[|\$\$)"
 )
 
 LIST_TOKEN_RE = re.compile(
@@ -78,25 +78,6 @@ def _append_sentences(
                 span=(base + start, base + end),
             )
         )
-
-
-def _item_content_start(text: str, position: int) -> int:
-    """Skip the optional label following a LaTeX item command."""
-    i = position
-
-    while i < len(text) and text[i].isspace():
-        i += 1
-
-    if i < len(text) and text[i] == "[":
-        end = text.find("]", i + 1)
-
-        if end >= 0:
-            i = end + 1
-
-    while i < len(text) and text[i].isspace():
-        i += 1
-
-    return i
 
 
 def _parse_list(
@@ -148,14 +129,20 @@ def _parse_list(
             else end_start
         )
 
-        content_start_item = _item_content_start(
-            text, marker.end()
-        )
-
-        children = _parse_content(
-            text[content_start_item:segment_end],
-            base + content_start_item,
-        )
+        content_start_item = marker.end()
+        while content_start_item < segment_end and text[content_start_item].isspace():
+            content_start_item += 1
+        end_label = label_end(text, content_start_item)
+        children = []
+        if content_start_item < end_label <= segment_end:
+            children.append(Leaf(
+                "sentence", text[content_start_item:end_label],
+                (base + content_start_item, base + end_label),
+            ))
+            content_start_item = end_label
+        children.extend(_parse_content(
+            text[content_start_item:segment_end], base + content_start_item
+        ))
 
         if children:
             items.append(
@@ -251,7 +238,7 @@ def _parse_content(text: str, base: int) -> list:
             )
             break
 
-        _, end = matching_end
+        close_start, end = matching_end
         raw = text[match.start():end]
         span = (
             base + match.start(),
@@ -265,6 +252,21 @@ def _parse_content(text: str, base: int) -> list:
 
             if node is not None:
                 output.append(node)
+
+        elif env in PROSE_ENVS:
+            content_start = match.end()
+            while content_start < close_start and text[content_start].isspace():
+                content_start += 1
+            end_title = label_end(text, content_start)
+            if content_start < end_title <= close_start:
+                output.append(Leaf(
+                    "sentence", text[content_start:end_title],
+                    (base + content_start, base + end_title),
+                ))
+                content_start = end_title
+            output.extend(_parse_content(
+                text[content_start:close_start], base + content_start
+            ))
 
         elif env in FIGURE_ENVS:
             output.append(
@@ -326,6 +328,9 @@ def _convert_block(block: Block) -> list:
             return [
                 Leaf("formula", block.raw, block.span)
             ]
+
+        if env in PROSE_ENVS:
+            return _parse_content(block.raw, block.span[0])
 
         # Unsupported environments are preserved as one leaf.
         return [

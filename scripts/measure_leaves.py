@@ -1,5 +1,7 @@
 """Đo kết quả của bộ phân tích Leaves trên bộ mẫu M2."""
+import argparse
 import json
+import traceback
 from collections import Counter
 from pathlib import Path
 from statistics import mean, median
@@ -22,9 +24,14 @@ def walk(node):
 
 def main():
     started = perf_counter()
-    plan_path = Path("configs/m2-sample-100.json")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("plan", nargs="?", type=Path, default=Path("configs/m2-sample-100.json"))
+    parser.add_argument("corpus", nargs="?", type=Path, default=Path("data/m2-sample"))
+    parser.add_argument("output", nargs="?", type=Path, default=Path("metrics/leaves.json"))
+    args = parser.parse_args()
+    plan_path = args.plan
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
-    corpus = Path("data/m2-sample")
+    corpus = args.corpus
     papers = plan["publications"]
     if plan["data_origin"] != "corpus" or len(papers) != 100:
         raise ValueError("Cần dùng danh sách mẫu thật gồm 100 bài.")
@@ -74,6 +81,7 @@ def main():
                     "arxiv_id": aid,
                     "version": version,
                     "stage": stage,
+                    "traceback": traceback.format_exc(limit=-3),
                     "error": f"{type(error).__name__}: {error}",
                 })
 
@@ -97,8 +105,8 @@ def main():
         "unsplit_definition": "Environment blocks preserved as one sentence with the same span, on validated versions.",
         "elapsed_seconds": round(perf_counter() - started, 3),
     }
-    output = Path("metrics/leaves.json")
-    output.parent.mkdir(exist_ok=True)
+    output = args.output
+    output.parent.mkdir(parents=True, exist_ok=True)
     write_json(output, report)
     print(f"{output}: {validated} validated, {skipped} non-TeX, {len(failures)} failed")
 

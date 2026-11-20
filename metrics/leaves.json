@@ -1,75 +1,84 @@
 {
   "data_origin": "corpus",
-  "elapsed_seconds": 11.694,
+  "elapsed_seconds": 11.67,
   "failed_versions": 9,
   "failures": [
     {
       "arxiv_id": "2508.03907",
       "error": "ValueError: [B.root.children[5].children[2]] Block.raw còn chứa comment LaTeX chưa thay bằng khoảng trắng\n[B.root.children[6].children[2].children[8]] Block.raw còn chứa comment LaTeX chưa thay bằng khoảng trắng",
       "stage": "structure",
+      "traceback": "Traceback (most recent call last):\n  File \"/home/hohuunghiem/arxiv-m2/scripts/measure_leaves.py\", line 60, in main\n    validate_B(tree, source.text)\n  File \"/home/hohuunghiem/arxiv-m2/src/parse/types.py\", line 624, in validate_B\n    return _finish(errors, raise_on_error)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/hohuunghiem/arxiv-m2/src/parse/types.py\", line 324, in _finish\n    raise ValueError(\"\\n\".join(errors))\nValueError: [B.root.children[5].children[2]] Block.raw còn chứa comment LaTeX chưa thay bằng khoảng trắng\n[B.root.children[6].children[2].children[8]] Block.raw còn chứa comment LaTeX chưa thay bằng khoảng trắng\n",
       "version": 1
     },
     {
       "arxiv_id": "2508.03927",
       "error": "ValueError: Cannot build structure for a failed SourceBundle",
       "stage": "structure",
+      "traceback": "Traceback (most recent call last):\n  File \"/home/hohuunghiem/arxiv-m2/scripts/measure_leaves.py\", line 59, in main\n    tree, _ = build_structure(source, aid, version, directory)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/hohuunghiem/arxiv-m2/src/parse/structure.py\", line 53, in build_structure\n    raise ValueError(\"Cannot build structure for a failed SourceBundle\")\nValueError: Cannot build structure for a failed SourceBundle\n",
       "version": 1
     },
     {
       "arxiv_id": "2508.04618",
       "error": "ValueError: [B.root.children[10].children[1]] Block.raw còn chứa comment LaTeX chưa thay bằng khoảng trắng",
       "stage": "structure",
+      "traceback": "Traceback (most recent call last):\n  File \"/home/hohuunghiem/arxiv-m2/scripts/measure_leaves.py\", line 60, in main\n    validate_B(tree, source.text)\n  File \"/home/hohuunghiem/arxiv-m2/src/parse/types.py\", line 624, in validate_B\n    return _finish(errors, raise_on_error)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/hohuunghiem/arxiv-m2/src/parse/types.py\", line 324, in _finish\n    raise ValueError(\"\\n\".join(errors))\nValueError: [B.root.children[10].children[1]] Block.raw còn chứa comment LaTeX chưa thay bằng khoảng trắng\n",
       "version": 1
     },
     {
       "arxiv_id": "2508.04618",
       "error": "ValueError: [B.root.children[10].children[1]] Block.raw còn chứa comment LaTeX chưa thay bằng khoảng trắng",
       "stage": "structure",
+      "traceback": "Traceback (most recent call last):\n  File \"/home/hohuunghiem/arxiv-m2/scripts/measure_leaves.py\", line 60, in main\n    validate_B(tree, source.text)\n  File \"/home/hohuunghiem/arxiv-m2/src/parse/types.py\", line 624, in validate_B\n    return _finish(errors, raise_on_error)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/hohuunghiem/arxiv-m2/src/parse/types.py\", line 324, in _finish\n    raise ValueError(\"\\n\".join(errors))\nValueError: [B.root.children[10].children[1]] Block.raw còn chứa comment LaTeX chưa thay bằng khoảng trắng\n",
       "version": 2
     },
     {
       "arxiv_id": "2508.06444",
       "error": "ValueError: Cannot build structure for a failed SourceBundle",
       "stage": "structure",
+      "traceback": "Traceback (most recent call last):\n  File \"/home/hohuunghiem/arxiv-m2/scripts/measure_leaves.py\", line 59, in main\n    tree, _ = build_structure(source, aid, version, directory)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/hohuunghiem/arxiv-m2/src/parse/structure.py\", line 53, in build_structure\n    raise ValueError(\"Cannot build structure for a failed SourceBundle\")\nValueError: Cannot build structure for a failed SourceBundle\n",
       "version": 1
     },
     {
       "arxiv_id": "2508.06783",
       "error": "ValueError: Cannot build structure for a failed SourceBundle",
       "stage": "structure",
+      "traceback": "Traceback (most recent call last):\n  File \"/home/hohuunghiem/arxiv-m2/scripts/measure_leaves.py\", line 59, in main\n    tree, _ = build_structure(source, aid, version, directory)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/hohuunghiem/arxiv-m2/src/parse/structure.py\", line 53, in build_structure\n    raise ValueError(\"Cannot build structure for a failed SourceBundle\")\nValueError: Cannot build structure for a failed SourceBundle\n",
       "version": 2
     },
     {
       "arxiv_id": "2508.06982",
       "error": "ValueError: Cannot build structure for a failed SourceBundle",
       "stage": "structure",
+      "traceback": "Traceback (most recent call last):\n  File \"/home/hohuunghiem/arxiv-m2/scripts/measure_leaves.py\", line 59, in main\n    tree, _ = build_structure(source, aid, version, directory)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/hohuunghiem/arxiv-m2/src/parse/structure.py\", line 53, in build_structure\n    raise ValueError(\"Cannot build structure for a failed SourceBundle\")\nValueError: Cannot build structure for a failed SourceBundle\n",
       "version": 1
     },
     {
       "arxiv_id": "2508.07326",
       "error": "ValueError: Cannot build structure for a failed SourceBundle",
       "stage": "structure",
+      "traceback": "Traceback (most recent call last):\n  File \"/home/hohuunghiem/arxiv-m2/scripts/measure_leaves.py\", line 59, in main\n    tree, _ = build_structure(source, aid, version, directory)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/hohuunghiem/arxiv-m2/src/parse/structure.py\", line 53, in build_structure\n    raise ValueError(\"Cannot build structure for a failed SourceBundle\")\nValueError: Cannot build structure for a failed SourceBundle\n",
       "version": 1
     },
     {
       "arxiv_id": "2508.07326",
       "error": "ValueError: Cannot build structure for a failed SourceBundle",
       "stage": "structure",
+      "traceback": "Traceback (most recent call last):\n  File \"/home/hohuunghiem/arxiv-m2/scripts/measure_leaves.py\", line 59, in main\n    tree, _ = build_structure(source, aid, version, directory)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/hohuunghiem/arxiv-m2/src/parse/structure.py\", line 53, in build_structure\n    raise ValueError(\"Cannot build structure for a failed SourceBundle\")\nValueError: Cannot build structure for a failed SourceBundle\n",
       "version": 2
     }
   ],
   "leaf_counts": {
-    "figure": 1411,
-    "formula": 2790,
-    "sentence": 36516
+    "figure": 1418,
+    "formula": 4682,
+    "sentence": 41984
   },
   "non_tex_versions": 7,
   "plan_sha256": "66db7a57274c842b63fda7a8540a177eb7fbb3c7f1edced87a2b7c5953fa66f3",
   "publications": 100,
-  "sentence_length_mean": 197.85551539051374,
-  "sentence_length_median": 147.0,
+  "sentence_length_mean": 159.5333222179878,
+  "sentence_length_median": 136.0,
   "sentence_length_unit": "characters in raw LaTeX",
-  "unsplit_blocks": 1881,
+  "unsplit_blocks": 376,
   "unsplit_definition": "Environment blocks preserved as one sentence with the same span, on validated versions.",
   "validated_versions": 132,
   "versions": 148

@@ -196,6 +196,14 @@
                 "children": [
                   {
                     "kind": "sentence",
+                    "raw": "[Input]",
+                    "span": [
+                      536,
+                      543
+                    ]
+                  },
+                  {
+                    "kind": "sentence",
                     "raw": "A sequence of values.",
                     "span": [
                       544,
@@ -211,6 +219,14 @@
                   598
                 ],
                 "children": [
+                  {
+                    "kind": "sentence",
+                    "raw": "[Output]",
+                    "span": [
+                      573,
+                      581
+                    ]
+                  },
                   {
                     "kind": "sentence",
                     "raw": "A single score.",

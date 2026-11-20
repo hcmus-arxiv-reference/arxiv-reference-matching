@@ -155,3 +155,60 @@ def test_enumerate_and_description_map_to_itemize(env, raw):
     assert validate_C(result) == []
 
 
+
+
+@pytest.mark.parametrize("env", ["proof", "abstract", "theorem", "quote"])
+def test_prose_environment_preserves_offsets_and_splits(env):
+    raw = rf"\begin{{{env}}}First sentence. Second sentence \cite{{a}}.\end{{{env}}}"
+    tree = make_tree(raw, "env", env)
+    result = build_leaves(tree)
+    leaves = result.root.children[0].children
+    assert [leaf.raw for leaf in leaves] == ["First sentence.", r"Second sentence \cite{a}."]
+    for leaf in leaves:
+        start, end = leaf.span
+        assert raw[start:end] == leaf.raw
+    assert validate_C(result, tree) == []
+    leaves.pop()
+    assert validate_C(result, tree, raise_on_error=False)
+
+
+@pytest.mark.parametrize("env", ["eqnarray", "eqnarray*", "alignat", "alignat*"])
+def test_formula_inside_subequations(env):
+    equation = rf"\begin{{{env}}}x=1\end{{{env}}}"
+    wrapped = r"\begin{subequations}" + equation + r"\end{subequations}"
+    for raw, outer in [(equation, env), (wrapped, "subequations")]:
+        tree = make_tree(raw, "env", outer)
+        result = build_leaves(tree)
+        leaf, = result.root.children[0].children
+        assert (leaf.kind, leaf.raw) == ("formula", equation)
+        assert validate_C(result, tree) == []
+
+
+def test_description_label_with_braced_closing_bracket():
+    raw = r"\begin{description}\item[Value {a]b}] First. Second.\end{description}"
+    tree = make_tree(raw, "env", "description")
+    node, = build_leaves(tree).root.children[0].children
+    assert [leaf.raw for leaf in node.children[0].children] == [
+        "[Value {a]b}]", "First.", "Second."
+    ]
+
+
+@pytest.mark.parametrize("env,setup", [
+    ("enumerate", "[(K1)]"),
+    ("enumerate", "[leftmargin=0.4cm]"),
+    ("enumerate", "[(a)]"),
+    ("enumerate", r"[label=(\roman*)]"),
+    ("itemize", r"\vspace{-5pt}"),
+])
+def test_list_setup_in_theorem(env, setup):
+    raw = (r"\begin{theorem}First. " + rf"\begin{{{env}}}{setup}"
+           + r"\item[Precision] Actual content."
+           + rf"\end{{{env}}}\end{{theorem}}")
+    tree = make_tree(raw, "env", "theorem")
+    result = build_leaves(tree)
+    assert validate_C(result, tree) == []
+
+    item = result.root.children[0].children[1].children[0]
+    assert [leaf.raw for leaf in item.children] == ["[Precision]", "Actual content."]
+    item.children.pop(0)
+    assert validate_C(result, tree, raise_on_error=False)
