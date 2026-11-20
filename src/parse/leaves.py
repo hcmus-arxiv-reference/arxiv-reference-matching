@@ -179,6 +179,16 @@ def _parse_list(
 def _parse_content(text: str, base: int) -> list:
     """Parse text and embedded display structures into ordered leaves."""
     output = []
+
+    # Preserve the raw text of a block wholly enclosed in a simple \iffalse.
+    if text.lstrip().startswith(r"\iffalse") and re.fullmatch(
+        r"\s*\\iffalse(?![A-Za-z])(?:(?!\\(?:if[A-Za-z]*|else|fi)(?![A-Za-z])).)*"
+        r"\\fi(?![A-Za-z])\s*",
+        text,
+        flags=re.DOTALL,
+    ):
+        _append_sentences(output, text, base)
+        return output
     cursor = 0
 
     while cursor < len(text):
