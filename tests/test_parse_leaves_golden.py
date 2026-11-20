@@ -82,3 +82,19 @@ def test_golden_C_validates_against_B():
     result = build_leaves(tree)
 
     assert validate_C(result, tree) == []
+
+
+def test_leaves_golden_from_tex():
+    from src.parse.source import SourceBundle
+    from src.parse.structure import build_structure
+
+    tex = (FIXTURE / "v1/main.tex").read_text(encoding="utf-8")
+    expected_b = load_structure_tree()
+    source = SourceBundle(status="ready", text=tex)
+    tree, _ = build_structure(source, expected_b.arxiv_id, expected_b.version)
+    assert asdict(tree) == asdict(expected_b)
+
+    leaves = build_leaves(tree)
+    assert validate_C(leaves, tree) == []
+    expected_c = json.loads((FIXTURE / "C.v1.json").read_text(encoding="utf-8"))
+    assert json.loads(json.dumps(asdict(leaves))) == expected_c

@@ -6,8 +6,8 @@
     "title_raw": "",
     "starred": false,
     "span": [
-      69,
-      1139
+      86,
+      1125
     ],
     "children": [
       {
@@ -16,16 +16,16 @@
         "starred": false,
         "span": [
           87,
-          1123
+          1125
         ],
         "children": [
           {
             "type": "text",
             "env": null,
-            "raw": "We use $x=3.14$ in this example. The value stays fixed.",
+            "raw": "\nWe use $x=3.14$ in this example. The value stays fixed.\n\n",
             "span": [
-              107,
-              162
+              106,
+              164
             ]
           },
           {
@@ -112,17 +112,25 @@
           {
             "type": "text",
             "env": null,
-            "raw": "The example ends here.",
+            "raw": "\n\nThe example ends here.\n\n",
             "span": [
-              1101,
-              1123
+              1099,
+              1125
             ]
           }
         ]
       }
     ]
   },
-  "dropped": [],
+  "dropped": [
+    {
+      "reason": "preamble",
+      "span": [
+        0,
+        86
+      ]
+    }
+  ],
   "issues": [],
   "structure_version": "1"
 }

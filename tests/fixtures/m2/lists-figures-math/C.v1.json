@@ -6,8 +6,8 @@
     "title_raw": "",
     "starred": false,
     "span": [
-      69,
-      1139
+      86,
+      1125
     ],
     "children": [
       {
@@ -16,7 +16,7 @@
         "starred": false,
         "span": [
           87,
-          1123
+          1125
         ],
         "children": [
           {
@@ -283,7 +283,15 @@
       }
     ]
   },
-  "dropped": [],
+  "dropped": [
+    {
+      "reason": "preamble",
+      "span": [
+        0,
+        86
+      ]
+    }
+  ],
   "issues": [],
   "leaves_version": "1"
 }
