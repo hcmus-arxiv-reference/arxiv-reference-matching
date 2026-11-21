@@ -4,15 +4,15 @@ Task của Minh trong issue [#33](https://github.com/hcmus-arxiv-reference/arxiv
 plan 100 Publication lấy ngẫu nhiên có seed từ Range Bảo, kèm lệnh tải từ Hugging Face.
 Script: `scripts/m2_sample.py`. Đây là công cụ chuẩn bị đầu vào, chưa chạy pipeline Parser M2.
 
-## Trạng thái và bộ mock
+## Trạng thái bộ mẫu và bộ mock
 
-**Task 12/11 chưa hoàn chỉnh.** Hiện chỉ có bộ mẫu mock và kiểm thử offline;
-chưa tạo plan từ corpus Bảo thật hoặc xác minh tải 100 Publication từ HF.
-
-Theo yêu cầu của người dùng, bước này dùng **dữ liệu mock** vì máy chưa có corpus Bảo và
-cấu hình HF. Plan được lưu ở `configs/m2-sample-100.mock.json`, có `data_origin = "mock"`.
-Các ID thuộc Range thật nhưng nội dung, metadata và receipt đều tự sinh; không phải dữ liệu
-đã crawl hay số liệu chất lượng Parser. Không dùng các hash trong plan mock để tải HF.
+- **Plan thật (`configs/m2-sample-100.json`):** `data_origin = "corpus"`, `seed = 20261112`,
+  lấy mẫu từ 4.941 Publication đủ điều kiện của Range Bảo trên HF (`raw/bao/`, loại 59 ID
+  `missing_metadata`). Bộ mẫu gồm **100 Publication, 148 Version (trong đó 7 Version `non_tex`)**,
+  đã tải từ HF (revision `68417da5f3f5ad7300d68716b409d0c7aa3ec6de`) và `verify` đạt **100/100**.
+- **Plan mock (`configs/m2-sample-100.mock.json`):** `data_origin = "mock"`, giữ lại để chạy
+  kiểm thử offline khi máy không có cấu hình HF hoặc mạng. Các ID thuộc Range thật nhưng nội dung,
+  metadata và receipt đều tự sinh; không dùng các hash trong plan mock để tải HF.
 
 Dùng môi trường Python có sẵn của dự án; nếu không có thì dùng `DL_Env`.
 Các lệnh dưới đây viết `python` với ý nghĩa Python của môi trường đã chọn. Không cần tạo
@@ -125,9 +125,10 @@ Publication. Exit 0 khi đủ tất cả; exit 2 khi thiếu/hỏng hoặc cấu
 Đây là kiểm tra đầu vào, không phải tỉ lệ parse thành công. Mọi raw và report nằm dưới
 `data/` đã được Git bỏ qua; chỉ bàn giao code, test, tài liệu và plan chứa ID/hash qua PR.
 
-Trước khi nghiệm thu dữ liệu thật: tạo plan 100 bài từ corpus Bảo thật, tải thành công từ
-HF theo plan, và chạy `verify` đạt 100/100. Những kiểm chứng HF thật này còn chờ dữ liệu
-và cấu hình; kiểm thử hiện tại dùng mock, không cần token hay mạng.
+Nghiệm thu dữ liệu thật đã hoàn tất: đã tạo `configs/m2-sample-100.json` từ corpus Bảo
+(4.941 Publication đủ điều kiện), tải từ HF về `data/m2-sample` và chạy `verify` đạt 100/100
+(148 Version, 7 Version `non_tex`). Kiểm thử tự động trong `tests/test_m2_sample.py` vẫn dùng
+dữ liệu tổng hợp offline để không phụ thuộc token hay mạng.
 
 Nguồn: [thẻ Integration](m2-cong-viec.md#44-minh-integration-m25-chạy-batch-số-liệu-báo-cáo),
 [hợp đồng H1](data-contract.md#3-h1-corpus-m1--m2),
