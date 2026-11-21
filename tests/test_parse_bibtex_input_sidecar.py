@@ -75,6 +75,35 @@ def test_missing_bib_is_recovered_and_checksum_changes_are_rejected(tmp_path):
         build_bib_source(ID, 1, directory, supplement_dir=root)
 
 
+def test_biblatex_bbl_reads_structured_fields_and_does_not_execute_endinput(tmp_path):
+    directory = version(tmp_path, {"main.tex": r"\documentclass{article}\begin{document}\cite{k}\addbibresource{refs.bib}\end{document}"})
+    root = supplement(tmp_path, directory, {"main.bbl": r"""
+\begingroup\aftergroup\endinput\endgroup
+\entry{k}{article}{}{}
+  \name{author}{2}{}{%
+    {{hash=one}{family={M{\"u}ller}, given={Alice}}}%
+    {{hash=two}{family={Doe}, prefix={van}, given={Bob}}}%
+  }
+  \field{title}{{BERT}: A {Nested} Title}
+  \field{journaltitle}{Example Journal}
+  \field{year}{2020}
+  \verb{doi}
+  \verb 10.1234/example
+  \endverb
+\endentry
+\endinput
+"""})
+    _, bib, provenance = build_bib_source(ID, 1, directory, supplement_dir=root)
+    result = merge_bibtex(ID, [bib])
+    assert validate_D(result, [bib]) == []
+    row = result.entries[0]
+    assert row["title"] == "BERT: A Nested Title"
+    assert row["authors"] == ["Müller, Alice", "van Doe, Bob"]
+    assert row["journal"] == "Example Journal" and row["year"] == 2020
+    assert row["doi"] == "10.1234/example"
+    assert provenance["issues"] == [{"code": "recovered_biblatex_fields", "file": "main.bbl"}]
+
+
 def test_root_review_selects_a_real_root_and_is_bound_to_receipt(tmp_path):
     text = r"\documentclass{article}\begin{document}Body\end{document}"
     directory = version(tmp_path, {"paper.tex": text, "supplement.tex": text})
