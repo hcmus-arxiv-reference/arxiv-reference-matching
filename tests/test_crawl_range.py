@@ -72,9 +72,8 @@ def test_progress_log_explains_unfinished_tasks_without_error_payloads(tmp_path,
     output = capsys.readouterr().out
     event = json.loads(output.strip())
     assert result["status"] == "incomplete"
+    # A 404 Version is a verified empty record (C11), so only the S2 error is unfinished.
     assert event["issues"] == [
-        {"kind": "source", "version": 1, "status": "unavailable",
-         "http_status": 404, "error_reason": None},
         {"kind": "references", "version": None, "status": "error",
          "http_status": None, "error_reason": "TimeoutError"},
     ]

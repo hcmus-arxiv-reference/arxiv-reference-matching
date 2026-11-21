@@ -9,6 +9,8 @@ import os
 from pathlib import Path
 from typing import Iterable
 
+from src.common.corpus import SOURCE_OK
+
 
 @dataclass
 class TaskRecord:
@@ -74,4 +76,4 @@ class Manifest:
         return list(self._by_id.get(arxiv_id, {}).values())
 
     def pending(self, records: Iterable[TaskRecord]) -> list[TaskRecord]:
-        return [r for r in records if (self.get(*r.key) or r).status not in {"success", "non_tex"}]
+        return [r for r in records if (self.get(*r.key) or r).status not in SOURCE_OK]

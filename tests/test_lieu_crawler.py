@@ -107,17 +107,18 @@ def test_s2_failure_is_pending_and_retry_keeps_source(tmp_path):
     assert result['status'] == 'complete' and calls == []
 
 
-def test_pdf_is_empty_but_http_404_remains_unavailable(tmp_path):
+def test_pdf_and_http_404_are_both_empty_records(tmp_path):
     def source(req):
         if '02873' in req.full_url:
             return HttpResponse(404, {}, b'')
         return HttpResponse(200, {}, b'%PDF-1.7')
     pipeline, _, _ = make_pipeline(tmp_path, source=source)
     result = run_range(pipeline, ['2508.02872', '2508.02873'], max_passes=1, min_free_bytes=0)
-    assert result['counts']['complete'] == 1
+    # C11 (instructor Q23.2): a 404 Version keeps an empty record like a PDF-only one.
+    assert result['counts']['complete'] == 2
     assert result['counts']['non_tex_versions'] == 1
     assert pipeline.manifest.get('2508.02873', 1).status == 'unavailable'
-    assert result['status'] == 'incomplete'
+    assert result['status'] == 'complete'
 
 
 def test_s2_overlaps_source_and_follows_pagination(tmp_path):
