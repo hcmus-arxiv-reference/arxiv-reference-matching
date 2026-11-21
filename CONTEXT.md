@@ -11,11 +11,19 @@
   nằm ở `src/common/references.py` (`CitationList`): "có arXiv ID" luôn đếm dòng thô,
   **trước** khử trùng lặp; số Reference là số dòng bảng `references`.
   _Tránh_: gọi dòng không có arXiv ID là Reference.
+- **S2 không có bài:** Semantic Scholar trả HTTP 404 cho một Publication. Đây là lỗi thật
+  phía S2, ghi bằng file references `s2_status: "not_found"` (rỗng) và task `references` =
+  `unavailable`; Publication vẫn hoàn chỉnh. Xem `docs/data-contract.md` mục 3.3.
+  _Tránh_: gọi là lỗi crawl, hay gộp với "S2 có bài nhưng 0 trích dẫn".
 - **BibTeX entry:** mục trích dẫn sau chuẩn hóa và khử trùng lặp.
 - **Element:** nút của cây phân cấp tài liệu.
 - **Version đã xác minh:** thư mục Version có receipt `source.json` hợp lệ, danh sách và
-  checksum file `.tex/.bib` khớp, status `success` hoặc `non_tex`. Lúc crawl còn phải khớp
-  status và checksum trong Manifest. Định nghĩa đầy đủ: `docs/data-contract.md` mục 3.2.
+  checksum file `.tex/.bib` khớp, status `success`, `non_tex` hoặc `unavailable`. Lúc crawl
+  còn phải khớp status và checksum trong Manifest. Định nghĩa đầy đủ: `docs/data-contract.md` mục 3.2.
+- **Version không tải được:** Version mà arXiv trả HTTP 404/410 cho `/src/` (thường là bản bị
+  rút). Đây vẫn là Version thật: có receipt rỗng status `unavailable`, là Version đã xác minh,
+  giống Version chỉ có PDF (C11, thầy trả lời câu 23.2).
+  _Tránh_: gọi là lỗi tải. Lỗi tạm thời (429, 5xx, mạng) là `error` và được thử lại.
 - **Publication hoàn chỉnh:** metadata hợp lệ, mọi Version từ `v1` tới số Version trong
   metadata đều là Version đã xác minh, và có references hợp lệ. Bỏ điều kiện references thì
   gọi là _đủ source_. Xem `docs/data-contract.md` mục 3.3.

@@ -20,8 +20,8 @@ class TaskLookup(Protocol):
     def get(self, arxiv_id: str, version: int | None, kind: str = "source") -> TaskRecord | None: ...
 
 
-def _matches(record: TaskRecord | None, body: bytes) -> bool:
-    return bool(record and record.status == "success"
+def _matches(record: TaskRecord | None, body: bytes, status: str = "success") -> bool:
+    return bool(record and record.status == status
                 and hashlib.sha256(body).hexdigest() == record.checksum)
 
 
@@ -49,9 +49,12 @@ class CorpusReader:
 
     def load_references(self, arxiv_id: str) -> CitationList:
         body = self.references_path(arxiv_id).read_bytes()
-        if not _matches(self.manifest.get(arxiv_id, None, "references"), body):
+        citations = self.files.read_references(arxiv_id, body)
+        # S2 404 is recorded as "unavailable", like a Version arXiv answers 404 for.
+        expected = "success" if citations.s2_found else "unavailable"
+        if not _matches(self.manifest.get(arxiv_id, None, "references"), body, expected):
             raise ValueError("Unverified references cache")
-        return self.files.read_references(arxiv_id, body)
+        return citations
 
     def status(self, arxiv_id: str) -> PublicationState:
         """State of one Publication; a Version is verified only if receipt and Manifest agree.
