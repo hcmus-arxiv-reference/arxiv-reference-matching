@@ -16,7 +16,7 @@ import re
 
 from src.common.corpus import verified_source
 
-ASSEMBLER_VERSION = "4"
+ASSEMBLER_VERSION = "5"
 _VERBATIM = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"}
 _DEFINITIONS = {"newcommand", "renewcommand", "providecommand", "DeclareRobustCommand",
                 "DeclareMathOperator", "newenvironment", "renewenvironment"}
@@ -241,8 +241,26 @@ def _scan(text: str, file: str, tokens: list[_Command] | None = None) -> _Scan:
                     else:
                         cursor += 1
                 continue
+            if name == "ifthenelse":
+                # The ifthen package takes three groups and has no matching \fi.
+                # Skip both alternatives; evaluating its expression requires TeX.
+                for _ in range(3):
+                    _, cursor = _group(text, cursor)
+                if active:
+                    issue("unsupported_conditional", start, r"\ifthenelse: neither branch is expanded")
+                continue
             if name.startswith("if") and name != "iff":
                 value = {"iftrue": True, "iffalse": False}.get(name)
+                if name == "ifnum":
+                    # A space or \relax terminates the second integer. A macro
+                    # directly after a digit could expand to additional digits.
+                    match = re.match(r"\s*([+-]?[0-9]{1,9})\s*([<=>])\s*([+-]?[0-9]{1,9})(?:\s+|\\relax\b)",
+                                     text[cursor:])
+                    if match:
+                        left, op, right = match.groups()
+                        a, b = int(left), int(right)
+                        value = {"<": a < b, "=": a == b, ">": a > b}[op]
+                        cursor += match.end()
                 if active and value is None:
                     issue("unsupported_conditional", start, f"\\{name}: neither branch is expanded")
                 conditions.append(value); continue
@@ -329,6 +347,10 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
         if verified.status == "non_tex":
             result.status = "empty_non_tex"
             return result
+        if verified.status == "unavailable":
+            # arXiv 404/410 Version: an empty record, logged apart from PDF-only (C11).
+            result.status = "empty_unavailable"
+            return result
         receipt = (base / "source.json").read_bytes()
     paths = sorted(p for p in base.rglob("*") if p.is_file() and p.suffix.lower() == ".tex")
     texts: dict[str, str] = {}
@@ -371,6 +393,28 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
         )
         if len(candidates) > 1 and len(complete) == 1 and templates_only:
             candidates = complete
+        elif len(complete) > 1 and templates_only:
+            # Auxiliary diagrams may each compile as a standalone document.
+            # Prefer the sole other complete document when every competing
+            # class declaration has a literal, readable class name.
+            classes = {}
+            for name in complete:
+                declarations = [c for c in scans[name].commands if c.name == "documentclass"]
+                if len(declarations) != 1:
+                    break
+                pos = _space(texts[name], declarations[0].end)
+                try:
+                    if texts[name].startswith("[", pos):
+                        _, pos = _group(texts[name], pos, "[")
+                    cls, _ = _group(texts[name], pos)
+                except ValueError:
+                    break
+                if not re.fullmatch(r"[A-Za-z0-9_-]+", cls.strip()):
+                    break
+                classes[name] = cls.strip()
+            primary = [name for name in classes if classes[name] != "standalone"]
+            if len(classes) == len(complete) and len(primary) == 1:
+                candidates = primary
         selected = candidates[0] if len(candidates) == 1 else None
     if selected is None:
         problem("ambiguous_root" if candidates else "missing_root", "",
@@ -410,6 +454,10 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
             if any(p.is_symlink() for p in (path, *path.parents)):
                 raise ValueError("Symlink in include path")
             relative = Path(os.path.normpath(path)).relative_to(base).as_posix()
+            # A dotted stem (such as sec.2) may still refer to sec.2.tex.
+            # Give a file bearing the literal name priority when it exists.
+            if requested.suffix.lower() not in {".tex", ".bbl"} and not path.exists():
+                relative += ".tex"
             requested_paths.append(relative)
             if path.is_file() and path.suffix.lower() != ".tex" and relative not in texts:
                 raise ValueError(f"Input is not an inventoried TeX file: {argument}")
@@ -426,7 +474,7 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
             problem("include_case_mismatch", name, f"Resolved {argument} to {chosen}", "info", line=line)
             return chosen
         chosen = candidates[0]
-        if (working / requested).resolve() != base / chosen:
+        if chosen != requested_paths[0]:
             problem("relative_to_includer", name, f"Resolved {argument} relative to including file", "info")
         return chosen
 

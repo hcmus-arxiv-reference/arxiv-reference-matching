@@ -57,12 +57,19 @@ def reference_rows(arxiv_id: str, raw_rows: list[dict]) -> list[dict]:
     return result
 
 
+# ``s2_status`` of a references cache file (docs/data-contract.md 3.3).
+S2_FOUND, S2_NOT_FOUND = "found", "not_found"
+
+
 @dataclass(frozen=True)
 class CitationList:
     """Validated S2 citation list of one Publication. Build it with ``from_raw``."""
     arxiv_id: str
     raw: tuple[dict, ...]
     references: tuple[dict, ...] = field(repr=False)
+    # False when Semantic Scholar has no record of the Publication (HTTP 404):
+    # a real S2-side gap, kept apart from "S2 knows it, zero citations".
+    s2_found: bool = True
 
     @classmethod
     def from_raw(cls, arxiv_id: str, raw_rows: list[dict]) -> CitationList:
@@ -70,6 +77,11 @@ class CitationList:
         if not isinstance(raw_rows, list) or any(not isinstance(r, dict) for r in raw_rows):
             raise ValueError("S2 citation list must be a list of objects")
         return cls(arxiv_id, tuple(raw_rows), tuple(reference_rows(arxiv_id, raw_rows)))
+
+    @classmethod
+    def not_found(cls, arxiv_id: str) -> CitationList:
+        """Semantic Scholar answered 404 for this Publication: no rows, ``s2_found`` False."""
+        return cls(arxiv_id, (), (), s2_found=False)
 
     @property
     def total(self) -> int:

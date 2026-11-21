@@ -98,6 +98,7 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None, benchm
     manifest = SimpleNamespace(get=lambda pid, v, kind="source": records.get((pid,v,kind)))
     corpus = CorpusReader(cache, manifest)
     counts = Counter(assigned=len(identifiers), discovered=0, complete=0, references_success=0,
+                     s2_not_found=0,
                      expected_versions=0, success=0, non_tex=0, unavailable=0,
                      download_error=0, not_attempted=0)
     versions_hist, retained_sizes, complete_sizes, ref_counts = Counter(), [], [], []
@@ -151,7 +152,13 @@ def snapshot(cache, identifiers, *, member="bao", trial=None, smoke=None, benchm
         retained_sizes.append(size)
         has_refs = False
         citations = pub_state.references
-        if citations is not None:
+        if citations is not None and not citations.s2_found:
+            # S2 answered 404: a real S2-side gap, counted apart (docs/data-contract.md 3.3).
+            has_refs = True
+            counts["s2_not_found"] += 1
+            rel = f"references/{key(identifier)}.json"
+            input_hashes[rel] = digest(cache / rel)
+        elif citations is not None:
             has_refs = True
             counts["references_success"] += 1
             raw_refs += citations.total
