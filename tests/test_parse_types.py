@@ -290,3 +290,26 @@ def test_validate_D_valid_and_invalid():
     )
     with pytest.raises(ValueError, match="smith20"):
         validate_D(missing_cite, bib_sources=[b1, b2])
+
+
+def test_validate_D_allows_only_explicitly_logged_missing_citations():
+    source = BibSource(arxiv_id="2508.02872", version=1, cite_keys_used=["ghost"])
+    result = BibResult(
+        arxiv_id=source.arxiv_id,
+        key_map={"1": {}},
+        stats={"unresolved": 1, "unresolved_keys": [
+            {"version": 1, "key": "ghost", "reason": "missing_entry"},
+        ]},
+    )
+    assert validate_D(result, [source]) == []
+    result.key_map["1"]["ghost"] = "ghost"
+    with pytest.raises(ValueError, match="entries"):
+        validate_D(result, [source])
+    result.key_map["1"] = {}
+    result.stats["unresolved_keys"][0]["version"] = 2
+    with pytest.raises(ValueError, match="ghost"):
+        validate_D(result, [source])
+    result.stats["unresolved_keys"][0]["version"] = 1
+    result.stats["unresolved"] = 0
+    with pytest.raises(ValueError, match="stats.unresolved"):
+        validate_D(result, [source])

@@ -201,8 +201,10 @@ class BibResult:
 ```
 
 Bất biến:
-- Mọi key trong `cite_keys_used` của mọi Version đều có trong `key_map` của Version đó. Key
-  không có entry nào ánh xạ về chính nó và được đếm vào `stats.unresolved`.
+- Mọi key trong `cite_keys_used` có entry đều có trong `key_map` của Version đó. Key thiếu
+  entry chỉ ghi một lần vào `stats.unresolved_keys` dưới dạng
+  `{"version": n, "key": key, "reason": "missing_entry"}` và được đếm trong `stats.unresolved`.
+  `key_map` chỉ chứa các ánh xạ phân giải được. Mỗi Version vẫn có một dict, kể cả dict rỗng.
 - Giá trị của `key_map` luôn là một `citation_key` có trong `entries`.
 - Quy tắc chọn key tất định (C6). Mặc định: lấy key của Version mới nhất có entry đó; nếu hòa,
   lấy key nhỏ nhất theo thứ tự từ điển.
