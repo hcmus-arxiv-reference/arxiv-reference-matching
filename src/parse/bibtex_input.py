@@ -13,9 +13,62 @@ import re
 
 from src.common.corpus import file_digest, safe_member
 from src.common.schema import require_id, publication_key
-from src.parse.source import SourceBundle, assemble_source
+from src.parse.source import SourceBundle, assemble_source, _group
 from src.parse.structure import build_structure
 from src.parse.types import BibSource
+
+
+def _biblatex_entries(text: str) -> str:
+    """Recover literal biber fields without executing the auxiliary TeX program.
+
+    Read entry/field/name/verb records from biblatex's generated bbl format.
+    Formatting metadata is deliberately ignored; the usual BibTeX reader still
+    performs text normalization, validation and deduplication on the result.
+    """
+    entries = []
+    scalar = {"title", "year", "doi", "url", "eprint", "archiveprefix", "booktitle", "journaltitle"}
+    for match in re.finditer(r"(?m)^\s*\\entry\{", text):
+        key, pos = _group(text, match.end() - 1)
+        kind, pos = _group(text, pos)
+        end = text.find(r"\endentry", pos)
+        if end < 0:
+            raise ValueError("Unclosed biblatex entry")
+        body = text[pos:end]
+        fields = {}
+        for item in re.finditer(r"\\field\{", body):
+            name, cursor = _group(body, item.end() - 1)
+            value, _ = _group(body, cursor)
+            if name in scalar:
+                fields["journal" if name == "journaltitle" else name] = value
+        for item in re.finditer(r"\\name\{", body):
+            name, cursor = _group(body, item.end() - 1)
+            for _ in range(2):
+                _, cursor = _group(body, cursor)
+            names, _ = _group(body, cursor)
+            if name != "author":
+                continue
+            authors = []
+            cursor = 0
+            while names[cursor:].strip():
+                record, cursor = _group(names, cursor)
+                parts = {}
+                for part in re.finditer(r"\b(family|given|prefix|suffix|literal)\s*=\s*\{", record):
+                    parts[part[1]], _ = _group(record, part.end() - 1)
+                if "literal" in parts:
+                    authors.append("{" + parts["literal"] + "}")
+                elif "family" in parts:
+                    family = " ".join(parts[name] for name in ("prefix", "family") if parts.get(name))
+                    authors.append(", ".join([family, *([parts["suffix"]] if parts.get("suffix") else []),
+                                              *([parts["given"]] if parts.get("given") else [])]))
+            if authors:
+                fields["author"] = " and ".join(authors)
+        for item in re.finditer(r"\\verb\{(doi|url|eprint)\}\s*\n\s*\\verb ([^\n]*)\n\s*\\endverb", body):
+            fields[item[1]] = item[2].strip()
+        entries.append("@" + kind + "{" + key + ",\n" + ",\n".join(
+            name + "={" + value + "}" for name, value in fields.items()) + "\n}")
+    if not entries:
+        raise ValueError("No literal biblatex entries found")
+    return "\n".join(entries)
 
 
 def load_root_reviews(path: Path | None) -> dict[tuple[str, int], dict]:
@@ -101,6 +154,7 @@ def supplement_bibliography(source: BibSource, bundle: SourceBundle,
                      bibitems_raw=list(source.bibitems_raw))
     root = PurePosixPath(bundle.root or "main.tex")
     used = set()
+    issues = []
 
     def locate(name):
         if not safe_member(name):
@@ -122,13 +176,19 @@ def supplement_bibliography(source: BibSource, bundle: SourceBundle,
         selected = locate(name)
         if selected is None or selected in used:
             continue
+        if re.search(r"(?m)^\s*\\entry\{", contents[selected]):
+            source.bib_files[selected + ".bib"] = _biblatex_entries(contents[selected])
+            issues.append({"code": "recovered_biblatex_fields", "file": selected})
+            used.add(selected)
+            continue
         # Reuse Structure's bibliography reader, without adding bibliography to
         # the hierarchy or treating citations within entries as document cites.
         wrapper = SourceBundle(status="ready", text="\\begin{document}\n" + contents[selected] + "\n\\end{document}")
-        _, extra = build_structure(wrapper, source.arxiv_id, source.version)
+        tree, extra = build_structure(wrapper, source.arxiv_id, source.version)
+        issues.extend({**item, "file": selected} for item in tree.issues)
         source.bibitems_raw.extend(item for item in extra.bibitems_raw if item not in source.bibitems_raw)
         used.add(selected)
     provenance = {"archive_sha256": manifest["archive_sha256"],
                   "receipt_sha256": manifest["receipt_sha256"],
-                  "files": {name: manifest["files"][name] for name in sorted(used)}}
+                  "files": {name: manifest["files"][name] for name in sorted(used)}, "issues": issues}
     return source, provenance
