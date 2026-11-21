@@ -23,7 +23,7 @@ def test_snapshot_checks_cache_without_repair_or_network(tmp_path):
     manifest=tmp_path/'manifests/crawl.jsonl'
     before=manifest.read_bytes()
     result=snapshot(tmp_path,ids)
-    assert result['counts']['complete']==1
+    assert result['counts']['complete']==2   # 404 Version: empty record (C11)
     assert result['counts']['non_tex']==1
     assert result['counts']['unavailable']==1
     assert result['counts']['references_success']==2

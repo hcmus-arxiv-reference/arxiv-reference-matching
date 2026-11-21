@@ -23,7 +23,10 @@ def atom(identifier, version):
 
 @pytest.fixture
 def cache(tmp_path):
-    """DONE has v1 TeX + v2 PDF and 2 S2 rows (1 with arXiv ID); MISSING is HTTP 404."""
+    """DONE has v1 TeX + v2 PDF and 2 S2 rows (1 with arXiv ID); MISSING's only Version is HTTP 404.
+
+    Since C11 (instructor Q23.2) MISSING is done: its 404 Version keeps an empty receipt.
+    """
     def transport(request, _):
         url = request.full_url
         if '/api/query?' in url:
@@ -55,7 +58,7 @@ def cache(tmp_path):
 def test_rows_follow_last_manifest_record(cache):
     rows = {r['id']: r for r in make_stats.collect(cache, [DONE, MISSING, S2_FAIL, NEVER])}
     assert {i: r['status'] for i, r in rows.items()} == {
-        DONE: 'done', MISSING: 'unavailable', S2_FAIL: 'error', NEVER: 'not_attempted'}
+        DONE: 'done', MISSING: 'done', S2_FAIL: 'error', NEVER: 'not_attempted'}
     done = rows[DONE]
     assert (done['n_versions'], done['versions_with_tex'], done['versions_non_tex']) == (2, 1, 1)
     assert done['bytes_after'] == len(b'\\documentclass{article}')
@@ -71,13 +74,13 @@ def test_cli_writes_summary_and_csv(cache, tmp_path):
     out = tmp_path / 'stats'
     make_stats.main(['--data-dir', str(cache), '--ids-file', str(ids), '--out', str(out)])
     summary = json.loads((out / 'summary.json').read_text())
-    assert summary['papers_requested'] == 4 and summary['papers_done'] == 1
-    assert summary['paper_success_rate'] == 0.25
+    assert summary['papers_requested'] == 4 and summary['papers_done'] == 2
+    assert summary['paper_success_rate'] == 0.5
     assert (summary['versions_total'], summary['versions_with_tex'], summary['versions_non_tex'],
             summary['versions_unavailable']) == (4, 2, 1, 1)
-    # DONE: v1 plain TeX (23 bytes kept), v2 PDF (8 bytes, nothing kept).
-    assert summary['avg_bytes_before_per_paper'] == 31 and summary['avg_bytes_after_per_paper'] == 23
-    assert summary['avg_bytes_downloaded_per_paper'] == 31 and summary['papers_with_size_before'] == 1
+    # DONE: v1 plain TeX (23 bytes kept), v2 PDF (8 bytes, nothing kept). MISSING: 0 bytes.
+    assert summary['avg_bytes_before_per_paper'] == 15.5 and summary['avg_bytes_after_per_paper'] == 11.5
+    assert summary['avg_bytes_downloaded_per_paper'] == 15.5 and summary['papers_with_size_before'] == 2
     assert summary['size_reduction_pct'] == 25.81
     assert summary['papers_with_ref_metadata'] == 2
     with (out / 'papers.csv').open() as f:
@@ -89,8 +92,14 @@ def test_partial_final_line_is_ignored_without_touching_manifest(cache):
     record = {'arxiv_id': DONE, 'version': None, 'kind': 'references', 'status': 'error'}
     manifest.write_bytes(manifest.read_bytes() + json.dumps(record).encode()[:-5])
     before = manifest.read_bytes()
-    assert make_stats.count_done(cache) == 1
+    assert make_stats.count_done(cache) == 2
     assert manifest.read_bytes() == before
+
+
+def test_404_without_receipt_from_before_c11_stays_unavailable(cache):
+    (cache / 'raw' / '2508-02873' / 'v1' / 'source.json').unlink()
+    row = {r['id']: r for r in make_stats.collect(cache, [MISSING])}[MISSING]
+    assert row['status'] == 'unavailable' and row['versions_unavailable'] == 1
 
 
 def test_corrupt_inner_line_is_an_error(cache):
@@ -101,7 +110,7 @@ def test_corrupt_inner_line_is_an_error(cache):
 
 
 def test_benchmark_counts_both_layouts(cache, tmp_path):
-    assert benchmark.count_done(cache) == 1
+    assert benchmark.count_done(cache) == 2
     standalone = tmp_path / 'standalone'
     (standalone / '2508.02872').mkdir(parents=True)
     (standalone / '2508.02872' / 'done.json').write_text('{}')

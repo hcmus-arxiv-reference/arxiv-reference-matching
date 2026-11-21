@@ -27,7 +27,7 @@ def main(argv=None) -> int:
     print(json.dumps({"status": result.status, "root": result.root,
                       "files": len(result.files), "issues": len(result.issues),
                       "output": str(args.output)}, ensure_ascii=False))
-    return 0 if result.status in {"ready", "empty_non_tex"} else 2
+    return 0 if result.status in {"ready", "empty_non_tex", "empty_unavailable"} else 2
 
 
 if __name__ == "__main__":
