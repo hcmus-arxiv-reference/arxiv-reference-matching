@@ -15,7 +15,9 @@ import unicodedata
 import bibtexparser
 from bibtexparser import middlewares
 from bibtexparser.model import DuplicateBlockKeyBlock, Entry
-from pylatexenc.latex2text import LatexNodes2Text
+from pylatexenc.latex2text import LatexNodes2Text, MacroTextSpec, get_default_latex_context_db
+from pylatexenc.latexwalker import get_default_latex_context_db as get_parser_context
+from pylatexenc.macrospec import MacroSpec
 
 from src.common.schema import require_id
 from .normalize import _group_end, _space_end, normalize
@@ -24,8 +26,17 @@ if TYPE_CHECKING:
     from src.parse.types import BibResult, BibSource
 
 
-BIBTEX_VERSION = "4"
-_BIB_TEXT = LatexNodes2Text(math_mode="verbatim")
+BIBTEX_VERSION = "5"
+# pylatexenc 2.10 has a text replacement for href, but no default argument
+# specification. Register both so linked titles and missing arguments are safe.
+_BIB_PARSER = get_parser_context()
+_BIB_PARSER.add_context_category("bibtex-links", macros=[MacroSpec("href", "{{")], prepend=True)
+_BIB_CONTEXT = get_default_latex_context_db()
+_BIB_CONTEXT.add_context_category("bibtex-links", macros=[
+    MacroTextSpec("href", lambda node, l2tobj:
+                  l2tobj.node_arg_to_text(node, 1) or l2tobj.node_arg_to_text(node, 0)),
+], prepend=True)
+_BIB_TEXT = LatexNodes2Text(math_mode="verbatim", latex_context=_BIB_CONTEXT)
 _DOI = re.compile(r"\b10\.\d{4,9}/[^\s{}<>\"\\]+", re.I)
 _URL = re.compile(r"https?://[^\s{}<>\"\\]+", re.I)
 _ARXIV = r"(?:\d{4}\.\d{4,5}|[a-z][a-z.\-]*/\d{7})"
@@ -109,7 +120,8 @@ def _clean_bib_text(text: str | None) -> str | None:
     """
     if text is None:
         return None
-    return " ".join(_BIB_TEXT.latex_to_text(normalize("sentence", text)).split()) or None
+    decoded = _BIB_TEXT.latex_to_text(normalize("sentence", text), latex_context=_BIB_PARSER)
+    return " ".join(decoded.split()) or None
 
 
 def _expression_parts(value: str) -> list[str]:

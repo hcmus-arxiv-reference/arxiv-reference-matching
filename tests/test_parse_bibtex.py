@@ -240,6 +240,18 @@ booktitle={Conf{\'e}rence}, year={2020}}''', cites=["bib"]),
     assert result.entries[0]["journal"] == "Conférence"
 
 
+@pytest.mark.parametrize(("title", "expected"), [
+    (r"\href{https://example.org}{A {Linked} Title}", "A Linked Title"),
+    (r"\href{https://example.org}", "https://example.org"),
+    (r"\href", None),
+])
+def test_linked_bibtex_titles_and_missing_arguments(title, expected):
+    sources = [_source(1, "@misc{linked, title={" + title + "}}", cites=["linked"])]
+    result = merge_bibtex(ARXIV_ID, sources)
+    assert validate_D(result, sources) == []
+    assert result.entries[0]["title"] == expected
+
+
 def test_empty_input_and_mixed_publications():
     result = merge_bibtex(ARXIV_ID, [])
     assert result.entries == [] and result.key_map == {}
