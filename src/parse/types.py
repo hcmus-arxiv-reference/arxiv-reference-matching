@@ -999,16 +999,44 @@ def validate_D(
 
     if not isinstance(result.stats, dict):
         errors.append("[D] stats phải là dict")
+        return _finish(errors, raise_on_error)
 
-    if bib_sources is not None:
+    missing_entries: set[tuple[int, str]] = set()
+    unresolved = result.stats.get("unresolved_keys", [])
+    if not isinstance(unresolved, list):
+        errors.append("[D] stats.unresolved_keys phải là list")
+    else:
+        for item in unresolved:
+            if (not isinstance(item, dict)
+                    or type(item.get("version")) is not int or item["version"] < 1
+                    or not isinstance(item.get("key"), str) or not item["key"].strip()
+                    or item.get("reason") != "missing_entry"):
+                errors.append("[D] unresolved_keys phải ghi version, key và reason='missing_entry'")
+                continue
+            pair = (item["version"], item["key"])
+            if pair in missing_entries:
+                errors.append(f"[D] unresolved_keys lặp lại {pair!r}")
+            missing_entries.add(pair)
+            mapping = result.key_map.get(str(item["version"]), {}) if isinstance(result.key_map, dict) else {}
+            if isinstance(mapping, dict) and item["key"] in mapping:
+                errors.append(f"[D] key {pair!r} vừa được ánh xạ vừa có trong unresolved_keys")
+        if result.stats.get("unresolved", len(unresolved)) != len(unresolved):
+            errors.append("[D] stats.unresolved phải bằng số mục unresolved_keys")
+
+    if bib_sources is not None and isinstance(result.key_map, dict):
+        used_pairs = {(src.version, key) for src in bib_sources for key in src.cite_keys_used}
+        if missing_entries - used_pairs:
+            errors.append("[D] unresolved_keys chứa key không thuộc cite_keys_used")
         for src in bib_sources:
             ver_key = str(src.version)
             if ver_key not in result.key_map:
                 errors.append(f"[D] thiếu key_map cho version {ver_key!r}")
                 continue
             ver_map = result.key_map[ver_key]
+            if not isinstance(ver_map, dict):
+                continue
             for used_key in src.cite_keys_used:
-                if used_key not in ver_map:
+                if used_key not in ver_map and (src.version, used_key) not in missing_entries:
                     errors.append(
                         f"[D] cite_keys_used {used_key!r} của version {ver_key} thiếu trong key_map[{ver_key!r}]"
                     )

@@ -170,6 +170,11 @@ Ngoại lệ: chế độ `references=False` của `run_crawl` bỏ điều ki�
   thành viên BibTeX chọn quy tắc. Gợi ý mặc định: lấy key ở Version mới nhất có entry, hòa thì
   lấy key nhỏ nhất theo thứ tự từ điển **[Đã chốt C6, 2026-11-05]**.
 - `year` không đọc được: `null`, giá trị thô ghi vào log của bộ trích BibTeX **[Đã chốt]**.
+- Key cite thiếu entry chỉ ghi vào `stats.unresolved_keys` theo Version, với
+  `reason = "missing_entry"`. Mọi đích trong `key_map` phải tồn tại trong `entries`.
+  Validator chấp nhận key cite thiếu trong map khi có đúng bản ghi log tương ứng.
+  Pipeline đọc log để báo độ phủ trích dẫn và xử lý Publication còn thiếu entry
+  **[Đã chốt ngoại lệ missing_entry, 20/11/2026]**.
 
 ### 4.3 M3 dùng gì
 
