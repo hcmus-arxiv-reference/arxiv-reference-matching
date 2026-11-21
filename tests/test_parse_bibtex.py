@@ -35,6 +35,7 @@ def test_two_versions_cite_rename_golden_and_parquet_schema():
         "unresolved_keys": [], "field_conflicts": 0, "conflicts": [],
         "invalid_years": [], "issues": [], "versions_without_bibliography": 0,
         "groups_before_filter": 1, "groups_filtered_out": 0,
+        "cross_version_resolved": 0, "cross_version_keys": [],
     })
 
     result = merge_bibtex(ARXIV_ID, inputs)
@@ -250,6 +251,56 @@ def test_linked_bibtex_titles_and_missing_arguments(title, expected):
     result = merge_bibtex(ARXIV_ID, sources)
     assert validate_D(result, sources) == []
     assert result.entries[0]["title"] == expected
+
+
+def test_unique_key_can_resolve_from_another_version_without_a_local_entry():
+    sources = [_source(1, "@misc{old, title={Shared}, year={2020}}"), _source(2, cites=["old"])]
+    result = merge_bibtex(ARXIV_ID, sources)
+    assert validate_D(result, sources) == []
+    assert [row["citation_key"] for row in result.entries] == ["old"]
+    assert result.key_map == {"1": {}, "2": {"old": "old"}}
+    assert result.stats["unresolved"] == 0
+    assert result.stats["cross_version_keys"] == [
+        {"version": 2, "key": "old", "citation_key": "old", "source_versions": [1]},
+    ]
+
+
+def test_cross_version_fallback_keeps_reused_ambiguous_keys_unresolved():
+    sources = [
+        _source(1, "@misc{k, title={First}, doi={10.1234/first}}", cites=["k"]),
+        _source(2, "@misc{k, title={Second}, doi={10.1234/second}}"),
+        _source(3, cites=["k"]),
+    ]
+    result = merge_bibtex(ARXIV_ID, sources)
+    assert validate_D(result, sources) == []
+    assert result.key_map["3"] == {}
+    assert result.stats["unresolved_keys"] == [{"version": 3, "key": "k", "reason": "missing_entry"}]
+    assert any(item["code"] == "ambiguous_cross_version_key" for item in result.stats["issues"])
+
+
+def test_duplicate_fields_keep_last_value_and_log_conflict():
+    sources = [_source(1, """
+@article{dup, title={Title}, doi={invalid}, author={A. Doe and B. Smith}, doi={10.1234/valid}}
+""", cites=["dup"])]
+    result = merge_bibtex(ARXIV_ID, sources)
+    assert validate_D(result, sources) == []
+    assert result.entries[0]["doi"] == "10.1234/valid"
+    assert result.entries[0]["authors"] == ["A. Doe", "B. Smith"]
+    assert any(item["code"] == "duplicate_field_conflict" for item in result.stats["issues"])
+
+
+def test_multiline_entry_header_is_recovered_without_rewriting_valid_fields():
+    sources = [_source(1, """
+@misc
+{multiline, title={Title}, year={2020}}
+@misc{literal, title={Example @misc
+{nested}}, year={2021}}
+""", cites=["multiline", "literal"])]
+    result = merge_bibtex(ARXIV_ID, sources)
+    assert validate_D(result, sources) == []
+    assert {row["citation_key"] for row in result.entries} == {"multiline", "literal"}
+    assert result.stats["entry_before"] == 2
+    assert [item["code"] for item in result.stats["issues"]] == ["multiline_entry_header"]
 
 
 def test_empty_input_and_mixed_publications():

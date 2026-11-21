@@ -14,7 +14,7 @@ import unicodedata
 
 import bibtexparser
 from bibtexparser import middlewares
-from bibtexparser.model import DuplicateBlockKeyBlock, Entry
+from bibtexparser.model import DuplicateBlockKeyBlock, DuplicateFieldKeyBlock, Entry, ImplicitComment
 from pylatexenc.latex2text import LatexNodes2Text, MacroTextSpec, get_default_latex_context_db
 from pylatexenc.latexwalker import get_default_latex_context_db as get_parser_context
 from pylatexenc.macrospec import MacroSpec
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from src.parse.types import BibResult, BibSource
 
 
-BIBTEX_VERSION = "5"
+BIBTEX_VERSION = "6"
 # pylatexenc 2.10 has a text replacement for href, but no default argument
 # specification. Register both so linked titles and missing arguments are safe.
 _BIB_PARSER = get_parser_context()
@@ -200,14 +200,7 @@ def _bib_candidates(version: int, bib_files: dict[str, str], issues: list[dict])
     # A Version's bibliography files can share macros and crossrefs.
     library = _parse_bib("\n".join(bib_files[name] for name in sorted(bib_files)))
     entries = list(library.entries)
-    for block in library.failed_blocks:
-        issues.append({"version": version, "code": type(block).__name__,
-                       "line": block.start_line})
-        if isinstance(block, DuplicateBlockKeyBlock) and isinstance(block.ignore_error_block, Entry):
-            # Parse the duplicate separately so complementary fields remain
-            # available for deduplication, with the same @string definitions.
-            macros = "\n".join(item.raw for item in library.strings if item.raw)
-            entries.extend(_parse_bib(macros + "\n" + block.raw).entries)
+    entries.extend(_recover_entries(library, version, issues))
 
     by_key = {}
     rows = []
@@ -240,6 +233,53 @@ def _bib_candidates(version: int, bib_files: dict[str, str], issues: list[dict])
             parent = _value(inherited, "crossref")
         result.append(_candidate(version, key, "bib", fields))
     return result
+
+
+def _recover_entries(library, version: int, issues: list[dict]) -> list[Entry]:
+    """Recover duplicate fields and multiline headers from unparsed blocks.
+
+    Only implicit comments are considered for header repair, so field values
+    inside successfully parsed entries retain their original text. Duplicate
+    fields use the last occurrence, with conflicting values retained in logs.
+    """
+    macros = "\n".join(item.raw for item in library.strings if item.raw)
+    pending = list(library.failed_blocks) + [block for block in library.comments if isinstance(block, ImplicitComment)]
+    recovered = []
+    seen = set()
+    for block in pending:
+        marker = (type(block).__name__, block.raw)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        raw = block.raw or ""
+        if isinstance(block, ImplicitComment):
+            fixed = re.sub(r"^\s*(@[A-Za-z]+)[ \t]*\r?\n\s*(?=[{(])", r"\1", raw, count=1)
+            if fixed == raw:
+                continue
+            raw = fixed
+            issues.append({"version": version, "code": "multiline_entry_header", "line": block.start_line})
+        else:
+            issues.append({"version": version, "code": type(block).__name__, "line": block.start_line})
+            if not isinstance(block, (DuplicateBlockKeyBlock, DuplicateFieldKeyBlock)):
+                continue
+            entry = block.ignore_error_block
+            if not isinstance(entry, Entry):
+                continue
+            if isinstance(block, DuplicateFieldKeyBlock):
+                fields = {}
+                for field in entry.fields:
+                    name = field.key.casefold()
+                    if name in fields and fields[name] != field.value:
+                        issues.append({"version": version, "key": entry.key, "code": "duplicate_field_conflict",
+                                       "field": name, "chosen": field.value, "previous": fields[name]})
+                    fields[name] = field.value
+                raw = "@" + entry.entry_type + "{" + entry.key + ",\n" + ",\n".join(
+                    name + " = " + value for name, value in fields.items()) + "\n}"
+        parsed = _parse_bib(macros + "\n" + raw)
+        recovered.extend(parsed.entries)
+        pending.extend(parsed.failed_blocks)
+        pending.extend(block for block in parsed.comments if isinstance(block, ImplicitComment))
+    return recovered
 
 
 def _styled_title(text: str) -> tuple[str, int] | None:
@@ -528,11 +568,19 @@ def merge_bibtex(arxiv_id: str, sources: list[BibSource]) -> BibResult:
     rows, conflicts, invalid_years, raw_years = [], [], [], {}
     key_targets = {}
     cited = {(source.version, key) for source in sources for key in source.cite_keys_used}
+    cited_keys = {key for _, key in cited}
     groups = _groups(candidates, issues)
+    groups_by_key = defaultdict(set)
+    for index, group in enumerate(groups):
+        for entry in group:
+            groups_by_key[entry.key].add(index)
     filtered = 0
+    canonical_by_group = {}
     used, reserved = set(), {entry.key for entry in candidates}
-    for group in groups:
-        if not any((entry.version, entry.key) in cited for entry in group):
+    for index, group in enumerate(groups):
+        direct = any((entry.version, entry.key) in cited for entry in group)
+        referenced_elsewhere = any(entry.key in cited_keys and len(groups_by_key[entry.key]) == 1 for entry in group)
+        if not direct and not referenced_elsewhere:
             filtered += 1
             continue
         preferred = group[0].key
@@ -547,6 +595,7 @@ def merge_bibtex(arxiv_id: str, sources: list[BibSource]) -> BibResult:
         if canonical != preferred:
             issues.append({"code": "canonical_key_collision", "key": preferred, "chosen": canonical})
         used.add(canonical)
+        canonical_by_group[index] = canonical
         row = {"arxiv_id": arxiv_id, "citation_key": canonical}
         for name in _FIELDS:
             available = [entry for entry in group if entry.fields[name] is not None]
@@ -565,16 +614,24 @@ def merge_bibtex(arxiv_id: str, sources: list[BibSource]) -> BibResult:
                     raw_years.setdefault(canonical, entry.raw_year)
                 invalid_years.append({"version": entry.version, "key": entry.key, "value": entry.raw_year})
 
-    key_map, unresolved = {}, []
+    key_map, unresolved, cross_version = {}, [], []
     for version, source in sorted(by_version.items()):
         mapping = {}
         for key in dict.fromkeys(source.cite_keys_used):
             target = key_targets.get((version, key))
+            matching_groups = groups_by_key.get(key, set())
+            if target is None and len(matching_groups) == 1:
+                index = next(iter(matching_groups))
+                target = canonical_by_group[index]
+                cross_version.append({"version": version, "key": key, "citation_key": target,
+                                      "source_versions": sorted({entry.version for entry in groups[index] if entry.key == key})})
             if target is not None:
                 mapping[key] = target
             else:
                 unresolved.append({"version": version, "key": key,
                                    "reason": "missing_entry"})
+                if len(matching_groups) > 1:
+                    issues.append({"version": version, "key": key, "code": "ambiguous_cross_version_key"})
         key_map[str(version)] = mapping
 
     return BibResult(arxiv_id=arxiv_id, entries=sorted(rows, key=lambda row: row["citation_key"]),
@@ -584,6 +641,7 @@ def merge_bibtex(arxiv_id: str, sources: list[BibSource]) -> BibResult:
             "from_bib": sum(e.origin == "bib" for e in candidates),
             "from_bibitem": sum(e.origin == "bibitem" for e in candidates),
             "unresolved": len(unresolved), "unresolved_keys": unresolved,
+            "cross_version_resolved": len(cross_version), "cross_version_keys": cross_version,
             "field_conflicts": len(conflicts), "conflicts": conflicts,
             "invalid_years": invalid_years, "issues": issues,
             "versions_without_bibliography": sum(not s.bib_files and not s.bibitems_raw and not s.missing_bib
