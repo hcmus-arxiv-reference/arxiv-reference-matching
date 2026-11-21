@@ -126,6 +126,17 @@ Ngoại lệ: chế độ `references=False` của `run_crawl` bỏ điều ki�
 - Độ phủ Version **[Đề]** tính trên `versions` trong metadata, không trên số thư mục tìm thấy.
 - Parser chỉ nhận thư mục Version và metadata trên đĩa, bất kể lấy từ máy crawl hay tải từ HF,
   và chỉ kiểm bằng file theo 3.2–3.3; không đọc Manifest **[Đã chốt C9, 2026-11-05]**.
+- Bổ sung ngày 21/11/2026, đã được người dùng duyệt: bibliography bị M1 lọc mất được
+  khôi phục từ archive gốc vào sidecar riêng. Mỗi `<publication key>/v<n>/manifest.json`
+  ghi `arxiv_id`, `version`, SHA-256 receipt gốc, archive gốc, URL nguồn và từng file
+  `.bib`/`.bbl` trong `files/`. Công cụ khôi phục phải xác nhận mọi `.tex`/`.bib` trong
+  receipt khớp archive trước khi ghi sidecar. Parser kiểm lại receipt và checksum file,
+  chỉ đọc `.bib` đã khai báo, `.bbl` được input/include hoặc `.bbl` của job gốc có lệnh
+  bibliography. Thứ tự các entry được giữ khi chuyển thành `BibSource.bibitems_raw`.
+  Sidecar và các file được dùng phải có trong checkpoint/bàn giao để tái lập được.
+- File gốc nhiều ứng viên được chọn qua cấu hình root đã review, ràng buộc bằng SHA-256
+  receipt và file TeX, có lý do lựa chọn. Quyết định chưa đủ bằng chứng tiếp tục ghi lỗi
+  `ambiguous_root`. Các lỗi cú pháp đầu vào được giữ trong log Version để bàn giao.
 
 ## 4. H2: bảng Parsing → M3
 
@@ -168,6 +179,11 @@ Ngoại lệ: chế độ `references=False` của `run_crawl` bỏ điều ki�
   không được cite. `stats.groups_before_filter` là số group sau khử trùng lặp trước lọc,
   `stats.groups_filtered_out` là số group bị loại, `stats.entry_after` là số dòng được xuất
   **[Đã chốt C12, 20/11/2026, issue #32]**.
+- Bổ sung ngày 21/11/2026, đã được người dùng duyệt: nếu Version đang cite thiếu entry
+  nhưng cùng key chỉ thuộc một group duy nhất trong các Version khác của Publication,
+  group đó vẫn được giữ và dùng để phân giải. `stats.cross_version_keys` ghi Version,
+  key, citation key được chọn và các Version cung cấp entry. Khi key thuộc nhiều group,
+  tiếp tục ghi unresolved và issue `ambiguous_cross_version_key`.
 - `\cite` dùng key bị bỏ phải được đổi sang key đã chọn **[Đề]**, nên khử trùng lặp BibTeX
   phải xong **trước** khi chốt `content` của Element chứa `\cite`.
 - `citation_key` là khóa nối nhãn của M3. Quy tắc chọn key phải tất định, nếu không nhãn tay
