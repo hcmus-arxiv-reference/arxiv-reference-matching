@@ -1,0 +1,36 @@
+{
+  "deferred": [
+    {
+      "arxiv_id": "2508.06783",
+      "reason": "Người dùng yêu cầu Bảo/Liễu xác minh PDF trước khi chọn main.tex hoặc main_Arxiv.tex.",
+      "version": 2
+    }
+  ],
+  "format": 1,
+  "reviews": [
+    {
+      "arxiv_id": "2508.06444",
+      "reason": "Tiêu đề khớp metadata của bài chính; root còn lại có tiêu đề Supplemental Material.",
+      "receipt_sha256": "471fc4e840111c1e450ebf24946781182a69dd6940145dfeab6933d28d0df1a1",
+      "root_file": "Manuscript_on_NonreciprocalGeometricFrustration.tex",
+      "root_sha256": "7f72555e9900c04c4fa638878fb88a92238b6dd1e72566a826eb2950dd4c6fd8",
+      "version": 1
+    },
+    {
+      "arxiv_id": "2508.07326",
+      "reason": "Root bài chính khớp tiêu đề metadata; SI.tex được ghi rõ là Supplementary Information.",
+      "receipt_sha256": "a70e08aed95088ee3e12e806d4cef4ace0863513efa1cf6315e81f77ca50853e",
+      "root_file": "paper.tex",
+      "root_sha256": "8e1d4b049dd39e2efc878bd1beeafbc9efccdb5381322e0125be4de8cefa717d",
+      "version": 1
+    },
+    {
+      "arxiv_id": "2508.07326",
+      "reason": "Root bài chính giữ tác giả và tiêu đề cập nhật của Publication; SI.tex được ghi rõ là Supplementary Information.",
+      "receipt_sha256": "2a62b6351fd18b0d8fc697759788508cffcf3b892a3729f7bb9720d26ddfab9c",
+      "root_file": "paper.tex",
+      "root_sha256": "090ad6cc26d694fb2b2c146fdd233f7a6d43ace4930146d5d223ad1de929d773",
+      "version": 2
+    }
+  ]
+}

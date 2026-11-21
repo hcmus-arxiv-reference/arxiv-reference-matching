@@ -6,6 +6,7 @@ import pytest
 from scripts.measure_bibtex import run
 from scripts.m2_sample import make_plan
 from src.common.corpus import Publication, file_digest
+from src.common.schema import read_table
 from src.common.json_io import write_json
 
 
@@ -66,6 +67,15 @@ def test_measure_counts_entries_across_versions_and_includes_non_tex(tmp_path):
     assert measured["sample"]["plan_sha256"] == file_digest(plan_path)
     assert measured["sample"]["data_origin"] == "corpus"
     assert measured["versions_expected"] == 3
+
+    artifacts = tmp_path / "handoff"
+    handed_off = run(tmp_path, sample_path=plan_path, artifacts_dir=artifacts)
+    table = read_table("bibtex", artifacts / "bibtex.parquet")
+    assert table.num_rows == handed_off["entry_after"] == 1
+    version_logs = (artifacts / "versions.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(version_logs) == 3
+    assert (artifacts / "publications" / f"{KEY}.json").exists()
+    assert handed_off["publication_coverage"] == {"complete": 1}
 
     with pytest.raises(ValueError, match="cannot be combined"):
         run(tmp_path, size=1, seed=42, sample_path=plan_path)
