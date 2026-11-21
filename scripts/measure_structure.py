@@ -11,7 +11,7 @@ from src.common.json_io import write_json
 from src.common.schema import publication_key
 from src.parse.source import assemble_source
 from src.parse.structure import build_structure
-from src.parse.types import Section, validate_B, validate_B_prime
+from src.parse.types import Block, Section, validate_B, validate_B_prime
 
 
 def measure_sample(plan, corpus):
@@ -28,9 +28,13 @@ def measure_sample(plan, corpus):
             if isinstance(child, Section):
                 counts[child.kind] += 1
                 title = re.sub(r"\\[A-Za-z]+|[^A-Za-z ]", " ", child.title_raw).lower().split()
-                if " ".join(title) in {"references", "reference", "bibliography", "works cited", "literature cited"}:
+                if child.title_raw.strip() in {r"\refname", r"\bibname"} or " ".join(title) in {
+                    "references", "reference", "bibliography", "works cited", "literature cited"
+                }:
                     leaked.add(aid)
                 count(child, counts, aid)
+            elif isinstance(child, Block) and re.search(r"\\begin\s*\{\s*thebibliography\s*\}", child.raw):
+                leaked.add(aid)
 
     seen = set()
     for paper in plan["publications"]:
@@ -79,6 +83,7 @@ def measure_sample(plan, corpus):
             "structure_versions_validated": parsed, "structure_failures": failures,
             "publications_with_tex_tree_checked": len(checked),
             "publications_with_references_heading": sorted(leaked),
+            "all_tex_versions_checked_without_references": bool(tex) and parsed == tex and not leaked,
             "headings_by_kind": dict(headings),
             "fully_parsed_tex_publications_without_section": without_section,
             "elapsed_seconds": round(perf_counter() - started, 3)}
