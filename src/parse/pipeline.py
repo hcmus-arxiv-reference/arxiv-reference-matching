@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 import hashlib
+import inspect
 import json
 from pathlib import Path
 import time
@@ -20,9 +21,7 @@ from src.common.metrics import dir_size_mb, peak_rss_mb
 from src.common.schema import publication_key, require_id
 from src.parse._fallback import (
     FALLBACK_BIBTEX_VERSION,
-    FALLBACK_LEAVES_VERSION,
     FALLBACK_NORMALIZE_VERSION,
-    fallback_build_leaves,
     fallback_merge_bibtex,
     fallback_normalize,
 )
@@ -35,6 +34,7 @@ from src.parse.export import (
     validate_E,
     write_export_tables,
 )
+from src.parse.leaves import LEAVES_VERSION, build_leaves
 from src.parse.source import ASSEMBLER_VERSION, SourceBundle, assemble_source
 from src.parse.structure import STRUCTURE_VERSION, build_structure
 from src.parse.types import (
@@ -50,7 +50,32 @@ from src.parse.types import (
     validate_D,
 )
 
-PIPELINE_VERSION = "2"
+PIPELINE_VERSION = "3"
+
+
+def _function_version_tag(fn: Callable[..., Any]) -> str:
+    """Tạo nhãn phiên bản tất định cho hàm tùy chỉnh truyền vào pipeline."""
+    mod = getattr(fn, "__module__", "") or ""
+    qual = getattr(fn, "__qualname__", None) or getattr(fn, "__name__", type(fn).__name__)
+    return f"custom:{mod}.{qual}" if mod else f"custom:{qual}"
+
+
+def _structure_accepts_vdir(fn: Callable[..., Any]) -> bool:
+    """Kiểm tra bằng inspect.signature xem structure_fn có nhận tham số thứ 4 (vdir) không."""
+    try:
+        sig = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return True
+    positional = 0
+    for param in sig.parameters.values():
+        if param.kind == inspect.Parameter.VAR_POSITIONAL:
+            return True
+        if param.kind in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        ):
+            positional += 1
+    return positional >= 4
 
 
 def _resolve_stage_functions(
@@ -68,45 +93,62 @@ def _resolve_stage_functions(
     Callable[[str, list[BibSource]], BibResult],
     Callable[[str, str], str],
     list[str],
+    dict[str, str],
 ]:
     """Nạp các hàm thực thi cho từng bước M2; chỉ dùng fallback tạm khi `allow_fallback=True`."""
-    assembler = assemble_fn or assemble_source
-    structure = structure_fn or build_structure
+    assembler = assemble_fn if assemble_fn is not None else assemble_source
+    structure = structure_fn if structure_fn is not None else build_structure
+    leaves = leaves_fn if leaves_fn is not None else build_leaves
     active_fallbacks: list[str] = []
     missing_modules: list[str] = []
-
-    leaves = leaves_fn
-    if leaves is None:
-        try:
-            from src.parse.leaves import build_leaves as leaves  # type: ignore[import-not-found]
-        except ImportError:
-            if allow_fallback:
-                leaves = fallback_build_leaves
-                active_fallbacks.append("leaves")
-            else:
-                missing_modules.append("src.parse.leaves")
+    versions: dict[str, str] = {
+        "assembler": (
+            str(ASSEMBLER_VERSION) if assemble_fn is None else _function_version_tag(assemble_fn)
+        ),
+        "structure": (
+            str(STRUCTURE_VERSION) if structure_fn is None else _function_version_tag(structure_fn)
+        ),
+        "leaves": (
+            str(LEAVES_VERSION) if leaves_fn is None else _function_version_tag(leaves_fn)
+        ),
+        "types": str(TYPES_VERSION),
+        "export": str(EXPORT_VERSION),
+        "pipeline": str(PIPELINE_VERSION),
+    }
 
     bibtex = bibtex_fn
     if bibtex is None:
         try:
-            from src.parse.bibtex import merge_bibtex as bibtex  # type: ignore[import-not-found]
-        except ImportError:
+            import src.parse.bibtex as bibtex_mod  # type: ignore[import-not-found]
+
+            bibtex = bibtex_mod.merge_bibtex
+            versions["bibtex"] = str(getattr(bibtex_mod, "BIBTEX_VERSION", "unknown"))
+        except (ImportError, AttributeError):
             if allow_fallback:
                 bibtex = fallback_merge_bibtex
                 active_fallbacks.append("bibtex")
+                versions["bibtex"] = FALLBACK_BIBTEX_VERSION
             else:
                 missing_modules.append("src.parse.bibtex")
+    else:
+        versions["bibtex"] = _function_version_tag(bibtex)
 
     normalizer = normalize_fn
     if normalizer is None:
         try:
-            from src.parse.normalize import normalize as normalizer  # type: ignore[import-not-found]
-        except ImportError:
+            import src.parse.normalize as normalize_mod  # type: ignore[import-not-found]
+
+            normalizer = normalize_mod.normalize
+            versions["normalize"] = str(getattr(normalize_mod, "NORMALIZE_VERSION", "unknown"))
+        except (ImportError, AttributeError):
             if allow_fallback:
                 normalizer = fallback_normalize
                 active_fallbacks.append("normalize")
+                versions["normalize"] = FALLBACK_NORMALIZE_VERSION
             else:
                 missing_modules.append("src.parse.normalize")
+    else:
+        versions["normalize"] = _function_version_tag(normalizer)
 
     if missing_modules:
         joined = ", ".join(missing_modules)
@@ -117,7 +159,7 @@ def _resolve_stage_functions(
         )
 
     assert leaves is not None and bibtex is not None and normalizer is not None
-    return assembler, structure, leaves, bibtex, normalizer, sorted(active_fallbacks)
+    return assembler, structure, leaves, bibtex, normalizer, sorted(active_fallbacks), versions
 
 
 def get_module_versions(*, allow_fallback: bool = False) -> dict[str, str]:
@@ -125,7 +167,7 @@ def get_module_versions(*, allow_fallback: bool = False) -> dict[str, str]:
     versions = {
         "assembler": str(ASSEMBLER_VERSION),
         "structure": str(STRUCTURE_VERSION),
-        "leaves": FALLBACK_LEAVES_VERSION if allow_fallback else "missing",
+        "leaves": str(LEAVES_VERSION),
         "normalize": FALLBACK_NORMALIZE_VERSION if allow_fallback else "missing",
         "bibtex": FALLBACK_BIBTEX_VERSION if allow_fallback else "missing",
         "types": str(TYPES_VERSION),
@@ -133,21 +175,17 @@ def get_module_versions(*, allow_fallback: bool = False) -> dict[str, str]:
         "pipeline": str(PIPELINE_VERSION),
     }
     try:
-        from src.parse.leaves import LEAVES_VERSION  # type: ignore[import-not-found]
+        import src.parse.normalize as normalize_mod  # type: ignore[import-not-found]
 
-        versions["leaves"] = str(LEAVES_VERSION)
+        if hasattr(normalize_mod, "normalize"):
+            versions["normalize"] = str(getattr(normalize_mod, "NORMALIZE_VERSION", "unknown"))
     except ImportError:
         pass
     try:
-        from src.parse.normalize import NORMALIZE_VERSION  # type: ignore[import-not-found]
+        import src.parse.bibtex as bibtex_mod  # type: ignore[import-not-found]
 
-        versions["normalize"] = str(NORMALIZE_VERSION)
-    except ImportError:
-        pass
-    try:
-        from src.parse.bibtex import BIBTEX_VERSION  # type: ignore[import-not-found]
-
-        versions["bibtex"] = str(BIBTEX_VERSION)
+        if hasattr(bibtex_mod, "merge_bibtex"):
+            versions["bibtex"] = str(getattr(bibtex_mod, "BIBTEX_VERSION", "unknown"))
     except ImportError:
         pass
     return versions
@@ -281,7 +319,15 @@ def parse_publication(
     publication = corpus.read_publication(arxiv_id)
     total_versions = publication.versions
 
-    assembler, structure, leaves, bibtex, normalizer, active_fallbacks = _resolve_stage_functions(
+    (
+        assembler,
+        structure,
+        leaves,
+        bibtex,
+        normalizer,
+        active_fallbacks,
+        resolved_versions,
+    ) = _resolve_stage_functions(
         allow_fallback=allow_fallback,
         assemble_fn=assemble_fn,
         structure_fn=structure_fn,
@@ -289,7 +335,7 @@ def parse_publication(
         bibtex_fn=bibtex_fn,
         normalize_fn=normalize_fn,
     )
-    mod_versions = dict(module_versions or get_module_versions(allow_fallback=allow_fallback))
+    mod_versions = dict(module_versions) if module_versions is not None else dict(resolved_versions)
     input_sha = compute_publication_input_sha256(corpus, arxiv_id, total_versions)
 
     if parse_dir is not None and resume:
@@ -303,6 +349,7 @@ def parse_publication(
                 seconds=time.perf_counter() - t0,
             )
 
+    structure_wants_vdir = _structure_accepts_vdir(structure)
     version_inputs: list[VersionInput] = []
     bib_sources: list[BibSource] = []
 
@@ -316,50 +363,66 @@ def parse_publication(
                     version=ver,
                     status="missing",
                     issues=["missing_or_invalid_source"],
+                    fallbacks=list(active_fallbacks),
                     seconds=time.perf_counter() - v_start,
                 )
             )
             continue
 
-        if verified.status == "non_tex":
-            sb = assembler(vdir)
-            version_inputs.append(
-                VersionInput(
-                    version=ver,
-                    status="empty_non_tex",
-                    source_bundle=sb,
-                    seconds=time.perf_counter() - v_start,
+        if verified.status in ("non_tex", "unavailable"):
+            empty_status = "empty_non_tex" if verified.status == "non_tex" else "empty_unavailable"
+            try:
+                sb = assembler(vdir)
+                version_inputs.append(
+                    VersionInput(
+                        version=ver,
+                        status=empty_status,
+                        source_bundle=sb,
+                        fallbacks=list(active_fallbacks),
+                        seconds=time.perf_counter() - v_start,
+                    )
                 )
-            )
+            except Exception as exc:
+                version_inputs.append(
+                    VersionInput(
+                        version=ver,
+                        status="failed",
+                        issues=[f"assemble_error:{type(exc).__name__}"],
+                        fallbacks=list(active_fallbacks),
+                        seconds=time.perf_counter() - v_start,
+                    )
+                )
             continue
 
         try:
             sb = assembler(vdir)
-            if sb.status == "empty_non_tex":
+            if sb.status in ("empty_non_tex", "empty_unavailable"):
                 version_inputs.append(
                     VersionInput(
                         version=ver,
-                        status="empty_non_tex",
+                        status=sb.status,
                         source_bundle=sb,
+                        fallbacks=list(active_fallbacks),
                         seconds=time.perf_counter() - v_start,
                     )
                 )
                 continue
-            if sb.status != "ready":
+            if sb.status not in ("ready", "needs_review"):
                 version_inputs.append(
                     VersionInput(
                         version=ver,
                         status="failed",
                         source_bundle=sb,
                         issues=[i.code for i in sb.issues] or ["assemble_failed"],
+                        fallbacks=list(active_fallbacks),
                         seconds=time.perf_counter() - v_start,
                     )
                 )
                 continue
             validate_A(sb)
-            try:
+            if structure_wants_vdir:
                 st_tree, bib_src = structure(sb, arxiv_id, ver, vdir)
-            except TypeError:
+            else:
                 st_tree, bib_src = structure(sb, arxiv_id, ver)
             validate_B(st_tree)
             validate_B_prime(bib_src)
@@ -414,6 +477,7 @@ def parse_publication(
         bib_res,
         total_versions=total_versions,
         normalize_fn=normalizer,
+        allow_fallback=allow_fallback,
         include_seconds=False,
         validate_output=True,
     )
@@ -425,6 +489,60 @@ def parse_publication(
         result=export_res,
         resumed=False,
         seconds=time.perf_counter() - t0,
+    )
+
+
+def _failed_publication_result(
+    corpus: FileCorpus,
+    arxiv_id: str,
+    exc: Exception,
+    active_fallbacks: Sequence[str],
+) -> ExportResult:
+    """Tạo ExportResult đánh dấu mọi Version là failed khi một Publication ném lỗi ở run_batch."""
+    issues = [f"publication_error:{type(exc).__name__}"]
+    try:
+        total_versions = max(1, int(corpus.read_publication(arxiv_id).versions))
+    except Exception:
+        total_versions = 1
+        issues.append("metadata_unreadable")
+
+    version_logs: list[dict[str, Any]] = []
+    for ver in range(1, total_versions + 1):
+        row: dict[str, Any] = {
+            "arxiv_id": arxiv_id,
+            "version": ver,
+            "status": "failed",
+            "issues": list(issues),
+            "elements": 0,
+            "edges": 0,
+            "duplicate_sibling_edges": 0,
+            "no_bibliography": False,
+        }
+        if active_fallbacks:
+            row["fallbacks"] = sorted(set(active_fallbacks))
+        version_logs.append(row)
+
+    return ExportResult(
+        arxiv_id=arxiv_id,
+        elements=[],
+        hierarchy=[],
+        bibtex=[],
+        version_logs=version_logs,
+        order={},
+        stats={
+            "versions_total": total_versions,
+            "versions_parsed": 0,
+            "versions_non_tex": 0,
+            "versions_unavailable": 0,
+            "versions_failed": total_versions,
+            "versions_missing": 0,
+            "elements_before_dedup": 0,
+            "elements_after_dedup": 0,
+            "bibtex_before_dedup": 0,
+            "bibtex_after_dedup": 0,
+            "duplicate_sibling_edges": 0,
+        },
+        root_by_version={},
     )
 
 
@@ -446,10 +564,11 @@ def run_batch(
     """Chạy batch trên danh sách Publication hoặc plan, xuất 3 bảng Parquet, log Version và metrics."""
     start_time = time.perf_counter()
     corpus_path = Path(corpus_dir)
+    corpus = FileCorpus(corpus_path)
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
-    _, _, _, _, _, active_fallbacks = _resolve_stage_functions(
+    _, _, _, _, _, active_fallbacks, mod_versions = _resolve_stage_functions(
         allow_fallback=allow_fallback,
         assemble_fn=assemble_fn,
         structure_fn=structure_fn,
@@ -472,32 +591,37 @@ def run_batch(
             for p in sorted(meta_dir.glob("*.json"))
         )
 
-    mod_versions = get_module_versions(allow_fallback=allow_fallback)
     results: list[ExportResult] = []
     resumed_count = 0
     pub_parsed_count = 0
+    pub_empty_only_count = 0
     pub_failed_count = 0
 
     for aid in target_ids:
-        outcome = parse_publication(
-            corpus_path,
-            aid,
-            parse_dir=out_path,
-            resume=resume,
-            allow_fallback=allow_fallback,
-            assemble_fn=assemble_fn,
-            structure_fn=structure_fn,
-            leaves_fn=leaves_fn,
-            bibtex_fn=bibtex_fn,
-            normalize_fn=normalize_fn,
-            module_versions=mod_versions,
-        )
-        res = outcome.result
+        try:
+            outcome = parse_publication(
+                corpus_path,
+                aid,
+                parse_dir=out_path,
+                resume=resume,
+                allow_fallback=allow_fallback,
+                assemble_fn=assemble_fn,
+                structure_fn=structure_fn,
+                leaves_fn=leaves_fn,
+                bibtex_fn=bibtex_fn,
+                normalize_fn=normalize_fn,
+                module_versions=mod_versions,
+            )
+            res = outcome.result
+            if outcome.resumed:
+                resumed_count += 1
+        except Exception as exc:
+            res = _failed_publication_result(corpus, aid, exc, active_fallbacks)
         results.append(res)
-        if outcome.resumed:
-            resumed_count += 1
         if res.stats["versions_failed"] == 0 and res.stats["versions_missing"] == 0:
             pub_parsed_count += 1
+            if res.stats["versions_parsed"] == 0:
+                pub_empty_only_count += 1
         else:
             pub_failed_count += 1
 
@@ -519,9 +643,11 @@ def run_batch(
     v_total = len(all_logs)
     v_parsed = status_counts["parsed"]
     v_non_tex = status_counts["empty_non_tex"]
+    v_unavailable = status_counts["empty_unavailable"]
+    v_empty = v_non_tex + v_unavailable
     v_failed = status_counts["failed"]
     v_missing = status_counts["missing"]
-    tex_versions = v_total - v_non_tex
+    tex_versions = v_total - v_empty
 
     elem_before = sum(r.stats["elements_before_dedup"] for r in results)
     elem_after = sum(r.stats["elements_after_dedup"] for r in results)
@@ -553,15 +679,17 @@ def run_batch(
         "module_versions": mod_versions,
         "publications_total": n_pubs,
         "publications_succeeded": pub_parsed_count,
+        "publications_empty_only": pub_empty_only_count,
         "publications_failed": pub_failed_count,
         "publications_resumed": resumed_count,
         "publication_parse_rate": round(pub_parsed_count / n_pubs, 6) if n_pubs else 0.0,
         "versions_total_metadata": v_total,
         "versions_parsed": v_parsed,
         "versions_empty_non_tex": v_non_tex,
+        "versions_empty_unavailable": v_unavailable,
         "versions_failed": v_failed,
         "versions_missing": v_missing,
-        "version_coverage_rate": round((v_parsed + v_non_tex) / v_total, 6) if v_total else 0.0,
+        "version_coverage_rate": round((v_parsed + v_empty) / v_total, 6) if v_total else 0.0,
         "version_tex_parse_rate": round(v_parsed / tex_versions, 6) if tex_versions else 1.0,
         "elements_before_dedup": elem_before,
         "elements_after_dedup": elem_after,
@@ -576,6 +704,7 @@ def run_batch(
         "elapsed_seconds": round(elapsed, 4),
         "avg_seconds_per_publication": round(elapsed / n_pubs, 4) if n_pubs else 0.0,
         "peak_rss_mb": round(peak_rss_mb() or 0.0, 2),
+        "tables_dir_size_mb": round(dir_size_mb(tables_dir), 4),
         "output_dir_size_mb": round(dir_size_mb(out_path), 4),
     }
     if metrics_path is not None:

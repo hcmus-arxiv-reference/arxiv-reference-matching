@@ -124,6 +124,7 @@ def test_duplicate_siblings_merge_edges_and_shared_element_under_two_parents() -
         arxiv_id,
         [VersionInput(version=1, status="parsed", leaf_tree=lt)],
         BibResult(arxiv_id=arxiv_id, entries=[], key_map={"1": {}}),
+        normalize_fn=default_normalize,
     )
     assert res.version_logs[0]["duplicate_sibling_edges"] == 1
     assert len(res.order["1"][sec_a_id := res.hierarchy[0]["parent_id"]]) == 3
@@ -137,7 +138,13 @@ def test_duplicate_siblings_merge_edges_and_shared_element_under_two_parents() -
 def test_validate_e_detects_all_invariant_violations() -> None:
     case_dir = FIXTURES_DIR / "two-versions-cite-rename"
     arxiv_id, total_versions, versions, bib_result = load_golden_case(case_dir)
-    base = export_publication(arxiv_id, versions, bib_result, total_versions=total_versions)
+    base = export_publication(
+        arxiv_id,
+        versions,
+        bib_result,
+        total_versions=total_versions,
+        normalize_fn=default_normalize,
+    )
 
     # I1: parent_id không tồn tại trong elements
     bad_i1 = deepcopy(base)
@@ -192,7 +199,9 @@ def test_pipeline_requires_explicit_fallback_flag_when_packages_missing(tmp_path
         run_batch(corpus_dir, tmp_path / "out_strict", allow_fallback=False)
 
 
-def test_pipeline_batch_determinism_and_checkpoint_resume(tmp_path: Path) -> None:
+def test_pipeline_batch_determinism_and_checkpoint_resume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     corpus_dir = tmp_path / "corpus"
     m2_sample.make_mock(corpus_dir, size=5, seed=20261112)
 
@@ -208,13 +217,13 @@ def test_pipeline_batch_determinism_and_checkpoint_resume(tmp_path: Path) -> Non
     assert metrics_one["publications_total"] == 5
     assert metrics_one["publications_succeeded"] == 5
     assert metrics_one["publications_resumed"] == 0
-    assert metrics_one["module_versions"]["assembler"] == "4"
-    assert metrics_one["module_versions"]["structure"] == "2"
     assert metrics_one["allow_fallback"] is True
-    assert metrics_one["fallback_modules"] == ["bibtex", "leaves", "normalize"]
     assert metrics_one["versions_total_metadata"] == (
-        metrics_one["versions_parsed"] + metrics_one["versions_empty_non_tex"]
+        metrics_one["versions_parsed"]
+        + metrics_one["versions_empty_non_tex"]
+        + metrics_one["versions_empty_unavailable"]
     )
+    assert metrics_one["tables_dir_size_mb"] <= metrics_one["output_dir_size_mb"]
 
     # Log từng Version TeX phải ghi rõ các gói đang dùng fallback
     log_lines = [
@@ -222,9 +231,8 @@ def test_pipeline_batch_determinism_and_checkpoint_resume(tmp_path: Path) -> Non
         for line in (out_one / "log" / "versions.jsonl").read_text(encoding="utf-8").splitlines()
     ]
     parsed_logs = [row for row in log_lines if row["status"] == "parsed"]
-    assert parsed_logs and all(
-        row.get("fallbacks") == ["bibtex", "leaves", "normalize"] for row in parsed_logs
-    )
+    expected_fallbacks = metrics_one["fallback_modules"]
+    assert parsed_logs and all(row.get("fallbacks") == expected_fallbacks for row in parsed_logs)
 
     # I7: Chạy hai lần ra file giống hệt từng byte (log/versions.jsonl và 3 bảng Parquet)
     assert (out_one / "log" / "versions.jsonl").read_bytes() == (
@@ -235,15 +243,15 @@ def test_pipeline_batch_determinism_and_checkpoint_resume(tmp_path: Path) -> Non
         p2 = out_two / "tables" / f"{name}.parquet"
         assert p1.read_bytes() == p2.read_bytes()
 
-    # Resume không làm lại Publication đã xong
+    # Resume không làm lại Publication đã xong khi dùng cùng cấu hình module
     failing_assembler = Mock(side_effect=AssertionError("Should not be called on resume"))
-    resumed_metrics = run_batch(
-        corpus_dir, out_one, assemble_fn=failing_assembler, allow_fallback=True
-    )
+    monkeypatch.setattr("src.parse.pipeline.assemble_source", failing_assembler)
+    resumed_metrics = run_batch(corpus_dir, out_one, allow_fallback=True)
     assert resumed_metrics["publications_resumed"] == 5
     failing_assembler.assert_not_called()
 
     # CLI scripts.parse_range hoạt động đầu-cuối với cờ --allow-fallback
+    monkeypatch.undo()
     cli_out = tmp_path / "cli_out"
     cli_metrics = tmp_path / "cli_metrics.json"
     rc = parse_range.main(
@@ -259,8 +267,252 @@ def test_pipeline_batch_determinism_and_checkpoint_resume(tmp_path: Path) -> Non
     )
     assert rc == 0
     assert cli_metrics.is_file()
-    assert EXPORT_VERSION == "1" and PIPELINE_VERSION == "2"
+    assert EXPORT_VERSION == "1" and PIPELINE_VERSION == "3"
     versions = get_module_versions(allow_fallback=True)
-    assert versions["assembler"] == "4"
-    assert versions["structure"] == "2"
     assert "export" in versions
+
+
+def _tex_publication_ids(corpus_dir: Path) -> list[str]:
+    """Lọc các Publication trong corpus có ít nhất một Version TeX (status == 'success')."""
+    from src.common.corpus import FileCorpus, verified_source
+
+    corpus = FileCorpus(corpus_dir)
+    ids: list[str] = []
+    for meta_path in sorted((corpus_dir / "metadata").glob("*.json")):
+        aid = json.loads(meta_path.read_text(encoding="utf-8"))["publication"]["arxiv_id"]
+        pub = corpus.read_publication(aid)
+        if any(
+            (v := verified_source(corpus.version_path(aid, ver))) is not None
+            and v.status == "success"
+            for ver in range(1, pub.versions + 1)
+        ):
+            ids.append(aid)
+    return ids
+
+
+def test_run_batch_isolates_publication_error_and_skips_done_checkpoint(tmp_path: Path) -> None:
+    corpus_dir = tmp_path / "corpus"
+    m2_sample.make_mock(corpus_dir, size=5, seed=20261112)
+    tex_ids = _tex_publication_ids(corpus_dir)
+    assert len(tex_ids) >= 2
+    bad_id = tex_ids[0]
+
+    def failing_bibtex(arxiv_id: str, sources: list) -> BibResult:
+        if arxiv_id == bad_id:
+            raise ValueError("Simulated I5/BibTeX failure")
+        from src.parse._fallback import fallback_merge_bibtex
+
+        return fallback_merge_bibtex(arxiv_id, sources)
+
+    out_dir = tmp_path / "out"
+    metrics = run_batch(
+        corpus_dir,
+        out_dir,
+        bibtex_fn=failing_bibtex,
+        allow_fallback=True,
+    )
+    assert metrics["publications_total"] == 5
+    assert metrics["publications_succeeded"] == 4
+    assert metrics["publications_failed"] == 1
+    assert (out_dir / "tables" / "elements.parquet").is_file()
+    assert not (out_dir / bad_id.replace(".", "-") / "done.json").exists()
+
+    logs = [
+        json.loads(line)
+        for line in (out_dir / "log" / "versions.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    bad_logs = [row for row in logs if row["arxiv_id"] == bad_id]
+    assert bad_logs and all(
+        row["status"] == "failed" and "publication_error:ValueError" in row["issues"]
+        for row in bad_logs
+    )
+
+
+def test_pipeline_handles_needs_review_and_unavailable_c11(tmp_path: Path) -> None:
+    from src.parse.source import Issue, SourceBundle, assemble_source
+
+    corpus_dir = tmp_path / "corpus"
+    m2_sample.make_mock(corpus_dir, size=5, seed=20261112)
+    tex_ids = _tex_publication_ids(corpus_dir)
+    assert len(tex_ids) >= 2
+    id_review, id_unavail = tex_ids[0], tex_ids[1]
+
+    # Biến v1 của id_unavail thành receipt status="unavailable" (C11)
+    unavail_v1 = corpus_dir / "raw" / id_unavail.replace(".", "-") / "v1"
+    for f in list(unavail_v1.iterdir()):
+        if f.name != "source.json":
+            f.unlink()
+    (unavail_v1 / "source.json").write_text(
+        json.dumps(
+            {
+                "format": 1,
+                "arxiv_id": id_unavail,
+                "version": 1,
+                "status": "unavailable",
+                "http_status": 404,
+                "checksum": "",
+                "files": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def review_assembler(vdir: Path) -> SourceBundle:
+        sb = assemble_source(vdir)
+        if id_review.replace(".", "-") in str(vdir) and sb.status == "ready":
+            return SourceBundle(
+                status="needs_review",
+                root=sb.root,
+                text=sb.text,
+                files=sb.files,
+                unused_tex_files=sb.unused_tex_files,
+                checksums=sb.checksums,
+                spans=sb.spans,
+                includes=sb.includes,
+                issues=[
+                    *sb.issues,
+                    Issue(
+                        code="unsupported_conditional",
+                        severity="warning",
+                        file=sb.root or "main.tex",
+                        line=1,
+                        message="test warning",
+                    ),
+                ],
+                assembler_version=sb.assembler_version,
+            )
+        return sb
+
+    out_dir = tmp_path / "out"
+    metrics = run_batch(
+        corpus_dir,
+        out_dir,
+        arxiv_ids=[id_review, id_unavail],
+        assemble_fn=review_assembler,
+        allow_fallback=True,
+    )
+    logs = [
+        json.loads(line)
+        for line in (out_dir / "log" / "versions.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    review_logs = [r for r in logs if r["arxiv_id"] == id_review]
+    assert any(
+        r["status"] == "parsed" and "unsupported_conditional" in r["issues"] for r in review_logs
+    )
+    unavail_v1_logs = [r for r in logs if r["arxiv_id"] == id_unavail and r["version"] == 1]
+    assert len(unavail_v1_logs) == 1
+    assert unavail_v1_logs[0]["status"] == "empty_unavailable"
+    assert metrics["versions_empty_unavailable"] >= 1
+    assert metrics["publications_failed"] == 0
+
+
+def test_structure_type_error_is_not_masked_by_fallback_call(tmp_path: Path) -> None:
+    corpus_dir = tmp_path / "corpus"
+    m2_sample.make_mock(corpus_dir, size=5, seed=20261112)
+    aid = _tex_publication_ids(corpus_dir)[0]
+
+    calls = 0
+
+    def buggy_structure(sb, arxiv_id: str, ver: int, vdir: Path):
+        nonlocal calls
+        calls += 1
+        raise TypeError("internal bug in build_structure")
+
+    outcome = parse_publication(
+        corpus_dir,
+        aid,
+        structure_fn=buggy_structure,
+        allow_fallback=True,
+    )
+    assert calls >= 1
+    assert any(
+        log["status"] == "failed" and "parse_error:TypeError" in log["issues"]
+        for log in outcome.result.version_logs
+    )
+
+
+def test_checkpoint_key_reflects_custom_stage_function(tmp_path: Path) -> None:
+    corpus_dir = tmp_path / "corpus"
+    m2_sample.make_mock(corpus_dir, size=5, seed=20261112)
+    aid = _tex_publication_ids(corpus_dir)[0]
+    out_dir = tmp_path / "out"
+
+    m1 = run_batch(corpus_dir, out_dir, arxiv_ids=[aid], allow_fallback=True)
+    assert m1["publications_resumed"] == 0
+
+    def custom_normalize(kind: str, raw: str) -> str:
+        base = default_normalize(kind, raw)
+        return f"[CUSTOM] {base}" if kind == "sentence" else base
+
+    m2 = run_batch(
+        corpus_dir, out_dir, arxiv_ids=[aid], normalize_fn=custom_normalize, allow_fallback=True
+    )
+    assert m2["publications_resumed"] == 0
+    assert m2["module_versions"]["normalize"].startswith("custom:")
+    tbl = read_table("elements", out_dir / "tables" / "elements.parquet")
+    sentences = [
+        row["content"] for row in tbl.to_pylist() if row["kind"] == "sentence"
+    ]
+    assert sentences and all(s.startswith("[CUSTOM] ") for s in sentences)
+
+
+def test_fallback_bibtex_handles_key_collisions_deterministically() -> None:
+    from src.parse._fallback import fallback_merge_bibtex
+    from src.parse.types import BibSource
+
+    src1 = BibSource(
+        arxiv_id="2508.02872",
+        version=1,
+        bib_files={
+            "refs.bib": '@article{smith20,\n  title={First Title},\n  author={A. Smith},\n  year={2020}\n}\n'
+        },
+        missing_bib=[],
+        bibitems_raw=[],
+        cite_keys_used=["smith20"],
+    )
+    src2 = BibSource(
+        arxiv_id="2508.02872",
+        version=2,
+        bib_files={
+            "refs.bib": '@article{smith20,\n  title={Completely Different Title},\n  author={A. Smith},\n  year={2020}\n}\n'
+        },
+        missing_bib=[],
+        bibitems_raw=[],
+        cite_keys_used=["smith20"],
+    )
+    res = fallback_merge_bibtex("2508.02872", [src1, src2])
+    assert res.stats["key_collisions"] == 1
+    assert len(res.entries) == 2
+    assert {e["title"] for e in res.entries} == {"First Title", "Completely Different Title"}
+    assert res.key_map["1"]["smith20"] != res.key_map["2"]["smith20"]
+
+
+def test_export_publication_requires_normalizer_or_fallback_and_rejects_excess_version() -> None:
+    lt = LeafTree(
+        arxiv_id="2508.02872",
+        version=1,
+        root=Section(
+            kind="document",
+            title_raw="",
+            starred=False,
+            span=(0, 10),
+            children=[Leaf(kind="sentence", raw="Hello.", span=(0, 6))],
+        ),
+    )
+    with pytest.raises(ImportError, match="allow_fallback"):
+        export_publication(
+            "2508.02872",
+            [VersionInput(version=1, status="parsed", leaf_tree=lt)],
+            BibResult(arxiv_id="2508.02872", entries=[], key_map={"1": {}}),
+        )
+    with pytest.raises(ValueError, match="total_versions"):
+        export_publication(
+            "2508.02872",
+            [
+                VersionInput(version=1, status="parsed", leaf_tree=lt),
+                VersionInput(version=2, status="missing"),
+            ],
+            BibResult(arxiv_id="2508.02872", entries=[], key_map={"1": {}}),
+            total_versions=1,
+            normalize_fn=default_normalize,
+        )

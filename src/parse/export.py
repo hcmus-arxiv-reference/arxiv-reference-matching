@@ -128,7 +128,7 @@ def extract_cite_keys(text: str) -> list[str]:
 def get_normalizer(
     normalize_fn: Callable[[str, str], str] | None = None,
     *,
-    allow_fallback: bool = True,
+    allow_fallback: bool = False,
 ) -> Callable[[str, str], str]:
     """Lấy hàm normalize được truyền vào, hoặc từ src.parse.normalize nếu đã có."""
     if normalize_fn is not None:
@@ -151,7 +151,7 @@ class VersionInput:
     """Đầu vào của một Version cho bước Export [E]."""
 
     version: int
-    status: str  # "ready" | "parsed" | "success" | "empty_non_tex" | "non_tex" | "failed" | "missing"
+    status: str  # "ready" | "needs_review" | "parsed" | "success" | "empty_non_tex" | "non_tex" | "empty_unavailable" | "unavailable" | "failed" | "missing"
     leaf_tree: LeafTree | None = None
     source_bundle: SourceBundle | None = None
     structure_tree: StructureTree | None = None
@@ -203,6 +203,7 @@ def export_publication(
     *,
     total_versions: int | None = None,
     normalize_fn: Callable[[str, str], str] | None = None,
+    allow_fallback: bool = False,
     include_seconds: bool = False,
     validate_output: bool = True,
 ) -> ExportResult:
@@ -216,7 +217,7 @@ def export_publication(
     5. Sinh cạnh hierarchy (C2), gộp cạnh trùng dưới cùng cha và đếm vào log.
     """
     require_id(arxiv_id)
-    normalizer = get_normalizer(normalize_fn)
+    normalizer = get_normalizer(normalize_fn, allow_fallback=allow_fallback)
 
     by_ver: dict[int, VersionInput] = {}
     for v_in in versions:
@@ -229,6 +230,11 @@ def export_publication(
     expected_count = total_versions if total_versions is not None else (max(by_ver) if by_ver else 0)
     if expected_count < 1:
         raise ValueError("Publication phải có ít nhất 1 Version")
+    out_of_range = [ver for ver in by_ver if ver > expected_count]
+    if out_of_range:
+        raise ValueError(
+            f"Version vượt quá total_versions={expected_count}: {sorted(out_of_range)}"
+        )
 
     key_map_by_ver: dict[str, Mapping[str, str]] = {}
     if bib_result is not None:
@@ -263,19 +269,26 @@ def export_publication(
                 "duplicate_sibling_edges": 0,
                 "no_bibliography": False,
             }
+            if v_in is not None and v_in.fallbacks:
+                log_row["fallbacks"] = sorted(set(v_in.fallbacks))
             if include_seconds and v_in is not None and v_in.seconds is not None:
                 log_row["seconds"] = round(float(v_in.seconds), 4)
             version_logs.append(log_row)
             continue
 
         raw_status = v_in.status
-        if raw_status in ("empty_non_tex", "non_tex"):
-            counts_by_status["empty_non_tex"] += 1
+        if raw_status in ("empty_non_tex", "non_tex", "empty_unavailable", "unavailable"):
+            empty_status = (
+                "empty_non_tex"
+                if raw_status in ("empty_non_tex", "non_tex")
+                else "empty_unavailable"
+            )
+            counts_by_status[empty_status] += 1
             issues = _collect_issue_codes(v_in.source_bundle, v_in.issues)
             log_row = {
                 "arxiv_id": arxiv_id,
                 "version": ver_num,
-                "status": "empty_non_tex",
+                "status": empty_status,
                 "issues": issues,
                 "elements": 0,
                 "edges": 0,
@@ -311,7 +324,7 @@ def export_publication(
             version_logs.append(log_row)
             continue
 
-        if raw_status not in ("ready", "parsed", "success"):
+        if raw_status not in ("ready", "needs_review", "parsed", "success"):
             raise ValueError(f"Trạng thái Version không hợp lệ: {raw_status!r}")
 
         tree = v_in.leaf_tree
@@ -446,6 +459,7 @@ def export_publication(
         "versions_total": expected_count,
         "versions_parsed": counts_by_status["parsed"],
         "versions_non_tex": counts_by_status["empty_non_tex"],
+        "versions_unavailable": counts_by_status["empty_unavailable"],
         "versions_failed": counts_by_status["failed"],
         "versions_missing": counts_by_status["missing"],
         "elements_before_dedup": elements_before_dedup,
@@ -648,10 +662,12 @@ def validate_E(
         errors.append(f"[I8] Thứ tự version trong log không liên tục từ 1: {logged_vers}")
     for log in result.version_logs:
         st = log.get("status")
-        if st not in ("parsed", "empty_non_tex", "failed", "missing"):
+        if st not in ("parsed", "empty_non_tex", "empty_unavailable", "failed", "missing"):
             errors.append(f"[I8] Trạng thái log không hợp lệ: {st!r}")
-        if st == "empty_non_tex" and (log.get("elements") != 0 or log.get("edges") != 0):
-            errors.append(f"[I8] Version {log.get('version')} empty_non_tex phải có 0 element và 0 edge")
+        if st in ("empty_non_tex", "empty_unavailable") and (
+            log.get("elements") != 0 or log.get("edges") != 0
+        ):
+            errors.append(f"[I8] Version {log.get('version')} {st} phải có 0 element và 0 edge")
 
     if errors and raise_on_error:
         raise ValueError("\n".join(errors))

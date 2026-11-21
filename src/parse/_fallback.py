@@ -1,8 +1,8 @@
-"""Các hàm thay thế tạm thời cho các gói M2 chưa merge vào `main` (leaves, normalize, bibtex).
+"""Các hàm thay thế tạm thời cho các gói M2 chưa merge vào `main` (normalize, bibtex).
 
 Module này chỉ được dùng khi người gọi bật cờ tường minh (`allow_fallback=True` hoặc
 `--allow-fallback`), và mọi lần sử dụng đều được ghi vào log từng Version cùng file metrics.
-Sau khi các PR #43 (Leaves) và #44 (Normalize + BibTeX) merge vào `main`, module này sẽ bị xóa.
+Sau khi PR #44 (Normalize + BibTeX) merge vào `main`, module này sẽ bị xóa.
 
 Nguồn tham khảo lệnh định dạng LaTeX:
 - LaTeX2e Unofficial Reference Manual (https://latexref.xyz/)
@@ -17,15 +17,8 @@ from typing import Any, Sequence
 from src.parse.types import (
     BibResult,
     BibSource,
-    Block,
-    Leaf,
-    LeafTree,
-    ListNode,
-    Section,
-    StructureTree,
 )
 
-FALLBACK_LEAVES_VERSION = "fallback-3"
 FALLBACK_BIBTEX_VERSION = "fallback-3"
 FALLBACK_NORMALIZE_VERSION = "fallback-1"
 
@@ -81,31 +74,6 @@ _DISPLAY_ENV_RE = re.compile(
     re.DOTALL,
 )
 
-_ABBREVIATIONS: tuple[str, ...] = (
-    "i.e.",
-    "e.g.",
-    "et al.",
-    "etc.",
-    "Fig.",
-    "Figs.",
-    "Eq.",
-    "Eqs.",
-    "Sec.",
-    "Secs.",
-    "Tab.",
-    "Tabs.",
-    "vs.",
-    "cf.",
-    "Dr.",
-    "Prof.",
-    "Mr.",
-    "Mrs.",
-    "Ms.",
-    "No.",
-    "Vol.",
-    "pp.",
-)
-
 
 def fallback_normalize(kind: str, raw: str) -> str:
     """Hàm chuẩn hóa dự phòng tuân thủ bất biến M2.4a khi gói Normalize chưa merge.
@@ -139,169 +107,6 @@ def fallback_normalize(kind: str, raw: str) -> str:
 
     text = re.sub(r"\s+", " ", text).strip()
     return text
-
-
-def _split_sentences_with_spans(raw: str, base_span: tuple[int, int]) -> list[Leaf]:
-    """Tách câu bảo toàn chữ viết tắt, số thập phân, URL, toán inline và ngoặc lệnh."""
-    masked = list(raw)
-
-    for m in re.finditer(r"\$[^$]+\$|\\\(.*?\\\)", raw, re.DOTALL):
-        for i in range(m.start(), m.end()):
-            if masked[i] in ".?!":
-                masked[i] = "_"
-
-    depth = 0
-    for i, ch in enumerate(raw):
-        if ch == "{" and (i == 0 or raw[i - 1] != "\\"):
-            depth += 1
-        elif ch == "}" and (i == 0 or raw[i - 1] != "\\"):
-            depth = max(0, depth - 1)
-        elif depth > 0 and masked[i] in ".?!":
-            masked[i] = "_"
-
-    for m in re.finditer(r"https?://\S+|\d+\.\d+", raw):
-        for i in range(m.start(), m.end()):
-            if masked[i] in ".?!":
-                masked[i] = "_"
-
-    for abbr in _ABBREVIATIONS:
-        for m in re.finditer(re.escape(abbr), raw, re.IGNORECASE):
-            for i in range(m.start(), m.end()):
-                if masked[i] == ".":
-                    masked[i] = "_"
-
-    masked_str = "".join(masked)
-    leaves: list[Leaf] = []
-    start = 0
-    for m in re.finditer(r"[.?!](?=\s|$)", masked_str):
-        end = m.end()
-        seg = raw[start:end]
-        s_trim = len(seg) - len(seg.lstrip())
-        e_trim = len(seg.rstrip())
-        text_piece = seg[s_trim:e_trim]
-        if text_piece:
-            leaves.append(
-                Leaf(
-                    kind="sentence",
-                    raw=text_piece,
-                    span=(base_span[0] + start + s_trim, base_span[0] + start + e_trim),
-                )
-            )
-        start = end
-    tail = raw[start:]
-    if tail.strip():
-        s_trim = len(tail) - len(tail.lstrip())
-        e_trim = len(tail.rstrip())
-        leaves.append(
-            Leaf(
-                kind="sentence",
-                raw=tail[s_trim:e_trim],
-                span=(base_span[0] + start + s_trim, base_span[0] + start + e_trim),
-            )
-        )
-    if not leaves and raw.strip():
-        leaves.append(Leaf(kind="sentence", raw=raw.strip(), span=base_span))
-    return leaves
-
-
-def _parse_list_block(block: Block) -> ListNode:
-    """Chuyển Block danh sách (itemize/enumerate/description) thành ListNode itemize -> item."""
-    raw = block.raw
-    b_start = block.span[0]
-    begin_m = re.match(r"^\\begin\{(?:itemize|enumerate|description)\}(?:\s*\[[^\]]*\])?", raw)
-    end_m = re.search(r"\\end\{(?:itemize|enumerate|description)\}\s*$", raw)
-    inner_start = begin_m.end() if begin_m else 0
-    inner_end = end_m.start() if end_m else len(raw)
-    if inner_end <= inner_start:
-        inner_start, inner_end = 0, len(raw)
-    inner = raw[inner_start:inner_end]
-
-    parts = list(re.finditer(r"\\item(?:\s*\[[^\]]*\])?", inner))
-    items: list[ListNode | Leaf] = []
-    if not parts:
-        sents = _split_sentences_with_spans(inner, (b_start + inner_start, b_start + inner_end))
-        if not sents:
-            sents = [Leaf(kind="sentence", raw="\\item", span=block.span)]
-        items.append(
-            ListNode(
-                kind="item",
-                span=(sents[0].span[0], sents[-1].span[1]),
-                children=list(sents),
-            )
-        )
-    else:
-        for idx, pm in enumerate(parts):
-            item_rel_start = inner_start + pm.start()
-            body_rel_start = inner_start + pm.end()
-            item_rel_end = (
-                inner_start + parts[idx + 1].start() if idx + 1 < len(parts) else inner_end
-            )
-            body = raw[body_rel_start:item_rel_end]
-            item_span = (b_start + item_rel_start, b_start + item_rel_end)
-            sents = (
-                _split_sentences_with_spans(body, (b_start + body_rel_start, b_start + item_rel_end))
-                if body.strip()
-                else [Leaf(kind="sentence", raw="\\item", span=item_span)]
-            )
-            items.append(ListNode(kind="item", span=item_span, children=list(sents)))
-    return ListNode(kind="itemize", span=block.span, children=items)
-
-
-def fallback_build_leaves(tree: StructureTree) -> LeafTree:
-    """Bộ dựng LeafTree dự phòng khi gói M2.3 chưa merge vào `main`."""
-
-    def _convert_section(sec: Section) -> Section:
-        new_children: list[Section | Block | ListNode | Leaf] = []
-        for child in sec.children:
-            if isinstance(child, Section):
-                new_children.append(_convert_section(child))
-            elif isinstance(child, Block):
-                if child.type == "env" and (child.env or "").startswith(("figure", "table")):
-                    new_children.append(Leaf(kind="figure", raw=child.raw, span=child.span))
-                elif child.type == "display_math" or (
-                    child.type == "env"
-                    and (child.env or "")
-                    in (
-                        "equation",
-                        "equation*",
-                        "align",
-                        "align*",
-                        "gather",
-                        "gather*",
-                        "multline",
-                        "multline*",
-                        "eqnarray",
-                        "eqnarray*",
-                        "displaymath",
-                    )
-                ):
-                    new_children.append(Leaf(kind="formula", raw=child.raw, span=child.span))
-                elif child.type == "env" and (child.env or "") in (
-                    "itemize",
-                    "enumerate",
-                    "description",
-                ):
-                    new_children.append(_parse_list_block(child))
-                else:
-                    new_children.extend(_split_sentences_with_spans(child.raw, child.span))
-            else:
-                new_children.append(child)
-        return Section(
-            kind=sec.kind,
-            title_raw=sec.title_raw,
-            starred=sec.starred,
-            span=sec.span,
-            children=new_children,
-        )
-
-    return LeafTree(
-        arxiv_id=tree.arxiv_id,
-        version=tree.version,
-        root=_convert_section(tree.root),
-        dropped=list(tree.dropped),
-        issues=list(tree.issues),
-        leaves_version=FALLBACK_LEAVES_VERSION,
-    )
 
 
 def fallback_merge_bibtex(arxiv_id: str, sources: Sequence[BibSource]) -> BibResult:
@@ -411,9 +216,17 @@ def fallback_merge_bibtex(arxiv_id: str, sources: Sequence[BibSource]) -> BibRes
         groups.setdefault(sig, []).append(cand)
 
     key_alias: dict[tuple[int, str], str] = {}
-    for group in groups.values():
+    key_collisions = 0
+    for _, group in sorted(groups.items()):
         max_ver = max(c[0] for c in group)
-        chosen_key = min(c[1] for c in group if c[0] == max_ver)
+        base_key = min(c[1] for c in group if c[0] == max_ver)
+        chosen_key = base_key
+        if chosen_key in entries_by_key:
+            key_collisions += 1
+            suffix = 2
+            while f"{base_key}__dup{suffix}" in entries_by_key:
+                suffix += 1
+            chosen_key = f"{base_key}__dup{suffix}"
         merged: dict[str, Any] = {
             "citation_key": chosen_key,
             "entry_type": "misc",
@@ -471,6 +284,7 @@ def fallback_merge_bibtex(arxiv_id: str, sources: Sequence[BibSource]) -> BibRes
             "from_bib": from_bib,
             "from_bibitem": from_bibitem,
             "unresolved": unresolved,
+            "key_collisions": key_collisions,
         },
         bibtex_version=FALLBACK_BIBTEX_VERSION,
     )
