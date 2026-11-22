@@ -272,7 +272,7 @@ trong hai đổi.
 | I2 | Mỗi Version có đúng một root `document`, không chu trình, mọi node đi tới được root | M2.2, M2.5 |
 | I3 | Không có Element nào có tiêu đề khớp References/Bibliography | M2.2 |
 | I4 | `kind` của cha hợp lệ: `sentence` không phải cha; cha của `item` luôn là `itemize` | M2.3 |
-| I5 | Mọi `\cite{k}` trong `elements.content` có `(arxiv_id, k)` trong `bibtex` | M2.4b, M2.5 |
+| I5 | Mọi `\cite{k}` trong `elements.content` có `(arxiv_id, k)` trong `bibtex`, trừ key thiếu entry đã ghi `missing_entry` trong `stats.unresolved_keys` | M2.4b, M2.5 |
 | I6 | Hai Version giống hệt nhau cho cùng một tập cạnh, và không sinh Element mới | M2.4a, M2.5 |
 | I7 | Chạy hai lần trên cùng input cho ra file giống hệt từng byte | mọi module |
 | I8 | Số dòng log = tổng số Version theo metadata; mọi Version `non_tex` có log `empty_non_tex` | M2.5 |

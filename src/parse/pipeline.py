@@ -232,6 +232,7 @@ def _save_publication_checkpoint(
             "version_logs": result.version_logs,
             "stats": result.stats,
             "root_by_version": {str(k): v for k, v in result.root_by_version.items()},
+            "unresolved_keys": sorted(result.unresolved_keys),
         },
     )
     write_json(
@@ -282,6 +283,7 @@ def _load_publication_checkpoint(
             root_by_version={
                 int(k): v for k, v in cached.get("root_by_version", {}).items()
             },
+            unresolved_keys=frozenset(cached.get("unresolved_keys", [])),
         )
         validate_E(result, expected_versions=expected_versions, raise_on_error=True)
         return result
@@ -540,6 +542,7 @@ def _failed_publication_result(
             "elements_after_dedup": 0,
             "bibtex_before_dedup": 0,
             "bibtex_after_dedup": 0,
+            "bibtex_unresolved_keys": 0,
             "duplicate_sibling_edges": 0,
         },
         root_by_version={},
@@ -653,6 +656,7 @@ def run_batch(
     elem_after = sum(r.stats["elements_after_dedup"] for r in results)
     bib_before = sum(r.stats["bibtex_before_dedup"] for r in results)
     bib_after = sum(r.stats["bibtex_after_dedup"] for r in results)
+    bib_unresolved = sum(r.stats.get("bibtex_unresolved_keys", 0) for r in results)
     dup_edges = sum(r.stats["duplicate_sibling_edges"] for r in results)
 
     elapsed = time.perf_counter() - start_time
@@ -698,6 +702,7 @@ def run_batch(
         "bibtex_entries_before_dedup": bib_before,
         "bibtex_entries_after_dedup": bib_after,
         "bibtex_dedup_saved": bib_before - bib_after,
+        "bibtex_unresolved_keys": bib_unresolved,
         "bibtex_dedup_rate": round(1.0 - (bib_after / bib_before), 6) if bib_before else 0.0,
         "hierarchy_edges": tables["hierarchy"].num_rows,
         "duplicate_sibling_edges": dup_edges,

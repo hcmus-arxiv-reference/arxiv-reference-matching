@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 from pathlib import Path
+import sys
 from unittest.mock import Mock
 
 import pytest
@@ -191,7 +192,19 @@ def test_validate_e_detects_all_invariant_violations() -> None:
     assert any("[I8]" in e for e in errs)
 
 
-def test_pipeline_requires_explicit_fallback_flag_when_packages_missing(tmp_path: Path) -> None:
+def _hide_team_modules(monkeypatch: pytest.MonkeyPatch, *names: str) -> None:
+    """Giả lập nhánh chưa có gói thật: `import` các module này sẽ raise ImportError.
+
+    normalize (#44) và bibtex (#58) đã có trên `main`, nên test nhánh thiếu gói phải tự ẩn chúng.
+    """
+    for name in names:
+        monkeypatch.setitem(sys.modules, name, None)
+
+
+def test_pipeline_requires_explicit_fallback_flag_when_packages_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _hide_team_modules(monkeypatch, "src.parse.bibtex", "src.parse.normalize")
     corpus_dir = tmp_path / "corpus"
     m2_sample.make_mock(corpus_dir, size=2, seed=20261112)
 
@@ -202,6 +215,8 @@ def test_pipeline_requires_explicit_fallback_flag_when_packages_missing(tmp_path
 def test_pipeline_batch_determinism_and_checkpoint_resume(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Test này kiểm tra log ghi đúng các gói fallback, nên ẩn gói thật đã có trên main.
+    _hide_team_modules(monkeypatch, "src.parse.bibtex", "src.parse.normalize")
     corpus_dir = tmp_path / "corpus"
     m2_sample.make_mock(corpus_dir, size=5, seed=20261112)
 
@@ -267,7 +282,7 @@ def test_pipeline_batch_determinism_and_checkpoint_resume(
     )
     assert rc == 0
     assert cli_metrics.is_file()
-    assert EXPORT_VERSION == "1" and PIPELINE_VERSION == "3"
+    assert EXPORT_VERSION == "2" and PIPELINE_VERSION == "3"
     versions = get_module_versions(allow_fallback=True)
     assert "export" in versions
 
@@ -487,7 +502,9 @@ def test_fallback_bibtex_handles_key_collisions_deterministically() -> None:
     assert res.key_map["1"]["smith20"] != res.key_map["2"]["smith20"]
 
 
-def test_export_publication_requires_normalizer_or_fallback_and_rejects_excess_version() -> None:
+def test_export_publication_requires_normalizer_or_fallback_and_rejects_excess_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     lt = LeafTree(
         arxiv_id="2508.02872",
         version=1,
@@ -499,12 +516,14 @@ def test_export_publication_requires_normalizer_or_fallback_and_rejects_excess_v
             children=[Leaf(kind="sentence", raw="Hello.", span=(0, 6))],
         ),
     )
-    with pytest.raises(ImportError, match="allow_fallback"):
-        export_publication(
-            "2508.02872",
-            [VersionInput(version=1, status="parsed", leaf_tree=lt)],
-            BibResult(arxiv_id="2508.02872", entries=[], key_map={"1": {}}),
-        )
+    with monkeypatch.context() as patch:
+        _hide_team_modules(patch, "src.parse.normalize")
+        with pytest.raises(ImportError, match="allow_fallback"):
+            export_publication(
+                "2508.02872",
+                [VersionInput(version=1, status="parsed", leaf_tree=lt)],
+                BibResult(arxiv_id="2508.02872", entries=[], key_map={"1": {}}),
+            )
     with pytest.raises(ValueError, match="total_versions"):
         export_publication(
             "2508.02872",
@@ -516,3 +535,76 @@ def test_export_publication_requires_normalizer_or_fallback_and_rejects_excess_v
             total_versions=1,
             normalize_fn=default_normalize,
         )
+
+
+def _cite_tree(raw: str) -> LeafTree:
+    return LeafTree(
+        arxiv_id="2508.02872",
+        version=1,
+        root=Section(
+            kind="document",
+            title_raw="",
+            starred=False,
+            span=(0, len(raw)),
+            children=[Leaf(kind="sentence", raw=raw, span=(0, len(raw)))],
+        ),
+    )
+
+
+def test_i5_accepts_logged_missing_entry_but_rejects_other_unknown_keys() -> None:
+    """Key thiếu entry đã ghi missing_entry (data-contract 4.2) không làm hỏng cả Publication."""
+    entry = {"citation_key": "known", "entry_type": "article", "title": "Known", "authors": [],
+             "year": 2020, "doi": None, "journal": None, "url": None}
+    logged = BibResult(
+        arxiv_id="2508.02872",
+        entries=[entry],
+        key_map={"1": {"known": "known"}},
+        stats={"unresolved": 1, "unresolved_keys": [
+            {"version": 1, "key": "ghost", "reason": "missing_entry"},
+        ]},
+    )
+    res = export_publication(
+        "2508.02872",
+        [VersionInput(version=1, status="parsed", leaf_tree=_cite_tree(r"See \cite{known,ghost}."))],
+        logged,
+        normalize_fn=default_normalize,
+    )
+    assert res.unresolved_keys == frozenset({"ghost"})
+    assert res.stats["bibtex_unresolved_keys"] == 1
+    assert [row["citation_key"] for row in res.bibtex] == ["known"]
+
+    unlogged = BibResult(arxiv_id="2508.02872", entries=[entry], key_map={"1": {"known": "known"}})
+    with pytest.raises(ValueError, match=r"\[I5\].*ghost"):
+        export_publication(
+            "2508.02872",
+            [VersionInput(version=1, status="parsed", leaf_tree=_cite_tree(r"See \cite{known,ghost}."))],
+            unlogged,
+            normalize_fn=default_normalize,
+        )
+
+
+
+def test_checkpoint_roundtrip_keeps_unresolved_keys(tmp_path: Path) -> None:
+    """export.json lưu unresolved_keys, nên resume vẫn qua I5 thay vì tính lại cả Publication."""
+    from src.parse.pipeline import _load_publication_checkpoint, _save_publication_checkpoint
+
+    logged = BibResult(
+        arxiv_id="2508.02872",
+        entries=[],
+        key_map={"1": {}},
+        stats={"unresolved": 1, "unresolved_keys": [
+            {"version": 1, "key": "ghost", "reason": "missing_entry"},
+        ]},
+    )
+    res = export_publication(
+        "2508.02872",
+        [VersionInput(version=1, status="parsed", leaf_tree=_cite_tree(r"See \cite{ghost}."))],
+        logged,
+        normalize_fn=default_normalize,
+    )
+    versions = {"export": EXPORT_VERSION}
+    _save_publication_checkpoint(tmp_path, res, "sha", versions)
+    loaded = _load_publication_checkpoint(tmp_path, "2508.02872", "sha", versions, expected_versions=1)
+    assert loaded is not None
+    assert loaded.unresolved_keys == frozenset({"ghost"})
+    assert loaded.elements == res.elements

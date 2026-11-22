@@ -52,7 +52,7 @@ from src.parse.types import (
     validate_D,
 )
 
-EXPORT_VERSION = "1"
+EXPORT_VERSION = "2"
 
 # Danh sách lệnh trích dẫn khớp với src/parse/structure.py (không nhận nhầm \citestyle, \setcitestyle, ...)
 _CITE_COMMANDS: tuple[str, ...] = (
@@ -173,6 +173,9 @@ class ExportResult:
     order: dict[str, dict[str, list[str]]]
     stats: dict[str, int]
     root_by_version: dict[int, str] = field(default_factory=dict)
+    # Key cite thiếu entry mà M2.4b đã ghi vào stats.unresolved_keys (reason="missing_entry",
+    # data-contract mục 4.2, chốt 20/11/2026). I5 chấp nhận đúng các key này.
+    unresolved_keys: frozenset[str] = field(default_factory=frozenset)
 
 
 def _collect_issue_codes(*sources: Any) -> list[str]:
@@ -439,7 +442,13 @@ def export_publication(
     bibtex_rows: list[dict[str, Any]] = []
     bib_before = 0
     bib_after = 0
+    unresolved_keys: frozenset[str] = frozenset()
     if bib_result is not None:
+        unresolved_keys = frozenset(
+            item["key"]
+            for item in bib_result.stats.get("unresolved_keys", [])
+            if item.get("reason") == "missing_entry"
+        )
         bib_before = int(bib_result.stats.get("entry_before", len(bib_result.entries)))
         bib_after = int(bib_result.stats.get("entry_after", len(bib_result.entries)))
         for entry in bib_result.entries:
@@ -466,6 +475,7 @@ def export_publication(
         "elements_after_dedup": len(elements_list),
         "bibtex_before_dedup": bib_before,
         "bibtex_after_dedup": bib_after,
+        "bibtex_unresolved_keys": len(unresolved_keys),
         "duplicate_sibling_edges": total_duplicate_sibling_edges,
     }
 
@@ -478,6 +488,7 @@ def export_publication(
         order=order_map,
         stats=stats,
         root_by_version=root_by_version,
+        unresolved_keys=unresolved_keys,
     )
     if validate_output:
         validate_E(result, expected_versions=expected_count, raise_on_error=True)
@@ -496,7 +507,8 @@ def validate_E(
     - I2: Mỗi Version parsed có đúng một root document, không chu trình, mọi node đi tới được root.
     - I3: Không có Element nào có tiêu đề khớp References/Bibliography.
     - I4: kind của cha hợp lệ: lá không làm cha; cha của item luôn là itemize; con của itemize luôn là item.
-    - I5: Mọi \\cite{k} trong elements.content có (arxiv_id, k) trong bibtex.
+    - I5: Mọi \\cite{k} trong elements.content có (arxiv_id, k) trong bibtex, trừ key thiếu entry
+      đã ghi ở unresolved_keys (missing_entry).
     - I6: Hai Version giống hệt nhau cho cùng một tập cạnh, và không sinh Element mới.
     - I8: Số dòng log = tổng số Version theo metadata; mọi Version non_tex có log empty_non_tex.
     - I9: validate() của schema.py qua cả ba bảng (elements, hierarchy, bibtex).
@@ -614,13 +626,15 @@ def validate_E(
                     f"[I3] Section {row['element_id']!r} có tiêu đề References/Bibliography: {row['content']!r}"
                 )
 
-    # I5: Mọi \cite{k} trong elements.content có (arxiv_id, k) trong bibtex
+    # I5: Mọi \cite{k} trong elements.content có (arxiv_id, k) trong bibtex. Key thiếu entry
+    # mà M2.4b đã ghi missing_entry không có dòng bibtex; I5 chấp nhận chúng thay vì loại
+    # cả Publication (data-contract mục 4.2).
     bib_keys = {
         (row["arxiv_id"], row["citation_key"]) for row in result.bibtex
     }
     for row in result.elements:
         for cited in extract_cite_keys(row["content"]):
-            if (row["arxiv_id"], cited) not in bib_keys:
+            if (row["arxiv_id"], cited) not in bib_keys and cited not in result.unresolved_keys:
                 errors.append(
                     f"[I5] Element {row['element_id']!r} trích dẫn {cited!r} không có trong bảng bibtex"
                 )
