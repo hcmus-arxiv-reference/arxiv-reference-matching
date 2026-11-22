@@ -191,6 +191,13 @@ Ngoại lệ: chế độ `references=False` của `run_crawl` bỏ điều ki�
   thành viên BibTeX chọn quy tắc. Gợi ý mặc định: lấy key ở Version mới nhất có entry, hòa thì
   lấy key nhỏ nhất theo thứ tự từ điển **[Đã chốt C6, 2026-11-05]**.
 - `year` không đọc được: `null`, giá trị thô ghi vào log của bộ trích BibTeX **[Đã chốt]**.
+- **Phạm vi:** chỉ giữ BibTeX entry **được trích dẫn** trong văn bản, tức là có ít nhất một
+  `(version, key)` nằm trong `cite_keys_used` của Version đó. Entry chỉ nằm trong `.bib` mà không
+  được cite thì không vào bảng. Phải lọc **sau** khi gộp giữa các Version, để `crossref` và phép
+  gộp vẫn thấy đủ entry. Số entry bị lọc ghi vào số liệu của bộ trích. Lý do: trên bộ mẫu, giữ cả
+  `.bib` cho 155.529 entry, trung bình khoảng 1.500 mỗi bài, chủ yếu từ file `.bib` dùng chung của
+  lab. Entry không được cite không có trong `references` của bài, nên chỉ làm nhiễu ma trận ứng
+  viên M3 **[Đã chốt C12, 2026-11-20]**.
 - Key cite thiếu entry chỉ ghi vào `stats.unresolved_keys` theo Version, với
   `reason = "missing_entry"`. Mọi đích trong `key_map` phải tồn tại trong `entries`.
   Validator chấp nhận key cite thiếu trong map khi có đúng bản ghi log tương ứng.
@@ -216,7 +223,8 @@ Ngoại lệ: chế độ `references=False` của `run_crawl` bỏ điều ki�
 - `cand_1..cand_5` lấy từ `references.ref_arxiv_id` của cùng Publication; `groundtruth_arxiv_id`
   null khi không có Reference đúng hoặc chưa biết.
 - Định dạng file nhãn tay/tự động do nhóm chọn nhưng phải ghi tài liệu **[Đề]**; khóa nhãn là
-  `(arxiv_id, citation_key)` **[Đã chốt]**; định dạng và nơi lưu **[Mở C8]**.
+  `(arxiv_id, citation_key)` **[Đã chốt]**; định dạng và nơi lưu: CSV 6 cột ở HF `labels/`,
+  theo `docs/m3-gan-nhan.md` **[Đã chốt C8, 2026-11-20]**.
 
 ### 5.2 Dataset nộp cuối
 
@@ -244,9 +252,7 @@ của từng bài arXiv **[Đã chốt C7, 2026-11-05]**.
 
 ## 6. Quyết định còn mở
 
-| # | Câu hỏi | Ảnh hưởng | Người quyết |
-|---|---|---|---|
-| C8 | Định dạng và nơi lưu file nhãn | M3, README | Thành viên Matching |
+Không còn mục mở. C8 (file nhãn) và C12 (phạm vi bảng `bibtex`) được chốt ngày 20/11/2026.
 
 ## 7. Thay đổi hợp đồng
 
