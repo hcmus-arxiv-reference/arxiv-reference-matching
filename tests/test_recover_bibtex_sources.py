@@ -124,3 +124,16 @@ def test_range_mode_reports_mismatching_archive_and_continues(tmp_path):
     })
     report = recover_corpus(corpus, tmp_path / "archives", tmp_path / "out", client=client)
     assert report["by_status"] == {"archive_mismatch": 1, "http_error": 1}
+
+
+def test_range_mode_records_unparseable_version_and_continues(tmp_path):
+    from scripts.recover_bibtex_sources import recover_corpus
+
+    broken = r"\documentclass{article} no document environment \bibliography{refs}"
+    needs = r"\documentclass{article}\begin{document}\cite{k}\bibliography{refs}\end{document}"
+    corpus = _range_corpus(tmp_path, {"2508.02872": broken, "2508.02873": needs})
+    url = "https://export.arxiv.org/src/2508.02873v1"
+    client = _FakeClient({url: archive_file(tmp_path, {"main.tex": needs, "refs.bib": "@misc{k}"}).read_bytes()})
+    report = recover_corpus(corpus, tmp_path / "archives", tmp_path / "out", client=client)
+    assert report["by_status"] == {"source_failed": 1, "verified": 1}
+    assert client.calls == [url]

@@ -104,7 +104,13 @@ def _recover_version(aid: str, number: int, directory: Path, archive_dir: Path, 
         manifest = json.loads((destination / "manifest.json").read_text(encoding="utf-8"))
         return {"arxiv_id": aid, "version": number, "status": "verified", "resumed": True,
                 "files": list(manifest["files"]), "archive_sha256": manifest["archive_sha256"]}
-    bundle, source, _ = build_bib_source(aid, number, directory, root_review=review)
+    try:
+        bundle, source, _ = build_bib_source(aid, number, directory, root_review=review)
+    except Exception as error:   # Source/Structure rejects this Version; the M2 log records why
+        if strict:
+            raise
+        return {"arxiv_id": aid, "version": number, "status": "source_failed",
+                "error": f"{type(error).__name__}: {error}"[:300]}
     if source is None:
         return {"arxiv_id": aid, "version": number, "status": "source_failed"}
     if not _needs_recovery(bundle, source):
