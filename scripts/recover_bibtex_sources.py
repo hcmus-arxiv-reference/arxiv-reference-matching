@@ -182,7 +182,13 @@ def recover_corpus(corpus: Path, archive_dir: Path, output: Path, *, ids: list[s
                      for path in sorted((corpus / "metadata").glob("*.json")))
     records = []
     for aid in ids:
-        for number in range(1, files.read_publication(aid).versions + 1):
+        try:
+            versions = files.read_publication(aid).versions
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            records.append({"arxiv_id": aid, "version": None, "status": "metadata_invalid",
+                            "error": f"{type(error).__name__}: {error}"[:300]})
+            continue
+        for number in range(1, versions + 1):
             directory = files.version_path(aid, number)
             if verified_source(directory) is None:
                 records.append({"arxiv_id": aid, "version": number, "status": "source_missing"})
