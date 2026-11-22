@@ -10,6 +10,7 @@ from src.common.config import ArxivRange, SegmentedRange
 from .manifest import TaskRecord
 from src.common.references import CitationList
 from .source import verified_source
+from src.common.corpus import SOURCE_OK
 from .storage import key
 
 
@@ -87,7 +88,7 @@ def validate_crawl(data_dir: str | Path, benchmark_path: str | Path) -> dict[str
                 allowed_statuses = {
                     "discovery": {"success", "error"},
                     "source": {"success", "non_tex", "unavailable", "error"},
-                    "references": {"success", "error"},
+                    "references": {"success", "unavailable", "error"},   # unavailable: S2 404
                 }
                 expected_version = record.kind == "source"
                 if (record.kind not in allowed_statuses
@@ -107,6 +108,7 @@ def validate_crawl(data_dir: str | Path, benchmark_path: str | Path) -> dict[str
     publications: dict[str, dict[str, Any]] = {}
     versions_expected = versions_ok = versions_non_tex = 0
     publications_complete = references_total = references_with_arxiv_id = publications_s2_ok = 0
+    publications_s2_not_found = 0
 
     for arxiv_id, discovery in discovery_records.items():
         if discovery.status != "success":
@@ -135,7 +137,7 @@ def validate_crawl(data_dir: str | Path, benchmark_path: str | Path) -> dict[str
         for version in range(1, count + 1):
             record = latest.get((arxiv_id, version, "source"))
             source = verified_source(root / "raw" / key(arxiv_id) / f"v{version}")
-            if (record is None or record.status not in {"success", "non_tex"} or source is None
+            if (record is None or record.status not in SOURCE_OK or source is None
                     or source.status != record.status or source.checksum != record.checksum):
                 complete_sources = False
                 continue
@@ -148,11 +150,15 @@ def validate_crawl(data_dir: str | Path, benchmark_path: str | Path) -> dict[str
         try:
             refs_data = _read_json(ref_path)
             raw_rows = refs_data["rows"]
-            if (not ref_record or ref_record.status != "success"
+            # S2 404 (s2_status "not_found") is a valid, empty file recorded "unavailable".
+            s2_status = refs_data.get("s2_status", "found")
+            expected = {"found": "success", "not_found": "unavailable"}.get(s2_status)
+            if (not ref_record or expected is None or ref_record.status != expected
                     or ref_record.checksum != _digest(ref_path)
                     or refs_data.get("format") != 1 or refs_data.get("arxiv_id") != arxiv_id
-                    or not isinstance(raw_rows, list)):
+                    or not isinstance(raw_rows, list) or (s2_status == "not_found" and raw_rows)):
                 raise ValueError("missing/mismatched reference receipt or payload")
+            publications_s2_not_found += s2_status == "not_found"
             # Reading and checksums above stay independent (ADR 0003); counting
             # uses the one shared definition, and mapping checks every arXiv ID.
             citations = CitationList.from_raw(arxiv_id, raw_rows)
@@ -177,6 +183,7 @@ def validate_crawl(data_dir: str | Path, benchmark_path: str | Path) -> dict[str
         "references_total": references_total,
         "references_with_arxiv_id": references_with_arxiv_id,
         "publications_s2_ok": publications_s2_ok,
+        "publications_s2_not_found": publications_s2_not_found,
     }
     if type(benchmark.get("ids_attempted")) is int and benchmark["ids_attempted"] != attempted:
         finding("counter_mismatch", f"ids_attempted: benchmark={benchmark['ids_attempted']}, observed={attempted}")

@@ -9,9 +9,11 @@ import signal
 
 from src.common.config import get_settings, member_ids
 from src.crawl.discovery import BatchedDiscovery
+from src.common.metrics import JsonlLog
 from src.crawl.http_client import HttpClient
 from src.crawl.pipeline import CrawlPipeline
 from src.crawl.semantic_scholar import SemanticScholarClient
+from src.crawl.snapshot import SnapshotDiscovery, load_snapshot
 from src.crawl.source import ArxivSourceDownloader
 from src.crawl.storage import require_id
 
@@ -26,6 +28,8 @@ def main(argv=None):
     parser.add_argument("--discover-batch", type=int, default=50)
     parser.add_argument("--max-passes", type=int, default=3)
     parser.add_argument("--retry-delay", type=int, default=1800)
+    parser.add_argument("--metadata-snapshot", type=Path,
+                        help="extract của scripts.extract_snapshot: Discovery không gọi API cho ID có trong đó")
     args = parser.parse_args(argv)
     if not 0 <= args.discover_batch <= 100 or (args.limit is not None and args.limit < 1):
         parser.error("Invalid discover-batch or limit")
@@ -50,11 +54,21 @@ def main(argv=None):
     ids = list(dict.fromkeys(require_id(i) for i in ids))
     if args.limit:
         ids = ids[:args.limit]
-    arxiv = HttpClient(settings.user_agent(), min_interval=3.1)
+    # One line per HTTP attempt and backoff, for the runtime check (src/crawl/runtime_model.py).
+    request_log = JsonlLog(settings.data_dir / "manifests" / "requests.jsonl")
+    arxiv = HttpClient(settings.user_agent(), min_interval=3.1, name="arxiv", on_request=request_log)
     s2 = HttpClient(settings.user_agent(), min_interval=1.1 if settings.s2_api_key else 3.1,
-                    headers={"x-api-key": settings.s2_api_key} if settings.s2_api_key else {})
+                    headers={"x-api-key": settings.s2_api_key} if settings.s2_api_key else {},
+                    name="s2", on_request=request_log)
     # Engine on main (ADR 0001); range-run.json and the M1 report record engine="main".
-    pipeline = CrawlPipeline(BatchedDiscovery(arxiv, args.discover_batch),
+    discovery = BatchedDiscovery(arxiv, args.discover_batch)
+    if args.metadata_snapshot is not None:
+        header, publications = load_snapshot(args.metadata_snapshot)
+        discovery = SnapshotDiscovery(publications, discovery)
+        print(json.dumps({"event": "metadata_snapshot", "publications": len(publications),
+                          "latest_update_date": header.get("latest_update_date"),
+                          "source_sha256": header.get("source_sha256")}), flush=True)
+    pipeline = CrawlPipeline(discovery,
         ArxivSourceDownloader(arxiv, settings.data_dir / "raw"), settings.data_dir,
         SemanticScholarClient(s2))
 

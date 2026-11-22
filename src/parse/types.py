@@ -21,6 +21,7 @@ import re
 from typing import Any, Sequence
 
 from src.common.schema import from_records, make_element_id, require_id
+from src.parse.leaf_markup import PROSE_ENVS, WRAPPER, only_markup
 from src.parse.source import Issue, SourceBundle, Span
 
 TYPES_VERSION = "1"
@@ -39,7 +40,7 @@ BLOCK_TYPES: tuple[str, ...] = ("text", "env", "display_math")
 LEAF_KINDS: tuple[str, ...] = ("sentence", "formula", "figure")
 LIST_KINDS: tuple[str, ...] = ("itemize", "item")
 
-_SOURCE_STATUSES = {"ready", "needs_review", "error", "empty_non_tex"}
+_SOURCE_STATUSES = {"ready", "needs_review", "error", "empty_non_tex", "empty_unavailable"}
 _ISSUE_SEVERITIES = {"warning", "error"}
 _REFERENCES_TITLES = {
     "references",
@@ -435,15 +436,17 @@ def validate_A(bundle: SourceBundle, *, raise_on_error: bool = True) -> list[str
         if type(issue.line) is not int or issue.line < 1:
             errors.append(f"[A] issues[{idx}].line phải >= 1")
 
-    if bundle.status == "empty_non_tex":
+    if bundle.status in {"empty_non_tex", "empty_unavailable"}:
+        # Both are empty records: PDF-only Version, or arXiv 404/410 Version (C11).
+        status = bundle.status
         if bundle.text != "":
-            errors.append("[A] status='empty_non_tex' nhưng text khác rỗng")
+            errors.append(f"[A] status='{status}' nhưng text khác rỗng")
         if bundle.root is not None:
-            errors.append("[A] status='empty_non_tex' nhưng root không phải None")
+            errors.append(f"[A] status='{status}' nhưng root không phải None")
         if bundle.files:
-            errors.append("[A] status='empty_non_tex' nhưng files không rỗng")
+            errors.append(f"[A] status='{status}' nhưng files không rỗng")
         if bundle.spans:
-            errors.append("[A] status='empty_non_tex' nhưng spans không rỗng")
+            errors.append(f"[A] status='{status}' nhưng spans không rỗng")
     elif bundle.status == "error":
         if not any(isinstance(i, Issue) and i.severity == "error" for i in bundle.issues):
             errors.append("[A] status='error' nhưng không có Issue nào mang severity='error'")
@@ -854,6 +857,19 @@ def _strip_ws(text: str) -> str:
     return "".join(text.split())
 
 
+def _only_wrapper_gaps(block: Block, leaves: list[Leaf]) -> bool:
+    """Verify exact leaf slices and allow only markup or whitespace between them."""
+    cursor = 0
+    for leaf in leaves:
+        start, end = (offset - block.span[0] for offset in leaf.span)
+        if start < cursor or block.raw[start:end] != leaf.raw:
+            return False
+        if not only_markup(block.raw[cursor:start]):
+            return False
+        cursor = end
+    return only_markup(block.raw[cursor:])
+
+
 def _check_no_lost_text(
     struct_sec: Section, leaf_root: Section, path: str, errors: list[str]
 ) -> None:
@@ -868,6 +884,16 @@ def _check_no_lost_text(
             leaves = _collect_leaves_in_span(leaf_root, child.span[0], child.span[1])
             joined = _strip_ws("".join(leaf.raw for leaf in leaves))
             expected = _strip_ws(child.raw)
+            if joined == expected:
+                continue
+            prose = child.env in PROSE_ENVS or (
+                child.type == "text" and any(
+                    match.group("env") in PROSE_ENVS
+                    for match in WRAPPER.finditer(child.raw)
+                )
+            )
+            if prose and _only_wrapper_gaps(child, leaves):
+                continue
             if joined != expected:
                 errors.append(
                     f"[{cpath}] Mất hoặc lệch chữ khi tách Block tại span {child.span}: "
@@ -973,16 +999,44 @@ def validate_D(
 
     if not isinstance(result.stats, dict):
         errors.append("[D] stats phải là dict")
+        return _finish(errors, raise_on_error)
 
-    if bib_sources is not None:
+    missing_entries: set[tuple[int, str]] = set()
+    unresolved = result.stats.get("unresolved_keys", [])
+    if not isinstance(unresolved, list):
+        errors.append("[D] stats.unresolved_keys phải là list")
+    else:
+        for item in unresolved:
+            if (not isinstance(item, dict)
+                    or type(item.get("version")) is not int or item["version"] < 1
+                    or not isinstance(item.get("key"), str) or not item["key"].strip()
+                    or item.get("reason") != "missing_entry"):
+                errors.append("[D] unresolved_keys phải ghi version, key và reason='missing_entry'")
+                continue
+            pair = (item["version"], item["key"])
+            if pair in missing_entries:
+                errors.append(f"[D] unresolved_keys lặp lại {pair!r}")
+            missing_entries.add(pair)
+            mapping = result.key_map.get(str(item["version"]), {}) if isinstance(result.key_map, dict) else {}
+            if isinstance(mapping, dict) and item["key"] in mapping:
+                errors.append(f"[D] key {pair!r} vừa được ánh xạ vừa có trong unresolved_keys")
+        if result.stats.get("unresolved", len(unresolved)) != len(unresolved):
+            errors.append("[D] stats.unresolved phải bằng số mục unresolved_keys")
+
+    if bib_sources is not None and isinstance(result.key_map, dict):
+        used_pairs = {(src.version, key) for src in bib_sources for key in src.cite_keys_used}
+        if missing_entries - used_pairs:
+            errors.append("[D] unresolved_keys chứa key không thuộc cite_keys_used")
         for src in bib_sources:
             ver_key = str(src.version)
             if ver_key not in result.key_map:
                 errors.append(f"[D] thiếu key_map cho version {ver_key!r}")
                 continue
             ver_map = result.key_map[ver_key]
+            if not isinstance(ver_map, dict):
+                continue
             for used_key in src.cite_keys_used:
-                if used_key not in ver_map:
+                if used_key not in ver_map and (src.version, used_key) not in missing_entries:
                     errors.append(
                         f"[D] cite_keys_used {used_key!r} của version {ver_key} thiếu trong key_map[{ver_key!r}]"
                     )

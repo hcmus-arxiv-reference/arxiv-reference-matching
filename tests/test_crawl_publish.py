@@ -21,11 +21,24 @@ class FakeHub:
         self.root = root; root.mkdir()
         self.sha = "initial"; self.private = True
         self.files = {}; self.commits = []; self.fail = False
+        self.sibling_cap = None   # the real Hub lists at most 100,000 siblings
+
+    def _file(self, name):
+        body = self.files[name]
+        return SimpleNamespace(path=name, rfilename=name, lfs=None,
+                               blob_id=hashlib.sha1(f"blob {len(body)}\0".encode() + body).hexdigest())
 
     def repo_info(self, **kwargs):
-        siblings = [SimpleNamespace(rfilename=name, blob_id=hashlib.sha1(
-            f"blob {len(body)}\0".encode() + body).hexdigest(), lfs=None) for name, body in self.files.items()]
+        siblings = [self._file(name) for name in self.files][:self.sibling_cap]
         return SimpleNamespace(private=self.private, sha=self.sha, siblings=siblings)
+
+    def get_paths_info(self, *, paths, revision, **kwargs):
+        assert revision == self.sha
+        return [self._file(name) for name in paths if name in self.files]
+
+    def list_repo_tree(self, *, path_in_repo, recursive, revision, **kwargs):
+        assert revision == self.sha and recursive
+        return [self._file(name) for name in self.files if name.startswith(path_in_repo.rstrip("/") + "/")]
 
     def hf_hub_download(self, *, filename, revision, **kwargs):
         assert revision == self.sha
@@ -142,20 +155,53 @@ def test_public_repo_and_corrupt_source_never_upload(tmp_path):
     assert not hub.commits
 
 
-def test_remote_revision_change_rejected_before_commit(tmp_path):
+def test_remote_revision_change_is_never_committed_on_a_stale_head(tmp_path):
     data = tmp_path / "data"; hub = FakeHub(tmp_path / "hub")
-    publisher = HuggingFacePublisher(settings(data), api=hub)
+    publisher = HuggingFacePublisher(settings(data), api=hub, sleep=lambda _: None)
     info = hub.repo_info
     count = [0]
-    def changing(**kwargs):
+    def changing(**kwargs):            # another member commits during every preparation
         count[0] += 1
-        if count[0] == 2:
-            hub.sha = "someone-else"
+        if count[0] % 2 == 0:
+            hub.sha = f"someone-else-{count[0]}"
         return info(**kwargs)
     hub.repo_info = changing
     with pytest.raises(RuntimeError, match="changed"):
         publisher.publish(*bundle(data))
-    assert not hub.commits
+    assert not hub.commits and count[0] == 2 * HuggingFacePublisher.ATTEMPTS
+
+
+def test_one_concurrent_commit_is_retried_and_merged_on_the_new_head(tmp_path):
+    data = tmp_path / "data"; hub = FakeHub(tmp_path / "hub")
+    publisher = HuggingFacePublisher(settings(data), api=hub, sleep=lambda _: None)
+    publisher.publish(*bundle(data))                       # 2508.02872 already on the Hub
+    info = hub.repo_info
+    count = [0]
+    def changing_once(**kwargs):
+        count[0] += 1
+        if count[0] == 2:                                   # e.g. another member's batch lands
+            hub.files["raw/other/x.txt"] = b"x"
+            hub.sha = "other-member"
+        return info(**kwargs)
+    hub.repo_info = changing_once
+    assert publisher.publish(*bundle(data, "2508.02873"))["status"] == "uploaded"
+    path = hub.hf_hub_download(filename="tables/bao/papers.parquet", revision=hub.sha)
+    assert {r["arxiv_id"] for r in read_table("papers", path).to_pylist()} == {"2508.02872", "2508.02873"}
+    assert hub.files["raw/other/x.txt"] == b"x"
+
+
+def test_tables_merge_when_the_hub_lists_only_part_of_the_siblings(tmp_path):
+    """Regression 20/11/2026: past 100,000 files, repo_info omitted tables/<member>/,
+    and every batch overwrote the member's tables (tables/lieu kept 250 rows)."""
+    data = tmp_path / "data"; hub = FakeHub(tmp_path / "hub")
+    hub.sibling_cap = 0
+    publisher = HuggingFacePublisher(settings(data), api=hub)
+    publisher.publish(*bundle(data))
+    publisher.publish(*bundle(data, "2508.02873"))
+    path = hub.hf_hub_download(filename="tables/bao/papers.parquet", revision=hub.sha)
+    assert {r["arxiv_id"] for r in read_table("papers", path).to_pylist()} == {"2508.02872", "2508.02873"}
+    # An unchanged rerun is still recognised without the sibling list.
+    assert publisher.publish(*bundle(data, "2508.02873"))["status"] == "unchanged"
 
 
 def test_conflicting_remote_source_receipt_rejected(tmp_path):

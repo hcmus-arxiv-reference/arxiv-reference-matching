@@ -74,6 +74,15 @@ class HttpClient:
 
     Injected transports/clocks are isolated for deterministic offline tests.
     Run one crawler process at a time across all data directories/machines.
+
+    ``on_request`` (optional) receives one small dict per HTTP attempt and per
+    backoff wait, tagged with ``name`` (for example "arxiv", "s2"): method,
+    endpoint (first path segment), status, bytes received, seconds on the
+    wire, seconds slept for pacing, and
+    the delay of each 429/5xx or network backoff. No URL, header or body is
+    passed, so the log cannot leak an API key. It is the measurement the M1
+    runtime check reads (``src/crawl/runtime_model.py``); a failing callback
+    never breaks a request.
     """
     _arxiv_lock = threading.Lock()
     _arxiv_last = float("-inf")
@@ -85,7 +94,9 @@ class HttpClient:
                  clock: Callable[[], float] = time.monotonic,
                  headers: dict[str, str] | None = None,
                  max_bytes: int = 128 * 1024 * 1024,
-                 jitter: Callable[[float, float], float] = random.uniform) -> None:
+                 jitter: Callable[[float, float], float] = random.uniform,
+                 name: str = "",
+                 on_request: Callable[[dict], None] | None = None) -> None:
         if not math.isfinite(min_interval) or min_interval < 0:
             raise ValueError("min_interval must be finite and nonnegative")
         self.user_agent, self.min_interval = user_agent, min_interval
@@ -98,6 +109,21 @@ class HttpClient:
         self._deadline: float | None = None  # set only while a resumable download reads
         self._last_request = float("-inf")
         self._lock = threading.Lock()
+        self.name, self.on_request = name, on_request
+
+    def _note(self, record: dict) -> None:
+        """Pass one measurement to ``on_request``; logging never fails a request."""
+        if self.on_request is None:
+            return
+        try:
+            self.on_request({"service": self.name, **record})
+        except Exception:
+            pass
+
+    def _backoff(self, delay: float, *, status: int | None = None, error: str | None = None) -> None:
+        """Sleep before a retry and record why and how long."""
+        self._note({"event": "backoff", "status": status, "error": error, "delay": round(delay, 3)})
+        self._sleeper(delay)
 
     def _urlopen(self, request: Request, timeout: float) -> HttpResponse:
         with build_opener(_Redirects()).open(request, timeout=timeout) as response:
@@ -155,13 +181,26 @@ class HttpClient:
         self._last_request = self._clock()
         if shared:
             HttpClient._arxiv_last = self._last_request
+        # First path segment only ("src", "api", "graph"): never the ID list or query.
+        endpoint = urlsplit(request.full_url).path.strip("/").split("/")[0]
+        record = {"event": "request", "endpoint": endpoint, "method": request.get_method(),
+                  "range": request.has_header("Range"), "paced": round(max(0.0, wait), 3)}
+        started = self._clock()
         try:
-            return self._transport(request, self.timeout)
+            response = self._transport(request, self.timeout)
         except HTTPError as error:
             # Error bodies are not corpus data and can contain secrets.
             response = HttpResponse(error.code, dict(error.headers.items()), b"")
             error.close()
-            return response
+        except BaseException as error:
+            partial = getattr(error, "partial", b"")
+            self._note({**record, "status": getattr(error, "status", None),
+                        "bytes": len(partial) if isinstance(partial, (bytes, bytearray)) else 0,
+                        "seconds": round(self._clock() - started, 3), "error": type(error).__name__})
+            raise
+        self._note({**record, "status": response.status, "bytes": len(response.body),
+                    "seconds": round(self._clock() - started, 3)})
+        return response
 
     def get(self, url: str, *, resume: bool = False,
             on_event: Callable[[dict], None] | None = None) -> HttpResponse:
@@ -193,14 +232,14 @@ class HttpClient:
             for attempt in range(self.max_retries + 1):
                 try:
                     response = self._send(request, interval, shared)
-                except (URLError, TimeoutError, ConnectionError, IncompleteRead):
+                except (URLError, TimeoutError, ConnectionError, IncompleteRead) as error:
                     if attempt >= self.max_retries:
                         raise
-                    self._sleeper(min(60.0, 2.0**attempt))
+                    self._backoff(min(60.0, 2.0**attempt), error=type(error).__name__)
                     continue
                 if response.status not in RETRY_STATUSES or attempt >= self.max_retries:
                     return response
-                self._sleeper(self._status_delay(response, attempt + 1))
+                self._backoff(self._status_delay(response, attempt + 1), status=response.status)
         raise AssertionError("unreachable")
 
     def _get_resumable(self, url: str, base_headers: dict[str, str], interval: float,
@@ -247,7 +286,7 @@ class HttpClient:
                     raise
                 delay = min(60.0, 2.0 ** (failures - 1))
                 emit({"event": "retry", "error": type(error).__name__, "delay": delay, "received": len(buf)})
-                self._sleeper(delay)
+                self._backoff(delay, error=type(error).__name__)
                 continue
             finally:
                 self._deadline = None
@@ -285,7 +324,7 @@ class HttpClient:
                     return HttpResponse(status, headers, b"")
                 delay = self._status_delay(HttpResponse(status, headers, b""), failures)
                 emit({"event": "retry", "status": status, "delay": round(delay, 1), "received": len(buf)})
-                self._sleeper(delay)
+                self._backoff(delay, status=status)
                 continue
             else:
                 return HttpResponse(status, headers, body)
@@ -301,5 +340,5 @@ class HttpClient:
             emit({"event": "partial", "received": len(buf), "total": total, "attempt": attempt + 1})
             if failures > self.max_retries:
                 raise IncompleteRead(bytes(buf), None if total is None else total - len(buf))
-            self._sleeper(min(60.0, 2.0 ** max(failures - 1, 0)))
+            self._backoff(min(60.0, 2.0 ** max(failures - 1, 0)), error="partial")
         raise IncompleteRead(bytes(buf), None if total is None else total - len(buf))

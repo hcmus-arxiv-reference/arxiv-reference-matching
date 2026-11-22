@@ -1,0 +1,17 @@
+[
+  {
+    "kind": "sentence",
+    "inputs": ["We   use \\(x+1\\).", "We use $ x+1 $.", "We \\small use \\begin{math}x+1\\end{math}."],
+    "expected": "We use $x+1$."
+  },
+  {
+    "kind": "formula",
+    "inputs": ["$$ x=1 $$", "\\[x=1\\]", "\\begin{equation*} x=1 \\end{equation*}"],
+    "expected": "\\begin{equation}x=1\\end{equation}"
+  },
+  {
+    "kind": "figure",
+    "inputs": ["\\begin{figure}[!htbp]\\centering\\includegraphics{x}\\caption{Result}\\label{fig:x}\\end{figure}", "\\begin{figure}\\includegraphics{x}\\caption{Result}\\label{fig:x}\\end{figure}"],
+    "expected": "\\begin{figure}\\includegraphics{x}\\caption{Result}\\label{fig:x}\\end{figure}"
+  }
+]

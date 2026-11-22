@@ -54,7 +54,7 @@ Không có lần nộp dữ liệu trung gian **[Đề]**; H1 và H2 là chuyể
 |---|---|---|
 | Máy crawl | `data/raw/<key>/v<n>/` | `.tex`/`.bib` giữ đường dẫn tương đối gốc, `source.json` (receipt) |
 | Máy crawl | `data/metadata/<key>.json` | metadata Publication (`format: 1`) |
-| Máy crawl | `data/references/<key>.json` | dòng S2 **thô**, gồm cả reference không có arXiv ID **[Đề]** |
+| Máy crawl | `data/references/<key>.json` | dòng S2 **thô**, gồm cả reference không có arXiv ID **[Đề]**; `s2_status: "not_found"` khi S2 trả 404 (mục 3.3) |
 | Máy crawl | `data/manifests/crawl.jsonl` | Manifest, chỉ để resume |
 | HF (private) | `raw/<member>/<key>/v<n>/` | `.tex`/`.bib`, `source.json`, `metadata.json`, `references.json` (hai file sau lặp lại ở mỗi Version) |
 | HF (private) | `tables/<member>/{papers,references}.parquet` | bảng Crawling của một Range |
@@ -67,16 +67,25 @@ Manifest (ADR 0002: file là nguồn gốc).
 Một thư mục Version là **Version đã xác minh** khi `verified_source()` chấp nhận nó:
 
 - `source.json` có `format: 1`, `arxiv_id` và `version` khớp tên thư mục;
-- `status` là `success` hoặc `non_tex`;
+- `status` là `success`, `non_tex` hoặc `unavailable`;
 - danh sách `.tex`/`.bib` trên đĩa khớp đúng danh sách trong receipt, checksum từng file khớp,
   không symlink, không đường dẫn thoát thư mục;
-- `success` khi và chỉ khi có ít nhất một `.tex`.
+- `success` khi và chỉ khi có ít nhất một `.tex`;
+- `unavailable` thì `files` rỗng, `checksum` rỗng, có `http_status` (404 hoặc 410) và thư mục
+  không có `.tex`/`.bib` nào.
 
 Version `non_tex` (chỉ PDF, docx) là Version đã xác minh nhưng không có TeX. M2 vẫn phải ghi
 nhận nó như một bản ghi rỗng **[Đề]**. Vì root không có dòng `hierarchy`, Version rỗng không
 có dòng nào trong các bảng; bản ghi rỗng nằm trong log parse theo từng Version, với `status`
-∈ {`parsed`, `empty_non_tex`, `failed`, `missing`}. Báo cáo độ phủ Version đọc từ log này
+∈ {`parsed`, `empty_non_tex`, `empty_unavailable`, `failed`, `missing`}. Báo cáo độ phủ Version đọc từ log này
 **[Đã chốt C4, 2026-11-05]**.
+
+Version `unavailable` là Version mà `export.arxiv.org/src/<id>v<n>` trả HTTP 404/410: metadata
+vẫn liệt kê nó nhưng arXiv không có source. Thầy trả lời câu 23.2 (đọc ngày 19/11/2026): đánh dấu
+"không tải được, lỗi 404" nhưng **vẫn giữ bản ghi rỗng như Version chỉ có PDF**, vì đó vẫn là
+Version thật, và không cần tìm nguồn khác. Engine ghi receipt rỗng một lần, không hỏi lại; M2 ghi
+log `empty_unavailable`. Ví dụ: Range Bảo có 48 Version như vậy (44 Publication), lịch sử nộp bài
+trên trang abs đều đánh dấu `(withdrawn)`, như `2508.03014` v2 **[Đã chốt C11, 2026-11-19]**.
 
 Lúc crawl, Runner và Export kiểm thêm: Manifest có bản ghi Version đó với cùng `status` và
 cùng `checksum`. Phép kiểm này chỉ có trên máy crawl.
@@ -89,6 +98,22 @@ Publication **hoàn chỉnh** khi:
    dòng `papers` qua `validate()`;
 2. mọi Version `v1..v<versions>` đều là Version đã xác minh;
 3. file references hợp lệ: `format: 1`, `arxiv_id` khớp, ánh xạ sang dòng `references` không lỗi.
+   File hợp lệ có một trong hai dạng:
+   - **S2 có bài** (`s2_status` vắng hoặc `"found"`): `rows` là Danh sách trích dẫn S2, có thể rỗng.
+     Manifest ghi `references` = `success`.
+   - **S2 không có bài** (`s2_status: "not_found"`): Semantic Scholar trả HTTP 404 cho
+     `arXiv:<id>`, `rows` bắt buộc rỗng. Manifest ghi `references` = `unavailable`,
+     `http_status: 404`, cùng checksum với file.
+
+S2 404 là **lỗi thật phía Semantic Scholar**, không phải lỗi crawl: hỏi lại vẫn 404, nên Engine
+ghi một lần rồi không hỏi lại (tương tự Version mà arXiv trả 404, mục 3.2). Phân biệt
+với "S2 có bài nhưng 0 trích dẫn" vì hai trường hợp khác nhau về nguồn gốc. Publication S2 không
+có bài vẫn hoàn chỉnh: có dòng `papers`, không có dòng `references`. Báo cáo đếm riêng
+(`publications_s2_not_found` của validator, `s2_not_found` của `report_m1`, cột `s2_status` của
+`make_stats`) và không tính vào trung bình số trích dẫn mỗi bài. Lỗi S2 khác (429, 5xx, mạng)
+vẫn là `error` và được thử lại ở lượt sau. Ví dụ thực tế: `2508.03220` (Range Bảo, chỉ có PDF),
+S2 trả `Paper with id arXiv:2508.03220 not found`, kiểm lại trực tiếp ngày 15/11/2026
+**[Đã chốt C10, 2026-11-15]**.
 
 Chỉ Publication hoàn chỉnh mới được Export ghi vào `papers`/`references` và được upload.
 Ngoại lệ: chế độ `references=False` của `run_crawl` bỏ điều kiện 3 và không xuất bảng
@@ -101,6 +126,17 @@ Ngoại lệ: chế độ `references=False` của `run_crawl` bỏ điều ki�
 - Độ phủ Version **[Đề]** tính trên `versions` trong metadata, không trên số thư mục tìm thấy.
 - Parser chỉ nhận thư mục Version và metadata trên đĩa, bất kể lấy từ máy crawl hay tải từ HF,
   và chỉ kiểm bằng file theo 3.2–3.3; không đọc Manifest **[Đã chốt C9, 2026-11-05]**.
+- Bổ sung ngày 21/11/2026, đã được người dùng duyệt: bibliography bị M1 lọc mất được
+  khôi phục từ archive gốc vào sidecar riêng. Mỗi `<publication key>/v<n>/manifest.json`
+  ghi `arxiv_id`, `version`, SHA-256 receipt gốc, archive gốc, URL nguồn và từng file
+  `.bib`/`.bbl` trong `files/`. Công cụ khôi phục phải xác nhận mọi `.tex`/`.bib` trong
+  receipt khớp archive trước khi ghi sidecar. Parser kiểm lại receipt và checksum file,
+  chỉ đọc `.bib` đã khai báo, `.bbl` được input/include hoặc `.bbl` của job gốc có lệnh
+  bibliography. Thứ tự các entry được giữ khi chuyển thành `BibSource.bibitems_raw`.
+  Sidecar và các file được dùng phải có trong checkpoint/bàn giao để tái lập được.
+- File gốc nhiều ứng viên được chọn qua cấu hình root đã review, ràng buộc bằng SHA-256
+  receipt và file TeX, có lý do lựa chọn. Quyết định chưa đủ bằng chứng tiếp tục ghi lỗi
+  `ambiguous_root`. Các lỗi cú pháp đầu vào được giữ trong log Version để bàn giao.
 
 ## 4. H2: bảng Parsing → M3
 
@@ -138,6 +174,16 @@ Ngoại lệ: chế độ `references=False` của `run_crawl` bỏ điều ki�
 
 - Một dòng cho mỗi BibTeX entry sau khi đổi `\bibitem` và khử trùng lặp giữa các Version;
   hợp các trường của entry trùng, không bỏ thông tin **[Đề]**.
+- Bảng chỉ giữ group có ít nhất một `(version, key)` thuộc `cite_keys_used` của Version
+  tương ứng. Lọc sau khi gộp để vẫn kế thừa trường qua `crossref` và từ các bản entry
+  không được cite. `stats.groups_before_filter` là số group sau khử trùng lặp trước lọc,
+  `stats.groups_filtered_out` là số group bị loại, `stats.entry_after` là số dòng được xuất
+  **[Đã chốt C12, 20/11/2026, issue #32]**.
+- Bổ sung ngày 21/11/2026, đã được người dùng duyệt: nếu Version đang cite thiếu entry
+  nhưng cùng key chỉ thuộc một group duy nhất trong các Version khác của Publication,
+  group đó vẫn được giữ và dùng để phân giải. `stats.cross_version_keys` ghi Version,
+  key, citation key được chọn và các Version cung cấp entry. Khi key thuộc nhiều group,
+  tiếp tục ghi unresolved và issue `ambiguous_cross_version_key`.
 - `\cite` dùng key bị bỏ phải được đổi sang key đã chọn **[Đề]**, nên khử trùng lặp BibTeX
   phải xong **trước** khi chốt `content` của Element chứa `\cite`.
 - `citation_key` là khóa nối nhãn của M3. Quy tắc chọn key phải tất định, nếu không nhãn tay
@@ -152,6 +198,11 @@ Ngoại lệ: chế độ `references=False` của `run_crawl` bỏ điều ki�
   `.bib` cho 155.529 entry, trung bình khoảng 1.500 mỗi bài, chủ yếu từ file `.bib` dùng chung của
   lab. Entry không được cite không có trong `references` của bài, nên chỉ làm nhiễu ma trận ứng
   viên M3 **[Đã chốt C12, 2026-11-20]**.
+- Key cite thiếu entry chỉ ghi vào `stats.unresolved_keys` theo Version, với
+  `reason = "missing_entry"`. Mọi đích trong `key_map` phải tồn tại trong `entries`.
+  Validator chấp nhận key cite thiếu trong map khi có đúng bản ghi log tương ứng.
+  Pipeline đọc log để báo độ phủ trích dẫn và xử lý Publication còn thiếu entry
+  **[Đã chốt ngoại lệ missing_entry, 20/11/2026]**.
 
 ### 4.3 M3 dùng gì
 
@@ -208,3 +259,11 @@ Không còn mục mở. C8 (file nhãn) và C12 (phạm vi bảng `bibtex`) đư
 - Đổi cột, kiểu, khóa hoặc enum: sửa `src/common/schema.py` và mục tương ứng ở đây trong
   cùng một commit, sau khi nhóm trưởng duyệt (`AGENTS.md` mục 4.4).
 - Khi một mục **[Mở]** được chốt: chuyển sang **[Đã chốt]**, ghi ngày, xóa dòng ở mục 6.
+- 2026-11-15 (C10, Bảo duyệt): thêm `s2_status: "not_found"` cho file references và status
+  `unavailable` của task `references` khi S2 trả 404 (mục 3.3). File cũ không có trường này
+  vẫn hợp lệ và giữ nguyên checksum.
+- 2026-11-19 (C11, theo câu trả lời 23.2 của thầy, Bảo duyệt): Version arXiv trả 404/410 có
+  receipt `status: "unavailable"` rỗng và là Version đã xác minh (mục 3.2), nên Publication có
+  Version như vậy vẫn hoàn chỉnh. Log parse thêm `empty_unavailable`. Dữ liệu crawl trước C11
+  chỉ có bản ghi Manifest, không có receipt: chạy lại Engine trên thư mục dữ liệu đó để ghi
+  receipt (chỉ hỏi lại các URL 404), rồi xuất lại bảng.
