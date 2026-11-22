@@ -34,6 +34,7 @@ from src.parse.export import (
     validate_E,
     write_export_tables,
 )
+from src.parse.bibtex_input import supplement_bibliography
 from src.parse.leaves import LEAVES_VERSION, build_leaves
 from src.parse.source import ASSEMBLER_VERSION, SourceBundle, assemble_source
 from src.parse.structure import STRUCTURE_VERSION, build_structure
@@ -50,7 +51,7 @@ from src.parse.types import (
     validate_D,
 )
 
-PIPELINE_VERSION = "3"
+PIPELINE_VERSION = "4"
 
 
 def _function_version_tag(fn: Callable[..., Any]) -> str:
@@ -211,6 +212,42 @@ def compute_publication_input_sha256(corpus: FileCorpus, arxiv_id: str, total_ve
     return hashlib.sha256(payload).hexdigest()
 
 
+def _bibliography_inputs_digest(
+    arxiv_id: str,
+    total_versions: int,
+    supplement_dir: Path | None,
+    root_reviews: Mapping[tuple[str, int], Mapping[str, Any]],
+) -> str | None:
+    """Băm các đầu vào ngoài corpus M1 mà một Publication dùng: sidecar và root đã review.
+
+    Sidecar bibliography (``scripts/recover_bibtex_sources.py``, data-contract mục 4.2) và
+    ``configs/m2-reviewed-roots.json`` đổi kết quả parse, nên phải vào khóa checkpoint.
+    Trả ``None`` khi Publication không dùng đầu vào nào như vậy (khóa giữ như cũ).
+    """
+    parts: list[str] = []
+    for ver in range(1, total_versions + 1):
+        if supplement_dir is not None:
+            manifest = supplement_dir / publication_key(arxiv_id) / f"v{ver}" / "manifest.json"
+            if manifest.is_file():
+                parts.append(f"supplement:v{ver}:{file_digest(manifest)}")
+        review = root_reviews.get((arxiv_id, ver))
+        if review is not None:
+            parts.append(
+                f"root:v{ver}:{review['root_file']}:{review['root_sha256']}:{review['receipt_sha256']}"
+            )
+    if not parts:
+        return None
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+
+
+def _assemble_reviewed_root(vdir: Path, review: Mapping[str, Any]) -> SourceBundle:
+    """Gom Version theo file gốc đã review, sau khi kiểm receipt và file gốc chưa đổi."""
+    if (file_digest(vdir / "source.json") != review["receipt_sha256"]
+            or file_digest(vdir / review["root_file"]) != review["root_sha256"]):
+        raise ValueError("root review không còn khớp receipt/file gốc")
+    return assemble_source(vdir, root_file=review["root_file"], require_receipt=True)
+
+
 def _save_publication_checkpoint(
     parse_dir: Path,
     result: ExportResult,
@@ -313,8 +350,18 @@ def parse_publication(
     bibtex_fn: Callable[[str, list[BibSource]], BibResult] | None = None,
     normalize_fn: Callable[[str, str], str] | None = None,
     module_versions: Mapping[str, str] | None = None,
+    supplement_dir: str | Path | None = None,
+    root_reviews: Mapping[tuple[str, int], Mapping[str, Any]] | None = None,
 ) -> PublicationRunOutcome:
-    """Chạy toàn bộ pipeline M2 cho một Publication (hỗ trợ checkpoint/resume)."""
+    """Chạy toàn bộ pipeline M2 cho một Publication (hỗ trợ checkpoint/resume).
+
+    ``supplement_dir``: thư mục sidecar bibliography do ``scripts/recover_bibtex_sources.py`` tạo.
+    Version có ``<key>/v<n>/manifest.json`` được bổ sung ``.bib/.bbl`` mà M1 đã lọc mất
+    (``supplement_bibliography``), log Version ghi ``bibliography_recovered``.
+    ``root_reviews``: kết quả ``load_root_reviews(configs/m2-reviewed-roots.json)``; Version có
+    review được gom theo file gốc đã chọn thay vì báo ``ambiguous_root``. Chỉ áp dụng khi dùng
+    bộ gom mặc định (``assemble_fn is None``).
+    """
     t0 = time.perf_counter()
     require_id(arxiv_id)
     corpus = FileCorpus(Path(corpus_dir))
@@ -338,7 +385,12 @@ def parse_publication(
         normalize_fn=normalize_fn,
     )
     mod_versions = dict(module_versions) if module_versions is not None else dict(resolved_versions)
+    supplement_path = Path(supplement_dir) if supplement_dir is not None else None
+    reviews = root_reviews or {}
     input_sha = compute_publication_input_sha256(corpus, arxiv_id, total_versions)
+    extra_inputs = _bibliography_inputs_digest(arxiv_id, total_versions, supplement_path, reviews)
+    if extra_inputs is not None:
+        input_sha = hashlib.sha256(f"{input_sha}:{extra_inputs}".encode("utf-8")).hexdigest()
 
     if parse_dir is not None and resume:
         cached = _load_publication_checkpoint(
@@ -397,7 +449,8 @@ def parse_publication(
             continue
 
         try:
-            sb = assembler(vdir)
+            review = reviews.get((arxiv_id, ver)) if assemble_fn is None else None
+            sb = _assemble_reviewed_root(vdir, review) if review is not None else assembler(vdir)
             if sb.status in ("empty_non_tex", "empty_unavailable"):
                 version_inputs.append(
                     VersionInput(
@@ -427,6 +480,12 @@ def parse_publication(
             else:
                 st_tree, bib_src = structure(sb, arxiv_id, ver)
             validate_B(st_tree)
+            extra_issues: list[str] = []
+            if supplement_path is not None:
+                manifest = supplement_path / publication_key(arxiv_id) / f"v{ver}" / "manifest.json"
+                if manifest.is_file():
+                    bib_src, _ = supplement_bibliography(bib_src, sb, vdir, manifest)
+                    extra_issues.append("bibliography_recovered")
             validate_B_prime(bib_src)
             leaf_tree = leaves(st_tree)
             validate_C(leaf_tree, structure_tree=st_tree)
@@ -439,6 +498,7 @@ def parse_publication(
                     source_bundle=sb,
                     structure_tree=st_tree,
                     bib_source=bib_src,
+                    issues=extra_issues,
                     fallbacks=list(active_fallbacks),
                     seconds=time.perf_counter() - v_start,
                 )
@@ -563,8 +623,13 @@ def run_batch(
     leaves_fn: Callable[[StructureTree], LeafTree] | None = None,
     bibtex_fn: Callable[[str, list[BibSource]], BibResult] | None = None,
     normalize_fn: Callable[[str, str], str] | None = None,
+    supplement_dir: str | Path | None = None,
+    root_reviews: Mapping[tuple[str, int], Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Chạy batch trên danh sách Publication hoặc plan, xuất 3 bảng Parquet, log Version và metrics."""
+    """Chạy batch trên danh sách Publication hoặc plan, xuất 3 bảng Parquet, log Version và metrics.
+
+    ``supplement_dir`` và ``root_reviews``: xem ``parse_publication``.
+    """
     start_time = time.perf_counter()
     corpus_path = Path(corpus_dir)
     corpus = FileCorpus(corpus_path)
@@ -614,6 +679,8 @@ def run_batch(
                 bibtex_fn=bibtex_fn,
                 normalize_fn=normalize_fn,
                 module_versions=mod_versions,
+                supplement_dir=supplement_dir,
+                root_reviews=root_reviews,
             )
             res = outcome.result
             if outcome.resumed:
@@ -679,6 +746,12 @@ def run_batch(
         "git_commit": git_commit,
         "seed": plan_seed,
         "allow_fallback": allow_fallback,
+        "bibliography_supplement": supplement_dir is not None,
+        "root_reviews": len(root_reviews or {}),
+        "versions_bibliography_recovered": sum(
+            "bibliography_recovered" in log.get("issues", [])
+            for r in results for log in r.version_logs
+        ),
         "fallback_modules": active_fallbacks,
         "module_versions": mod_versions,
         "publications_total": n_pubs,
