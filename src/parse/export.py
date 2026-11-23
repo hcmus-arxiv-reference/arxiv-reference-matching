@@ -29,10 +29,7 @@ from src.common.schema import (
     validate as validate_schema_table,
     write_table,
 )
-from src.parse._fallback import (
-    FORMATTING_COMMANDS,
-    fallback_normalize as default_normalize,
-)
+from src.parse.normalize import normalize as default_normalize
 from src.parse.types import (
     LEAF_KINDS,
     LIST_KINDS,
@@ -52,7 +49,7 @@ from src.parse.types import (
     validate_D,
 )
 
-EXPORT_VERSION = "2"
+EXPORT_VERSION = "3"
 
 # Danh sách lệnh trích dẫn khớp với src/parse/structure.py (không nhận nhầm \citestyle, \setcitestyle, ...)
 _CITE_COMMANDS: tuple[str, ...] = (
@@ -130,20 +127,8 @@ def get_normalizer(
     *,
     allow_fallback: bool = False,
 ) -> Callable[[str, str], str]:
-    """Lấy hàm normalize được truyền vào, hoặc từ src.parse.normalize nếu đã có."""
-    if normalize_fn is not None:
-        return normalize_fn
-    try:
-        from src.parse.normalize import normalize as team_normalize  # type: ignore[import-not-found]
-
-        return team_normalize
-    except ImportError as exc:
-        if allow_fallback:
-            return default_normalize
-        raise ImportError(
-            "Thiếu gói thật `src.parse.normalize`. Truyền `allow_fallback=True` "
-            "(hoặc `--allow-fallback`) nếu muốn chạy bản thay thế tạm."
-        ) from exc
+    """Dùng normalizer thật; giữ allow_fallback để tương thích lời gọi cũ."""
+    return normalize_fn if normalize_fn is not None else default_normalize
 
 
 @dataclass

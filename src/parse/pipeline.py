@@ -19,12 +19,7 @@ from src.common.corpus import FileCorpus, file_digest, verified_source
 from src.common.json_io import write_json
 from src.common.metrics import dir_size_mb, peak_rss_mb
 from src.common.schema import publication_key, require_id
-from src.parse._fallback import (
-    FALLBACK_BIBTEX_VERSION,
-    FALLBACK_NORMALIZE_VERSION,
-    fallback_merge_bibtex,
-    fallback_normalize,
-)
+from src.parse.bibtex import BIBTEX_VERSION, merge_bibtex
 from src.parse.export import (
     EXPORT_VERSION,
     ExportResult,
@@ -35,6 +30,7 @@ from src.parse.export import (
     write_export_tables,
 )
 from src.parse.leaves import LEAVES_VERSION, build_leaves
+from src.parse.normalize import NORMALIZE_VERSION, normalize
 from src.parse.source import ASSEMBLER_VERSION, SourceBundle, assemble_source
 from src.parse.structure import STRUCTURE_VERSION, build_structure
 from src.parse.types import (
@@ -50,7 +46,7 @@ from src.parse.types import (
     validate_D,
 )
 
-PIPELINE_VERSION = "3"
+PIPELINE_VERSION = "5"
 
 
 def _function_version_tag(fn: Callable[..., Any]) -> str:
@@ -95,12 +91,11 @@ def _resolve_stage_functions(
     list[str],
     dict[str, str],
 ]:
-    """Nạp các hàm thực thi cho từng bước M2; chỉ dùng fallback tạm khi `allow_fallback=True`."""
+    """Nạp các gói thật; allow_fallback chỉ giữ tương thích lời gọi cũ."""
     assembler = assemble_fn if assemble_fn is not None else assemble_source
     structure = structure_fn if structure_fn is not None else build_structure
     leaves = leaves_fn if leaves_fn is not None else build_leaves
     active_fallbacks: list[str] = []
-    missing_modules: list[str] = []
     versions: dict[str, str] = {
         "assembler": (
             str(ASSEMBLER_VERSION) if assemble_fn is None else _function_version_tag(assemble_fn)
@@ -116,79 +111,20 @@ def _resolve_stage_functions(
         "pipeline": str(PIPELINE_VERSION),
     }
 
-    bibtex = bibtex_fn
-    if bibtex is None:
-        try:
-            import src.parse.bibtex as bibtex_mod  # type: ignore[import-not-found]
-
-            bibtex = bibtex_mod.merge_bibtex
-            versions["bibtex"] = str(getattr(bibtex_mod, "BIBTEX_VERSION", "unknown"))
-        except (ImportError, AttributeError):
-            if allow_fallback:
-                bibtex = fallback_merge_bibtex
-                active_fallbacks.append("bibtex")
-                versions["bibtex"] = FALLBACK_BIBTEX_VERSION
-            else:
-                missing_modules.append("src.parse.bibtex")
-    else:
-        versions["bibtex"] = _function_version_tag(bibtex)
-
-    normalizer = normalize_fn
-    if normalizer is None:
-        try:
-            import src.parse.normalize as normalize_mod  # type: ignore[import-not-found]
-
-            normalizer = normalize_mod.normalize
-            versions["normalize"] = str(getattr(normalize_mod, "NORMALIZE_VERSION", "unknown"))
-        except (ImportError, AttributeError):
-            if allow_fallback:
-                normalizer = fallback_normalize
-                active_fallbacks.append("normalize")
-                versions["normalize"] = FALLBACK_NORMALIZE_VERSION
-            else:
-                missing_modules.append("src.parse.normalize")
-    else:
-        versions["normalize"] = _function_version_tag(normalizer)
-
-    if missing_modules:
-        joined = ", ".join(missing_modules)
-        raise ImportError(
-            f"Thiếu gói thật trên nhánh hiện tại: {joined}. "
-            "Cần merge các PR còn lại vào `main`, hoặc bật cờ `allow_fallback=True` "
-            "(`--allow-fallback` ở CLI) nếu muốn chạy thử bằng bản thay thế tạm."
-        )
-
-    assert leaves is not None and bibtex is not None and normalizer is not None
-    return assembler, structure, leaves, bibtex, normalizer, sorted(active_fallbacks), versions
+    bibtex = bibtex_fn if bibtex_fn is not None else merge_bibtex
+    normalizer = normalize_fn if normalize_fn is not None else normalize
+    versions["bibtex"] = (
+        str(BIBTEX_VERSION) if bibtex_fn is None else _function_version_tag(bibtex_fn)
+    )
+    versions["normalize"] = (
+        str(NORMALIZE_VERSION) if normalize_fn is None else _function_version_tag(normalize_fn)
+    )
+    return assembler, structure, leaves, bibtex, normalizer, active_fallbacks, versions
 
 
 def get_module_versions(*, allow_fallback: bool = False) -> dict[str, str]:
-    """Lấy phiên bản của mọi module trong pipeline để ghi nhận vào checkpoint done.json."""
-    versions = {
-        "assembler": str(ASSEMBLER_VERSION),
-        "structure": str(STRUCTURE_VERSION),
-        "leaves": str(LEAVES_VERSION),
-        "normalize": FALLBACK_NORMALIZE_VERSION if allow_fallback else "missing",
-        "bibtex": FALLBACK_BIBTEX_VERSION if allow_fallback else "missing",
-        "types": str(TYPES_VERSION),
-        "export": str(EXPORT_VERSION),
-        "pipeline": str(PIPELINE_VERSION),
-    }
-    try:
-        import src.parse.normalize as normalize_mod  # type: ignore[import-not-found]
-
-        if hasattr(normalize_mod, "normalize"):
-            versions["normalize"] = str(getattr(normalize_mod, "NORMALIZE_VERSION", "unknown"))
-    except ImportError:
-        pass
-    try:
-        import src.parse.bibtex as bibtex_mod  # type: ignore[import-not-found]
-
-        if hasattr(bibtex_mod, "merge_bibtex"):
-            versions["bibtex"] = str(getattr(bibtex_mod, "BIBTEX_VERSION", "unknown"))
-    except ImportError:
-        pass
-    return versions
+    """Phiên bản gói thật; allow_fallback được giữ để tương thích lời gọi cũ."""
+    return _resolve_stage_functions()[-1]
 
 
 def compute_publication_input_sha256(corpus: FileCorpus, arxiv_id: str, total_versions: int) -> str:
@@ -638,7 +574,7 @@ def run_batch(
     for res in results:
         all_logs.extend(res.version_logs)
     log_path.write_text(
-        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in all_logs),
+        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in all_logs),
         encoding="utf-8",
     )
 
@@ -678,7 +614,7 @@ def run_batch(
         "module": "export",
         "git_commit": git_commit,
         "seed": plan_seed,
-        "allow_fallback": allow_fallback,
+        "allow_fallback": False,
         "fallback_modules": active_fallbacks,
         "module_versions": mod_versions,
         "publications_total": n_pubs,

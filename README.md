@@ -30,9 +30,12 @@ Báo cáo (Jupyter Book):
     chạy bù trên bản sao 59 bài đó cho 59/59 hoàn chỉnh.
   - Benchmark chính thức: mỗi thành viên chạy notebook Colab trên Range của mình ở tag
     `m1-bench-v5` (Range đã chạy với v4 chỉ cần chạy bù v5). Kết quả được chép vào repo báo cáo.
-- **M2 – Parsing:** mới có lớp gom source của một Version
-  ([mô tả](docs/milestone2-source.md)) và kiểu cột M2 trong `src/common/schema.py`.
-  Chưa có parser cây phân cấp hay BibTeX. Phân công và interface:
+- **M2 – Parsing (cập nhật 23/11):** đã ghép Source, Structure, Leaves,
+  Normalize và BibTeX thật, xuất ba bảng bằng `scripts.parse_range`.
+  Bộ mẫu 100 Publication / 148 Version: 93 Publication thành công, độ phủ Version
+  93,92%; còn 9 Version lỗi và 985 citation key thiếu entry khi chưa dùng sidecar.
+  Kết quả, giới hạn và lệnh chạy: [bàn giao mốc 19/11](docs/handoff/2026-11-23-m2-integration.md).
+  Phân công và interface:
   [m2-cong-viec](docs/m2-cong-viec.md), [m2-interfaces](docs/m2-interfaces.md).
 - **M3 – Matching:** chưa bắt đầu.
 - Tag đã chốt: `m1-crawl-v1` (Engine M1), `m1-bench-v5` (code benchmark Colab;
@@ -122,6 +125,18 @@ Notebook clone `REF` (benchmark chính thức dùng SHA hoặc tag đã chốt),
 .venv/bin/python -m scripts.assemble_source \
   --source-dir data/crawl-smoke/raw/2508-02872/v1 --output out/2508-02872v1.json
 ```
+
+Chạy pipeline tích hợp trên bộ mẫu đã tải (dùng Python của môi trường dự án,
+hoặc `DL_Env` nếu không có môi trường dự án):
+
+```sh
+python -m scripts.parse_range --data-dir data/m2-sample \
+  --plan configs/m2-sample-100.json --out-dir data/parse \
+  --metrics metrics/export.json
+```
+
+Chạy lại để resume; thêm `--no-resume` để đo từ đầu. Pipeline luôn dùng các gói thật.
+Ba bảng nằm ở `tables/`, log nằm ở `log/versions.jsonl` dưới thư mục output.
 
 ## Tài liệu
 

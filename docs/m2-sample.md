@@ -130,6 +130,9 @@ Nghiệm thu dữ liệu thật đã hoàn tất: đã tạo `configs/m2-sample-
 (148 Version, 7 Version `non_tex`). Kiểm thử tự động trong `tests/test_m2_sample.py` vẫn dùng
 dữ liệu tổng hợp offline để không phụ thuộc token hay mạng.
 
+Mốc tích hợp 19/11 được chạy lại ngày 23/11 với đủ các gói thật, không dùng fallback.
+Kết quả và cách tái lập: [bàn giao Integration](handoff/2026-11-23-m2-integration.md).
+
 Nguồn: [thẻ Integration](m2-cong-viec.md#44-minh-integration-m25-chạy-batch-số-liệu-báo-cáo),
 [hợp đồng H1](data-contract.md#3-h1-corpus-m1--m2),
 [HF: tải theo revision và lọc file](https://huggingface.co/docs/huggingface_hub/en/guides/download).
