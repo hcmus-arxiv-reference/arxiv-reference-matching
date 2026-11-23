@@ -43,7 +43,7 @@ def classify_version(directory: Path) -> str | None:
     if source is None or source.status != "success":
         return None
     tex, has_bib = [], False
-    for path in sorted(directory.rglob("*")):
+    for path in sorted(p for p in directory.rglob("*") if p.is_file()):  # a directory may be named x.tex
         if path.suffix.lower() == ".tex":
             text = path.read_text(encoding="utf-8", errors="replace")
             tex.append("\n".join(_COMMENT.sub("", line) for line in text.splitlines()))
