@@ -5,12 +5,12 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 from pathlib import Path
-import shutil
 from unittest.mock import Mock
 
 import pytest
 
 from scripts import m2_sample, parse_range
+from src.common.corpus import file_digest
 from src.common.schema import read_table, validate as validate_schema
 from src.parse.bibtex import merge_bibtex
 from src.parse.normalize import normalize
@@ -208,7 +208,21 @@ def test_real_pipeline_merges_bibliography_before_normalizing_citations(tmp_path
     corpus_dir = tmp_path / "corpus"
     aid = "2508.02872"
     key = "2508-02872"
-    shutil.copytree(FIXTURES_DIR / "two-versions-cite-rename" / key, corpus_dir / "raw" / key)
+    case_dir = FIXTURES_DIR / "two-versions-cite-rename"
+    # Raw .tex/.bib fixtures are ignored by Git; materialize tracked JSON inputs.
+    for version in (1, 2):
+        directory = corpus_dir / "raw" / key / f"v{version}"
+        directory.mkdir(parents=True)
+        bundle = json.loads((case_dir / f"A.v{version}.json").read_text(encoding="utf-8"))
+        bib_source = json.loads((case_dir / f"B'.v{version}.json").read_text(encoding="utf-8"))
+        contents = {"main.tex": bundle["text"], **bib_source["bib_files"]}
+        for name, content in contents.items():
+            (directory / name).write_text(content, encoding="utf-8")
+        files = {name: file_digest(directory / name) for name in contents}
+        (directory / "source.json").write_text(json.dumps({
+            "format": 1, "arxiv_id": aid, "version": version,
+            "status": "success", "checksum": files["main.tex"], "files": files,
+        }), encoding="utf-8")
     metadata_dir = corpus_dir / "metadata"
     metadata_dir.mkdir()
     (metadata_dir / f"{key}.json").write_text(json.dumps({
