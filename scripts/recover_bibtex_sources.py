@@ -117,7 +117,13 @@ def _recover_version(aid: str, number: int, directory: Path, archive_dir: Path, 
         return None
     archive = archive_dir / f"{aid}v{number}.source"
     if not archive.exists():
-        response = fetcher.get(f"https://export.arxiv.org/src/{aid}v{number}")
+        try:
+            response = fetcher.get(f"https://export.arxiv.org/src/{aid}v{number}")
+        except OSError as error:   # timeout/connection reset after the client's own retries
+            if strict:
+                raise
+            return {"arxiv_id": aid, "version": number, "status": "network_error",
+                    "error": f"{type(error).__name__}: {error}"[:300]}
         if response.status != 200:
             return {"arxiv_id": aid, "version": number, "status": "http_error", "http_status": response.status}
         archive.write_bytes(response.body)

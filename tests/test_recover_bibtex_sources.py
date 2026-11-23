@@ -154,3 +154,23 @@ def test_range_mode_records_non_tar_archive_and_continues(tmp_path):
     })
     report = recover_corpus(corpus, tmp_path / "archives", tmp_path / "out", client=client)
     assert report["by_status"] == {"archive_not_tar": 1, "verified": 1}
+
+
+def test_range_mode_records_network_error_and_continues(tmp_path):
+    """A read timeout on one archive is recorded; a later run retries it (no sidecar written)."""
+    from scripts.recover_bibtex_sources import recover_corpus
+
+    tex = r"\documentclass{article}\begin{document}\cite{k}\bibliography{refs}\end{document}"
+    corpus = _range_corpus(tmp_path, {"2508.02872": tex, "2508.02873": tex})
+    good = archive_file(tmp_path, {"main.tex": tex, "refs.bib": "@misc{k}"}).read_bytes()
+
+    class Flaky(_FakeClient):
+        def get(self, url, resume=True):
+            if url.endswith("2508.02872v1"):
+                self.calls.append(url)
+                raise TimeoutError("The read operation timed out")
+            return super().get(url, resume)
+
+    client = Flaky({"https://export.arxiv.org/src/2508.02873v1": good})
+    report = recover_corpus(corpus, tmp_path / "archives", tmp_path / "out", client=client)
+    assert report["by_status"] == {"network_error": 1, "verified": 1}
