@@ -127,6 +127,12 @@ def _recover_version(aid: str, number: int, directory: Path, archive_dir: Path, 
         if strict:
             raise
         return {"arxiv_id": aid, "version": number, "status": "archive_mismatch", "error": str(error)}
+    except tarfile.TarError as error:
+        # arXiv serves a one-file source as a bare gzip, not a tar: it holds no .bib/.bbl to recover.
+        if strict:
+            raise
+        return {"arxiv_id": aid, "version": number, "status": "archive_not_tar",
+                "error": f"{type(error).__name__}: {error}"[:300]}
     if not keep_archive:
         archive.unlink()
     print(f"Recovered {aid}v{number}: {len(manifest['files'])} bibliography files", flush=True)
