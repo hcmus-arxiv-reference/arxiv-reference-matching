@@ -1,4 +1,6 @@
-from scripts.m3_auto_match import candidate, match, evaluate
+import pytest
+
+from scripts.m3_auto_match import align_gold, candidate, match, evaluate
 
 RID = "1706.03762"
 
@@ -35,3 +37,28 @@ def test_metrics_wrong_id_counts_both_ways(tmp_path):
                    "1901.01234": ref("Another Real Candidate")}}
     result = evaluate({k: "1901.01234"}, {k: {"url": "arXiv:1706.03762"}}, refs, tmp_path)
     assert (result["tp"], result["fp"], result["fn"]) == (0, 1, 1)
+
+
+def test_align_gold_resolves_aliases_once_per_affected_paper():
+    gold = {("a", "old"): RID, ("a", "new"): RID, ("a", "other-old"): "",
+            ("b", "old"): ""}
+    expected = {("a", "new"): RID, ("a", "other"): "", ("b", "old"): ""}
+    calls = []
+
+    def get_map(pid):
+        calls.append(pid)
+        return {"old": "new", "other-old": "other"}
+
+    assert align_gold(gold, dict.fromkeys(expected), get_map) == expected
+    assert calls == ["a"]
+
+
+def test_align_gold_rejects_conflicting_aliases():
+    gold = {("a", "old"): "", ("a", "new"): RID}
+    with pytest.raises(ValueError, match="mâu thuẫn"):
+        align_gold(gold, {("a", "new"): {}}, lambda pid: {"old": "new"})
+
+
+def test_align_gold_rejects_missing_target():
+    with pytest.raises(ValueError, match="Thiếu khóa bibtex"):
+        align_gold({("a", "old"): RID}, {}, lambda pid: {"old": "missing"})

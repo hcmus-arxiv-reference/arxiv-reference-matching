@@ -21,7 +21,8 @@ sys.path.insert(0, str(ROOT))
 
 from scripts.m3_check_labels import LABEL_COLUMNS, check
 from src.common.config import get_settings, load_ranges
-from src.common.hf_io import table_path
+from src.common.hf_io import download_dir, table_path
+from src.common.schema import publication_key
 
 SEED = 20261120
 ID_PATTERN = re.compile(
@@ -127,6 +128,44 @@ def load_gold(files):
     if errors:
         raise ValueError("\n".join(errors[:10]))
     return {row_key(r): r["ref_arxiv_id"] for r in rows}
+
+
+def publication_key_map(pid, directory):
+    """Rebuild M2's aliases for the TeX version used by the manual sheet."""
+    from scripts.m3_label_sheet import newest_tex_version
+    from src.parse.bibtex import merge_bibtex
+    from src.parse.source import assemble_source
+    from src.parse.structure import build_structure
+
+    latest = newest_tex_version(directory)
+    if latest is None:
+        raise ValueError(f"{pid}: thiếu nguồn TeX để đối chiếu citation_key.")
+    sources = []
+    for folder in sorted(directory.glob("v*")):
+        if not folder.is_dir() or not folder.name[1:].isdigit():
+            continue
+        bundle = assemble_source(folder, require_receipt=True)
+        if bundle.status in {"ready", "needs_review"}:
+            _, bib = build_structure(bundle, pid, int(folder.name[1:]), folder)
+            sources.append(bib)
+    result = merge_bibtex(pid, sources)
+    return result.key_map.get(str(latest[0]), {})
+
+
+def align_gold(gold, entries, get_map):
+    """Resolve missing manual keys and count agreeing aliases only once."""
+    affected = {pid for pid, cite in gold if (pid, cite) not in entries}
+    maps = {pid: get_map(pid) for pid in sorted(affected)}
+    aligned = {}
+    for (pid, cite), truth in gold.items():
+        target = maps.get(pid, {}).get(cite, cite)
+        key = (pid, target)
+        if key not in entries:
+            raise ValueError(f"Thiếu khóa bibtex {pid}/{cite} sau khi đối chiếu key_map: {target}")
+        if key in aligned and aligned[key] != truth:
+            raise ValueError(f"Nhãn tay mâu thuẫn sau khi gộp {pid}/{target}.")
+        aligned[key] = truth
+    return aligned
 
 
 def evaluate(gold, entries, refs, output):
@@ -292,7 +331,17 @@ def team(output):
                 raise ValueError(f"Trùng reference {pid}/{rid}")
             refs[pid][rid] = candidate(row)
 
+    manual_rows = len(evaluation)
+    with tempfile.TemporaryDirectory() as cache:
+        def get_map(pid):
+            remote = f"raw/{owners[pid]}/{publication_key(pid)}"
+            directory = download_dir(settings, remote, cache, revision=revision)
+            return publication_key_map(pid, directory)
+
+        evaluation = align_gold(evaluation, entries, get_map)
     metrics = evaluate(evaluation, entries, refs, output)
+    metrics["manual_rows"] = manual_rows
+    metrics["merged_alias_rows"] = manual_rows - len(evaluation)
     print("Precision/recall trên nhãn tay:", metrics, flush=True)
     subprocess.run(["git", "ls-files", "--error-unmatch", "scripts/m3_auto_match.py"],
                    cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
