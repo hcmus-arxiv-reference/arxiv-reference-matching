@@ -16,7 +16,7 @@ import re
 
 from src.common.corpus import verified_source
 
-ASSEMBLER_VERSION = "5"
+ASSEMBLER_VERSION = "6"
 _VERBATIM = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"}
 _DEFINITIONS = {"newcommand", "renewcommand", "providecommand", "DeclareRobustCommand",
                 "DeclareMathOperator", "newenvironment", "renewenvironment"}
@@ -316,15 +316,68 @@ def _scan(text: str, file: str, tokens: list[_Command] | None = None) -> _Scan:
     return result
 
 
+# Root selection when several files declare \documentclass (ADR 0005). File names that
+# mark a document as companion material rather than the paper itself. A bare "letter"
+# is not listed: journals publish papers called Letters (e.g. PoP_Letter_open.tex).
+_AUXILIARY_ROOT = re.compile(
+    r"(?:^|[^a-z])(?:supp\w*|si|appendix|appendices|rebuttal|response\w*|reply|cover\w*)"
+    r"(?:[^a-z]|$)"
+)
+_TITLE = re.compile(r"\\title\s*(?:\[[^\]]*\]\s*)?\{")
+
+
+def _title_words(text: str) -> tuple[str, ...]:
+    """Letters and digits of a title, lowercased, with commands and braces dropped."""
+    text = re.sub(r"\\(?:[A-Za-z]+|.)", " ", text)
+    return tuple(re.findall(r"[^\W_]+", text.lower()))
+
+
+def _declared_title(text: str) -> tuple[str, ...]:
+    """Words of the first ``\\title{...}`` in a preamble, or () if absent or unbalanced."""
+    match = _TITLE.search(text)
+    if match is None:
+        return ()
+    try:
+        title, _ = _group(text, match.end() - 1)
+    except ValueError:
+        return ()
+    return _title_words(title)
+
+
+def _select_root(candidates: list[str], texts: dict[str, str],
+                 title_hint: str | None) -> tuple[str, str] | None:
+    """Pick one root by evidence, or None when no rule gives a unique answer.
+
+    1. Exactly one candidate's ``\\title`` equals the Publication title (words only).
+    2. Exactly one candidate's file name does not mark companion material
+       (supplement, SI, appendix, rebuttal, response, cover letter).
+    """
+    wanted = _title_words(title_hint or "")
+    if wanted:
+        by_title = [name for name in candidates if _declared_title(texts[name]) == wanted]
+        if len(by_title) == 1:
+            return by_title[0], "root_selected_by_title"
+        if by_title:
+            candidates = by_title
+    primary = [name for name in candidates
+               if not _AUXILIARY_ROOT.search(Path(name).stem.lower())]
+    if len(primary) == 1:
+        return primary[0], "root_selected_by_name"
+    return None
+
+
 def assemble_source(directory: str | Path, *, root_file: str | None = None,
                     require_receipt: bool = False, max_depth: int = 64,
-                    max_chars: int = 16 * 1024 * 1024) -> SourceBundle:
+                    max_chars: int = 16 * 1024 * 1024,
+                    title_hint: str | None = None) -> SourceBundle:
     """Assemble one Version, retain provenance, and never mutate source files.
 
     Literal paths first resolve against the root document's directory, as with
     a TeX working directory; a unique includer-relative fallback is reported.
     Repeated inclusion is preserved, cycles are rejected using the active stack.
     ``ready`` concerns this layer only, not successful hierarchy/BibTeX parsing.
+    ``title_hint`` (the Publication title from metadata) is only used to choose
+    among several root candidates; ``root_file`` always takes precedence.
     """
     result = SourceBundle()
     base = Path(directory).absolute()
@@ -416,6 +469,11 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
             if len(classes) == len(complete) and len(primary) == 1:
                 candidates = primary
         selected = candidates[0] if len(candidates) == 1 else None
+        if selected is None and len(candidates) > 1:
+            chosen = _select_root(candidates, texts, title_hint)
+            if chosen is not None:
+                selected, rule = chosen
+                problem(rule, selected, f"Selected among candidates: {candidates}", "warning")
     if selected is None:
         problem("ambiguous_root" if candidates else "missing_root", "",
                 f"Expected one root; candidates: {candidates}")
