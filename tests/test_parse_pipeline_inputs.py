@@ -179,3 +179,37 @@ def test_workers_must_be_positive(tmp_path: Path) -> None:
     corpus, _ = _corpus(tmp_path, {"main.tex": MAIN})
     with pytest.raises(ValueError):
         run_batch(corpus, tmp_path / "out", arxiv_ids=[ID], workers=0)
+
+
+def _add_version(corpus: Path, number: str, version: int, files: dict[str, str]) -> None:
+    """Ghi một Version đã xác minh như crawler: file trước, receipt sau."""
+    directory = corpus / "raw" / number.replace(".", "-") / f"v{version}"
+    for name, text in files.items():
+        (directory / name).parent.mkdir(parents=True, exist_ok=True)
+        (directory / name).write_text(text, encoding="utf-8")
+    digests = {name: file_digest(directory / name) for name in files}
+    write_json(directory / "source.json", {
+        "format": 1, "arxiv_id": number, "version": version, "status": "success", "files": digests,
+        "checksum": hashlib.sha256(json.dumps(digests, sort_keys=True).encode()).hexdigest(),
+    })
+
+
+def test_new_version_reparses_only_its_publication_and_keeps_old_ids(tmp_path: Path) -> None:
+    """Chạy M2 khi crawl còn dở: Version chưa về là ``missing``; lần sau chỉ parse lại bài đó."""
+    corpus, ids = _many(tmp_path)
+    meta = corpus / "metadata" / f"{KEY}.json"
+    data = json.loads(meta.read_text(encoding="utf-8"))
+    data["publication"].update(versions=2, revised_dates=["2025-09-01"])
+    write_json(meta, data)
+
+    out = tmp_path / "out"
+    first = run_batch(corpus, out, arxiv_ids=ids)
+    assert first["versions_missing"] == 1
+    old = {row["element_id"] for row in parse_publication(corpus, ID, parse_dir=out).result.elements}
+
+    _add_version(corpus, ID, 2, {"main.tex": MAIN.replace("Intro", "Introduction")})
+    second = run_batch(corpus, out, arxiv_ids=ids)
+    assert second["versions_missing"] == 0
+    assert second["publications_resumed"] == len(ids) - 1, "chỉ bài có Version mới được parse lại"
+    new = {row["element_id"] for row in parse_publication(corpus, ID, parse_dir=out).result.elements}
+    assert old < new, "Element của v1 giữ nguyên element_id; v2 chỉ thêm Element mới"
