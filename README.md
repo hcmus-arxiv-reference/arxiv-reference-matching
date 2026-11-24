@@ -30,9 +30,14 @@ Báo cáo (Jupyter Book):
     chạy bù trên bản sao 59 bài đó cho 59/59 hoàn chỉnh.
   - Benchmark chính thức: mỗi thành viên chạy notebook Colab trên Range của mình ở tag
     `m1-bench-v5` (Range đã chạy với v4 chỉ cần chạy bù v5). Kết quả được chép vào repo báo cáo.
-- **M2 – Parsing:** mới có lớp gom source của một Version
-  ([mô tả](docs/milestone2-source.md)) và kiểu cột M2 trong `src/common/schema.py`.
-  Chưa có parser cây phân cấp hay BibTeX. Phân công và interface:
+- **M2 – Parsing (cập nhật 24/11):** đã ghép Source, Structure, Leaves,
+  Normalize và BibTeX thật, xuất ba bảng bằng `scripts.parse_range`, có dùng sidecar
+  bibliography và root đã review (thuật ngữ trong `CONTEXT.md`).
+  Bộ mẫu 100 Publication / 148 Version: 95 Publication thành công, độ phủ Version
+  95,95%; còn 6 Version lỗi và 5 citation key thiếu entry (key vắng trong `.bib` của
+  tác giả). Cả 5 Range: 21.911/24.977 Publication parse đủ (87,7%).
+  Bàn giao mốc 19/11 (trước khi có sidecar): [2026-11-23-m2-integration](docs/handoff/2026-11-23-m2-integration.md).
+  Phân công và interface:
   [m2-cong-viec](docs/m2-cong-viec.md), [m2-interfaces](docs/m2-interfaces.md).
 - **M3 – Matching:** chưa bắt đầu.
 - Tag đã chốt: `m1-crawl-v1` (Engine M1), `m1-bench-v5` (code benchmark Colab;
@@ -122,6 +127,23 @@ Notebook clone `REF` (benchmark chính thức dùng SHA hoặc tag đã chốt),
 .venv/bin/python -m scripts.assemble_source \
   --source-dir data/crawl-smoke/raw/2508-02872/v1 --output out/2508-02872v1.json
 ```
+
+Chạy pipeline tích hợp trên bộ mẫu đã tải (dùng Python của môi trường dự án,
+hoặc `DL_Env` nếu không có môi trường dự án):
+
+```sh
+python -m scripts.parse_range --data-dir data/m2-sample \
+  --plan configs/m2-sample-100.json --out-dir data/parse \
+  --supplement-dir data/supplement/bao --roots configs/m2-reviewed-roots.json \
+  --metrics metrics/export.json
+```
+
+Chạy toàn Range: thay `--plan ...` bằng `--member <m>`, `--data-dir` là corpus của Range
+và `--supplement-dir data/supplement/<m>`. Sidecar tạo bằng
+`python -m scripts.recover_bibtex_sources --all`.
+
+Chạy lại để resume; thêm `--no-resume` để đo từ đầu. Pipeline luôn dùng các gói thật.
+Ba bảng nằm ở `tables/`, log nằm ở `log/versions.jsonl` dưới thư mục output.
 
 ## Tài liệu
 

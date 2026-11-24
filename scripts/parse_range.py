@@ -69,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--allow-fallback",
         action="store_true",
-        help="Cho phép dùng bản thay thế tạm trong src/parse/_fallback.py cho các gói chưa merge",
+        help="Cờ cũ được giữ để tương thích; pipeline luôn dùng các gói thật",
     )
     parser.add_argument(
         "--supplement-dir",
