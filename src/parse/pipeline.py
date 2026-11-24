@@ -7,7 +7,9 @@ lưu thứ tự anh em (C3), xuất 3 bảng Parquet và tổng hợp số liệ
 from __future__ import annotations
 
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
+from functools import partial
 import hashlib
 import inspect
 import json
@@ -17,7 +19,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 from src.common.corpus import FileCorpus, file_digest, verified_source
 from src.common.json_io import write_json
-from src.common.metrics import dir_size_mb, peak_rss_mb
+from src.common.metrics import dir_size_mb, peak_rss_children_mb, peak_rss_mb
 from src.common.schema import publication_key, require_id
 from src.parse.bibtex import BIBTEX_VERSION, merge_bibtex
 from src.parse.export import (
@@ -545,6 +547,28 @@ def _failed_publication_result(
     )
 
 
+def _chunksize(n_tasks: int, workers: int) -> int:
+    """Lô nhỏ để cân tải (Publication dài ngắn rất khác nhau) mà vẫn giảm chi phí gửi task."""
+    return max(1, min(16, n_tasks // (workers * 8)))
+
+
+def _parse_one_publication(
+    corpus_path: Path,
+    active_fallbacks: Sequence[str],
+    stage_options: Mapping[str, Any],
+    arxiv_id: str,
+) -> tuple[ExportResult, bool]:
+    """Parse một Publication cho run_batch; lỗi được đổi thành ExportResult failed, không ném ra.
+
+    Ở cấp module để ProcessPoolExecutor pickle được.
+    """
+    try:
+        outcome = parse_publication(corpus_path, arxiv_id, **stage_options)
+        return outcome.result, outcome.resumed
+    except Exception as exc:
+        return _failed_publication_result(FileCorpus(corpus_path), arxiv_id, exc, active_fallbacks), False
+
+
 def run_batch(
     corpus_dir: str | Path,
     out_dir: str | Path,
@@ -561,11 +585,17 @@ def run_batch(
     normalize_fn: Callable[[str, str], str] | None = None,
     supplement_dir: str | Path | None = None,
     root_reviews: Mapping[tuple[str, int], Mapping[str, Any]] | None = None,
+    workers: int = 1,
 ) -> dict[str, Any]:
     """Chạy batch trên danh sách Publication hoặc plan, xuất 3 bảng Parquet, log Version và metrics.
 
     ``supplement_dir`` và ``root_reviews``: xem ``parse_publication``.
+    ``workers``: số tiến trình parse song song theo Publication (1 = tuần tự). Bảng xuất ra giống
+    hệt bản tuần tự vì kết quả được gộp theo thứ tự ID. Khi ``workers > 1``, các hàm Stage tùy
+    chỉnh phải pickle được (hàm cấp module).
     """
+    if workers < 1:
+        raise ValueError(f"workers phải >= 1, nhận {workers}")
     start_time = time.perf_counter()
     corpus_path = Path(corpus_dir)
     corpus = FileCorpus(corpus_path)
@@ -595,34 +625,34 @@ def run_batch(
             for p in sorted(meta_dir.glob("*.json"))
         )
 
+    stage_options: dict[str, Any] = {
+        "parse_dir": out_path,
+        "resume": resume,
+        "assemble_fn": assemble_fn,
+        "structure_fn": structure_fn,
+        "leaves_fn": leaves_fn,
+        "bibtex_fn": bibtex_fn,
+        "normalize_fn": normalize_fn,
+        "module_versions": mod_versions,
+        "supplement_dir": supplement_dir,
+        "root_reviews": root_reviews,
+    }
+    parse_one = partial(_parse_one_publication, corpus_path, active_fallbacks, stage_options)
+    if workers > 1 and len(target_ids) > 1:
+        # Mỗi Publication độc lập và có checkpoint riêng, nên chia cho nhiều tiến trình được.
+        # executor.map trả kết quả theo đúng thứ tự target_ids, nên bảng gộp giống hệt bản tuần tự.
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            outcomes = list(pool.map(parse_one, target_ids, chunksize=_chunksize(len(target_ids), workers)))
+    else:
+        outcomes = [parse_one(aid) for aid in target_ids]
+
     results: list[ExportResult] = []
     resumed_count = 0
     pub_parsed_count = 0
     pub_empty_only_count = 0
     pub_failed_count = 0
-
-    for aid in target_ids:
-        try:
-            outcome = parse_publication(
-                corpus_path,
-                aid,
-                parse_dir=out_path,
-                resume=resume,
-                allow_fallback=allow_fallback,
-                assemble_fn=assemble_fn,
-                structure_fn=structure_fn,
-                leaves_fn=leaves_fn,
-                bibtex_fn=bibtex_fn,
-                normalize_fn=normalize_fn,
-                module_versions=mod_versions,
-                supplement_dir=supplement_dir,
-                root_reviews=root_reviews,
-            )
-            res = outcome.result
-            if outcome.resumed:
-                resumed_count += 1
-        except Exception as exc:
-            res = _failed_publication_result(corpus, aid, exc, active_fallbacks)
+    for res, resumed in outcomes:
+        resumed_count += resumed
         results.append(res)
         if res.stats["versions_failed"] == 0 and res.stats["versions_missing"] == 0:
             pub_parsed_count += 1
@@ -630,6 +660,7 @@ def run_batch(
                 pub_empty_only_count += 1
         else:
             pub_failed_count += 1
+    del outcomes
 
     tables = merge_export_tables(results)
     tables_dir = out_path / "tables"
@@ -717,7 +748,11 @@ def run_batch(
         "duplicate_sibling_edges": dup_edges,
         "elapsed_seconds": round(elapsed, 4),
         "avg_seconds_per_publication": round(elapsed / n_pubs, 4) if n_pubs else 0.0,
+        "workers": workers,
         "peak_rss_mb": round(peak_rss_mb() or 0.0, 2),
+        # Đỉnh RAM của tiến trình con lớn nhất (0 khi chạy tuần tự); RAM đỉnh toàn máy có thể tới
+        # peak_rss_mb + workers * peak_rss_children_mb.
+        "peak_rss_children_mb": round(peak_rss_children_mb() or 0.0, 2),
         "tables_dir_size_mb": round(dir_size_mb(tables_dir), 4),
         "output_dir_size_mb": round(dir_size_mb(out_path), 4),
     }

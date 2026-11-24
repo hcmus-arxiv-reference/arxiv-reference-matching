@@ -123,3 +123,59 @@ def test_stale_root_review_fails_the_version_instead_of_guessing(tmp_path: Path)
     result = parse_publication(corpus, ID, parse_dir=tmp_path / "out",
                                root_reviews={(ID, 1): review}).result
     assert result.version_logs[0]["status"] == "failed"
+
+
+def _many(tmp_path: Path) -> tuple[Path, list[str]]:
+    """Corpus ba Publication, bài giữa có Version lỗi (không có file gốc)."""
+    corpus, _ = _corpus(tmp_path, {"main.tex": MAIN})
+    ids = [ID]
+    for number, files in (("2508.02873", {"notes.tex": "no root here"}),
+                          ("2508.02874", {"main.tex": MAIN.replace("Intro", "Method")})):
+        other, _ = _corpus(tmp_path / number, files)
+        key = number.replace(".", "-")
+        for sub in ("metadata", "raw"):
+            for path in sorted((other / sub).rglob("*")):
+                if path.is_file():
+                    target = corpus / sub / path.relative_to(other / sub)
+                    target = Path(str(target).replace(KEY, key))
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(path.read_text(encoding="utf-8").replace(ID, number),
+                                      encoding="utf-8")
+        ids.append(number)
+    # Receipt và metadata của bài sao chép phải khớp ID mới: tính lại receipt.
+    for number in ids[1:]:
+        directory = corpus / "raw" / number.replace(".", "-") / "v1"
+        digests = {p.name: file_digest(p) for p in directory.iterdir()
+                   if p.suffix == ".tex"}
+        write_json(directory / "source.json", {
+            "format": 1, "arxiv_id": number, "version": 1, "status": "success", "files": digests,
+            "checksum": hashlib.sha256(json.dumps(digests, sort_keys=True).encode()).hexdigest(),
+        })
+    return corpus, ids
+
+
+def test_parallel_run_writes_the_same_tables_as_sequential(tmp_path: Path) -> None:
+    corpus, ids = _many(tmp_path)
+    serial = run_batch(corpus, tmp_path / "serial", arxiv_ids=ids, workers=1)
+    parallel = run_batch(corpus, tmp_path / "parallel", arxiv_ids=ids, workers=2)
+
+    for name in ("elements", "hierarchy", "bibtex"):
+        a = (tmp_path / "serial" / "tables" / f"{name}.parquet").read_bytes()
+        b = (tmp_path / "parallel" / "tables" / f"{name}.parquet").read_bytes()
+        assert a == b, name
+    assert ((tmp_path / "serial" / "log" / "versions.jsonl").read_text()
+            == (tmp_path / "parallel" / "log" / "versions.jsonl").read_text())
+    assert parallel["workers"] == 2
+    assert parallel["publications_failed"] == serial["publications_failed"] == 1
+    assert parallel["publications_succeeded"] == 2
+
+    resumed = run_batch(corpus, tmp_path / "parallel", arxiv_ids=ids, workers=2)
+    assert resumed["publications_resumed"] == 3
+
+
+def test_workers_must_be_positive(tmp_path: Path) -> None:
+    import pytest
+
+    corpus, _ = _corpus(tmp_path, {"main.tex": MAIN})
+    with pytest.raises(ValueError):
+        run_batch(corpus, tmp_path / "out", arxiv_ids=[ID], workers=0)
