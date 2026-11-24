@@ -43,3 +43,35 @@ def test_cleanup_keeps_command_boundaries_and_table_content():
 
 def test_math_environment_with_spaced_control_word_is_idempotent():
     assert normalize("section", r"Model \begin {math} y \end {math}") == "Model $y$"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (r"\begin{eqnarray}a&=&b\\ c&=&d\end{eqnarray}",
+         r"\begin{equation}\begin{aligned}a&=&b\\ c&=&d\end{aligned}\end{equation}"),
+        (r"\begin{eqnarray*}a&=&b\end{eqnarray*}",
+         r"\begin{equation}\begin{aligned}a&=&b\end{aligned}\end{equation}"),
+        (r"\begin{flalign}a&=b&c&=d\end{flalign}",
+         r"\begin{equation}\begin{aligned}a&=b&c&=d\end{aligned}\end{equation}"),
+        (r"\begin{flalign*}a&=b\end{flalign*}",
+         r"\begin{equation}\begin{aligned}a&=b\end{aligned}\end{equation}"),
+        (r"\begin{alignat}{2}a&=b&\quad c&=d\end{alignat}",
+         r"\begin{equation}\begin{alignedat}{2}a&=b&\quad c&=d\end{alignedat}\end{equation}"),
+        (r"\begin{alignat*} {3} a&=b\end{alignat*}",
+         r"\begin{equation}\begin{alignedat}{3}a&=b\end{alignedat}\end{equation}"),
+        (r"\begin{multline}a+b\\ +c\end{multline}",
+         r"\begin{equation}\begin{gathered}a+b\\ +c\end{gathered}\end{equation}"),
+        (r"\begin{multline*}a\\ b\end{multline*}",
+         r"\begin{equation}\begin{gathered}a\\ b\end{gathered}\end{equation}"),
+    ],
+)
+def test_display_environments_illegal_inside_equation_are_rewritten(raw, expected):
+    """amsmath forbids eqnarray/multline/flalign/alignat inside equation; use the inner forms."""
+    assert normalize("formula", raw) == expected
+    assert normalize("formula", expected) == expected
+
+
+def test_inner_environments_written_by_authors_stay_nested():
+    raw = r"\begin{equation}\begin{split}a&=b\\&=c\end{split}\end{equation}"
+    assert normalize("formula", raw) == raw
