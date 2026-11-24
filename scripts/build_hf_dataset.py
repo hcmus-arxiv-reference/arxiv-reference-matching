@@ -36,6 +36,11 @@ import pyarrow.parquet as pq
 from src.common.schema import PRIMARY_KEYS, SCHEMAS, validate
 
 MEMBERS = ("bao", "minh", "nghiem", "hai", "lieu")
+# Nhãn Range theo dải arXiv ID (configs/ranges.toml), cùng nhãn với Jupyter Book.
+RANGE_LABEL = {"bao": "2508.02872–2508.07871", "minh": "2409.18594–2410.03024",
+               "nghiem": "2409.08594–2409.13593", "hai": "2412.08848–2412.13847",
+               "lieu": "2410.08025–2410.13024"}
+GROUP_DATASET = "https://huggingface.co/datasets/hcmus-arxiv-reference/arxiv_reference_matching_dataset"
 TABLES = ("papers", "references", "elements", "hierarchy", "bibtex", "predictions")
 # predictions do M3 sinh ra; dataset vẫn dựng được khi chưa có, card ghi rõ bảng còn thiếu.
 OPTIONAL = {"predictions"}
@@ -92,13 +97,26 @@ def write_shards(table: pa.Table, directory: Path) -> list[Path]:
     return paths
 
 
-def dataset_card(counts: dict[str, int]) -> str:
+def _size_category(rows: int) -> str:
+    """Nhãn ``size_categories`` của Hub theo bảng lớn nhất."""
+    for limit, label in ((1_000, "n<1K"), (10_000, "1K<n<10K"), (100_000, "10K<n<100K"),
+                         (1_000_000, "100K<n<1M"), (10_000_000, "1M<n<10M")):
+        if rows < limit:
+            return label
+    return "10M<n<100M"
+
+
+def dataset_card(counts: dict[str, int], members: tuple[str, ...] = MEMBERS) -> str:
     """README.md có YAML ``configs`` (mỗi bảng một config, split ``train``) và mô tả bảng."""
     configs = "".join(
         f"- config_name: {name}\n  data_files:\n  - split: train\n    path: data/{name}/*.parquet\n"
         for name in TABLES if name in counts)
     rows = "\n".join(f"| `{name}` | {counts[name]:,} |".replace(",", ".") if name in counts
                      else f"| `{name}` | chưa có |" for name in TABLES)
+    papers = f"{counts.get('papers', 0):,}".replace(",", ".")
+    scope = (f"{papers} Publication arXiv thuộc {len(members)} dải ID" if len(members) > 1 else
+             f"{papers} Publication arXiv thuộc dải {RANGE_LABEL[members[0]]}, phần do một thành viên "
+             f"phụ trách (dataset đầy đủ của nhóm: <{GROUP_DATASET}>)")
     columns = "\n".join(f"- `{name}`: " + ", ".join(f"`{f.name}`" for f in SCHEMAS[name])
                         for name in TABLES)
     return f"""---
@@ -107,13 +125,13 @@ language:
 - en
 - vi
 size_categories:
-- 10M<n<100M
+- {_size_category(max(counts.values(), default=0))}
 configs:
 {configs}---
 
 # arXiv Reference Matching
 
-Dữ liệu của đồ án Nhập môn Khoa học Dữ liệu (HCMUS): 24.977 Publication arXiv thuộc 5 dải ID,
+Dữ liệu của đồ án Nhập môn Khoa học Dữ liệu (HCMUS): {scope},
 metadata và reference Semantic Scholar có arXiv ID (Milestone 1), mã nguồn LaTeX được parse thành
 cây phân cấp và BibTeX entry đã khử trùng lặp (Milestone 2), và kết quả ghép BibTeX entry với
 reference (Milestone 3).
@@ -141,11 +159,11 @@ Cột:
 """
 
 
-def build(source: Path, out: Path) -> dict[str, object]:
+def build(source: Path, out: Path, members: tuple[str, ...] = MEMBERS) -> dict[str, object]:
     """Gộp, kiểm và ghi dataset; trả số dòng và lỗi. Không ghi gì nếu có lỗi."""
     tables, errors = {}, []
     for name in TABLES:
-        table = load_table(source, name)
+        table = load_table(source, name, members)
         if table is None:
             if name not in OPTIONAL:
                 errors.append(f"[{name}] không có file nào trong {source}")
@@ -160,17 +178,17 @@ def build(source: Path, out: Path) -> dict[str, object]:
     files = []
     for name, table in tables.items():
         files += [str(p.relative_to(out)) for p in write_shards(table, out / "data" / name)]
-    (out / "README.md").write_text(dataset_card(counts), encoding="utf-8")
+    (out / "README.md").write_text(dataset_card(counts, members), encoding="utf-8")
     return {"counts": counts, "errors": [], "files": files}
 
 
-def download(source: Path) -> None:
+def download(source: Path, members: tuple[str, ...] = MEMBERS) -> None:
     """Tải ``tables/<member>/<bảng>.parquet`` từ dataset private về ``<source>/<member>/``."""
     from src.common.config import get_settings
     from src.common.hf_io import download_table
 
     settings = get_settings()
-    for member in MEMBERS:
+    for member in members:
         for name in TABLES:
             try:
                 path = download_table(settings, member, name, source / ".hf")
@@ -187,11 +205,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--source", type=Path, required=True, help="<source>/<member>/<bảng>.parquet")
     parser.add_argument("--out", type=Path, required=True, help="Thư mục dataset sẽ ghi")
+    parser.add_argument("--member", choices=MEMBERS, action="append",
+                        help="Chỉ lấy Range của thành viên này (lặp lại được); mặc định cả 5 Range")
     parser.add_argument("--from-hf", action="store_true", help="Tải tables/<member>/ từ dataset private trước")
     args = parser.parse_args(argv)
+    members = tuple(args.member) if args.member else MEMBERS
     if args.from_hf:
-        download(args.source)
-    report = build(args.source, args.out)
+        download(args.source, members)
+    report = build(args.source, args.out, members)
     print(json.dumps(report, ensure_ascii=False, indent=1))
     return 1 if report["errors"] else 0
 

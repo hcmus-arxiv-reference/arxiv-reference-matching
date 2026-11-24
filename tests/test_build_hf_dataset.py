@@ -62,3 +62,14 @@ def test_shards_split_large_tables(tmp_path: Path, monkeypatch) -> None:
     assert "data/elements/train-00003-of-00004.parquet" in report["files"]
     total = sum(pq.read_table(tmp_path / "out" / f).num_rows for f in report["files"] if "/elements/" in f)
     assert total == 4
+
+
+def test_member_dataset_keeps_only_that_range(tmp_path: Path) -> None:
+    _range(tmp_path / "src", "bao", "2508.02872")
+    _range(tmp_path / "src", "minh", "2409.18594")
+    report = b.build(tmp_path / "src", tmp_path / "out", ("minh",))
+    assert report["errors"] == [] and report["counts"]["papers"] == 1
+    papers = pq.read_table(tmp_path / "out/data/papers/train-00000-of-00001.parquet")
+    assert papers["arxiv_id"].to_pylist() == ["2409.18594"]
+    card = (tmp_path / "out/README.md").read_text(encoding="utf-8")
+    assert "2409.18594–2410.03024" in card and b.GROUP_DATASET in card and "- n<1K" in card
