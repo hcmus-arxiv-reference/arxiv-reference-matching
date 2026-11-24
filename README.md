@@ -118,6 +118,32 @@ Notebook clone `REF` (benchmark chính thức dùng SHA hoặc tag đã chốt),
 
 ## Gom source cho M2
 
+Mở [M2 Colab CPU](https://colab.research.google.com/drive/1Rq7OhbH3oezaIQDvnH7lvKTMRcABCgGp)
+hoặc tải [file notebook](notebooks/colab_m2_benchmark.ipynb) lên Colab, chọn
+`MEMBER` (`bao`, `minh`, `nghiem`, `hai`, `lieu`) rồi **Run all**.
+Range tự đọc từ `configs/ranges.toml`; token đọc dataset lấy từ Colab Secrets
+`HF_TOKEN` (cũng nhận `HF_API_KEY`, `HUGGINGFACE_TOKEN`, `HUGGING_FACE_HUB_TOKEN`).
+Không cần key Semantic Scholar. `LIMIT=0` chạy toàn Range; `LIMIT=3` kiểm tra nhanh.
+Notebook dùng commit Parser cố định, tải và kiểm checksum trước khi benchmark,
+parse theo lô 50 Publication rồi ghép ba bảng. Log và `input-report.json` giữ rõ
+ID/Version thiếu dữ liệu; số liệu phân biệt lượt mới và resume. Kết quả được đóng
+gói ZIP để tải về; bật `SAVE_TO_DRIVE` nếu muốn sao lưu checkpoint qua các runtime.
+Đã thử trên Colab CPU với dữ liệu HF thật ngày 24/11: 3 Publication, 5 Version
+đều thành công; resume dùng 3/3 checkpoint và giữ checksum ba bảng cùng log.
+Đây là kiểm tra luồng chạy, chưa phải benchmark toàn Range. Bản Drive cần quyền
+truy cập của chủ file; file notebook trong repo có thể dùng độc lập sau khi tải lên.
+
+Notebook riêng cho nhánh `feat/Minh-pipeline-M2`:
+[mở Colab](https://colab.research.google.com/drive/1h9Rzh2LjbdSU2NaN8P8Eah2BPtfQk8rj)
+hoặc tải [file notebook](notebooks/colab_m2_minh_pipeline_benchmark.ipynb).
+Chọn `MEMBER` và Run all; notebook build C++ rồi gọi benchmark gốc tại commit
+`06c8b5a596e1492c0b7a42d063d0059530c3b72b`. Benchmark này chọn **một Version
+giàu source nhất mỗi Publication**, xuất report/cây JSON/Markdown, chưa có BibTeX
+hay lượt parse mọi Version. Mỗi lần benchmark chạy mới, không dùng parse resume.
+Đã build và kiểm tra cục bộ: 144 test của nhánh, 4 test notebook mới; thử 3 bài
+thật cho 3 cây hợp lệ về cấu trúc (1 complete, 2 partial có diagnostic).
+Chưa chạy notebook mới trên runtime Colab hoặc benchmark toàn Range.
+
 ```sh
 .venv/bin/python -m scripts.assemble_source \
   --source-dir data/crawl-smoke/raw/2508-02872/v1 --output out/2508-02872v1.json
