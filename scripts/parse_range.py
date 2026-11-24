@@ -2,7 +2,11 @@
 
 Ví dụ:
     python -m scripts.parse_range --data-dir data/m2-sample --plan configs/m2-sample-100.json \\
-        --out-dir data/parse --metrics metrics/export.json
+        --out-dir data/parse --metrics metrics/export.json \\
+        --supplement-dir data/m2-bibtex-supplement --roots configs/m2-reviewed-roots.json
+
+``--supplement-dir`` là sidecar bibliography do ``scripts.recover_bibtex_sources`` tạo (khôi phục
+``.bib/.bbl`` mà M1 đã lọc); ``--roots`` là file gốc đã review cho các Version ``ambiguous_root``.
 """
 
 from __future__ import annotations
@@ -12,6 +16,7 @@ import json
 from pathlib import Path
 
 from src.common.config import member_ids
+from src.parse.bibtex_input import load_root_reviews
 from src.parse.pipeline import run_batch
 
 
@@ -66,6 +71,18 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Cờ cũ được giữ để tương thích; pipeline luôn dùng các gói thật",
     )
+    parser.add_argument(
+        "--supplement-dir",
+        type=Path,
+        default=None,
+        help="Sidecar bibliography của scripts.recover_bibtex_sources (<key>/v<n>/manifest.json)",
+    )
+    parser.add_argument(
+        "--roots",
+        type=Path,
+        default=None,
+        help="File gốc đã review, ví dụ configs/m2-reviewed-roots.json",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -90,6 +107,8 @@ def main(argv: list[str] | None = None) -> int:
             metrics_path=args.metrics,
             resume=not args.no_resume,
             allow_fallback=args.allow_fallback,
+            supplement_dir=args.supplement_dir,
+            root_reviews=load_root_reviews(args.roots),
         )
         print(json.dumps(summary, ensure_ascii=False))
         return 0

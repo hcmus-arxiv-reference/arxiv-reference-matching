@@ -326,7 +326,7 @@ def test_pipeline_batch_determinism_and_checkpoint_resume(
     )
     assert rc == 0
     assert cli_metrics.is_file()
-    assert EXPORT_VERSION == "3" and PIPELINE_VERSION == "5"
+    assert EXPORT_VERSION == "3" and PIPELINE_VERSION == "6"
     versions = get_module_versions(allow_fallback=True)
     assert "export" in versions
 
