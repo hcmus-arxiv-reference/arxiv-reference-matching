@@ -1,4 +1,4 @@
-"""CLI chạy pipeline Parser M2 trên bộ mẫu hoặc toàn Range (docs/m2-cong-viec.md mục 4.4).
+"""CLI chạy pipeline Parser M2 trên bộ mẫu hoặc toàn Range.
 
 Ví dụ:
     python -m scripts.parse_range --data-dir data/m2-sample --plan configs/m2-sample-100.json \\

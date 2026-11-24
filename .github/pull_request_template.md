@@ -1,17 +1,19 @@
 <!-- Điền đủ các mục. PR thiếu mục sẽ không được review. Xem CONTRIBUTING.md mục 5. -->
 
-## Gói và mục tiêu
+## Issue và mục tiêu
 
-<!-- Gói nào (structure / leaves / bibtex / export / khác), PR này làm gì trong 1–3 câu. -->
+Closes #
+
+<!-- PR này làm gì trong 1–3 câu. -->
 
 ## Phạm vi
 
 - Làm:
 - **Không** làm (để PR sau):
 
-## Tiêu chí "Xong khi" (docs/m2-cong-viec.md mục 4)
+## Tiêu chí "Xong khi" (chép từ issue)
 
-<!-- Chép các ô của gói mình, tích ô PR này đạt, ghi số đo bên cạnh. -->
+<!-- Tích ô PR này đạt, ghi số đo bên cạnh. -->
 
 - [ ]
 

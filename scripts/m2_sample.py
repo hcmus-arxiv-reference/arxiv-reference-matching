@@ -1,4 +1,4 @@
-"""Create, download and verify the shared M2 sample (docs/m2-cong-viec.md §4.4).
+"""Create, download and verify the shared M2 sample.
 
 Raw files remain outside Git. Plans contain IDs, Version inventory and hashes only.
 HF downloads use one resolved revision per run:

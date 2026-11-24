@@ -7,7 +7,7 @@ Tài liệu này dành cho agent lập trình làm việc **thay mặt Nguyễn 
 Đồ án môn Nhập môn Khoa học Dữ liệu (HCMUS, nhóm 3 KHDL24): thu thập bài arXiv, parse mã nguồn LaTeX thành cây phân cấp, rồi ghép BibTeX entry với Reference của Semantic Scholar bằng pipeline học máy.
 
 - Đề bài: <https://hcmus-cs-ta.github.io/lab-book/intro-ds/statement/> (3 trang con `crawling/`, `parsing/`, `matching/`). Nếu công cụ web không đọc được, thử tải URL trực tiếp trước khi nhờ người dùng dán nội dung.
-- Trạng thái hiện tại và cách chạy: `README.md`. Quyết định kiến trúc: `docs/adr/`. Kế hoạch merge và việc còn mở: `docs/handoff/`. Kiểm tra lại file thực tế; không tuyên bố tính năng "đã chạy" nếu chưa chạy kiểm thử thật.
+- Trạng thái hiện tại và cách chạy: `README.md`. Quyết định kiến trúc: `docs/adr/`. Việc còn mở và phân công: GitHub Issues (milestone "Nộp bài 27/11"). Kiểm tra lại file thực tế; không tuyên bố tính năng "đã chạy" nếu chưa chạy kiểm thử thật.
 
 ### Quyết định đã chốt (không hỏi lại)
 
