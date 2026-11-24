@@ -143,6 +143,15 @@ và `--supplement-dir data/supplement/<m>`. Sidecar tạo bằng
 `python -m scripts.recover_bibtex_sources --all`.
 
 Chạy lại để resume; thêm `--no-resume` để đo từ đầu. Pipeline luôn dùng các gói thật.
+Có thể chạy M2 khi crawl còn dở: Version chưa về được ghi `missing`, lần chạy sau chỉ parse lại
+Publication có đầu vào đổi.
+
+`--workers N` parse song song theo Publication (`0` là dùng mọi CPU); bảng xuất ra giống hệt bản
+tuần tự. Trên Range 5.000 Publication, máy 10 nhân, 8 tiến trình cho thời gian 10,9 phút thay vì
+25,4 phút, nhưng RAM tăng thêm khoảng 1,3 GB mỗi tiến trình. Với 2 nhân (Colab) thì gần như không
+nhanh hơn, nên giữ mặc định `--workers 1`. Khi gọi `run_batch(..., workers>1)` từ code Python,
+đặt lời gọi trong `if __name__ == "__main__":` (macOS và Windows khởi động tiến trình con bằng
+`spawn`).
 Ba bảng nằm ở `tables/`, log nằm ở `log/versions.jsonl` dưới thư mục output.
 
 ## Tài liệu
