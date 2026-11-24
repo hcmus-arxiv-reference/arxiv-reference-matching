@@ -17,6 +17,11 @@
   _Tránh_: gọi là lỗi crawl, hay gộp với "S2 có bài nhưng 0 trích dẫn".
 - **BibTeX entry:** mục trích dẫn sau chuẩn hóa và khử trùng lặp.
 - **Element:** nút của cây phân cấp tài liệu.
+- **Sidecar bibliography:** file `.bib`/`.bbl` của một Version mà Engine M1 đã lọc khỏi
+  corpus, được khôi phục riêng từ archive arXiv và chỉ dùng làm đầu vào bổ sung cho M2.
+  _Tránh_: "bib bổ sung", "supplement".
+- **Root đã review:** file `.tex` gốc do người chọn cho một Version có nhiều ứng viên gốc
+  (`ambiguous_root`); gắn với checksum của Version, mất hiệu lực khi source đổi.
 - **Version đã xác minh:** thư mục Version có receipt `source.json` hợp lệ, danh sách và
   checksum file `.tex/.bib` khớp, status `success`, `non_tex` hoặc `unavailable`. Lúc crawl
   còn phải khớp status và checksum trong Manifest. Định nghĩa đầy đủ: `docs/data-contract.md` mục 3.2.
