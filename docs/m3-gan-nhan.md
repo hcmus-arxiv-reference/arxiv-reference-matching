@@ -99,6 +99,54 @@ không đổi, nên bài dự phòng được đẩy lên.
 Chạy thử trên Range Bảo ngày 20/11: chọn được 5 bài, ra 198 entry, mất khoảng 3 giây. 104/198 dòng
 có gợi ý từ 0,8 trở lên.
 
+### Gán trên trình duyệt (không cần Excel)
+
+```sh
+python -m scripts.m3_label_ui --work-dir labels-work
+```
+
+Lệnh đọc mọi `labels-*.csv` và `candidates/` trong thư mục, ghi `labels-work/gan-nhan.html`. Mở file
+bằng trình duyệt; không cần mạng hay server.
+
+- Mỗi phiếu là một tab, mỗi bài một mục ở cột trái kèm thanh tiến độ.
+- Mỗi dòng hiện đoạn entry gốc, từ trùng với tiêu đề ứng viên được tô màu, và 3 gợi ý kèm điểm và link
+  `arxiv.org/abs/<id>`. Ô tìm kiếm lọc toàn bộ References của bài theo tiêu đề hoặc ID.
+- Bấm một ứng viên để khớp, hoặc "Không khớp (rỗng)". Lựa chọn ghi `confidence = sure`; bấm `unsure` và
+  điền `note` khi chưa chắc. Nút `multi` thêm `multi` vào `note`.
+- Phím tắt: `j`/`k` dòng sau/trước, `1` `2` `3` chọn gợi ý, `0` không khớp, `u` đổi sure/unsure,
+  `/` tìm, `x` xóa nhãn. Bộ lọc "chỉ dòng chưa gán" ẩn dòng đã gán.
+- **Xuất CSV** tải về file cùng tên, đủ cột và đúng thứ tự dòng của phiếu gốc. Chạy
+  `python -m scripts.m3_check_labels <file> --hf-member <range>` trước khi upload.
+
+**Cách làm.** `m3_label_ui.py` nhúng các phiếu và ứng viên thành JSON vào một trang HTML có sẵn CSS và
+JavaScript (chuỗi `</` được thoát để entry chứa `</script>` không làm vỡ trang). Trang giữ nhãn trong bộ
+nhớ, lưu vào `localStorage` của trình duyệt theo tên phiếu sau mỗi thao tác, và tự ghi CSV khi xuất (ô có
+dấu phẩy, ngoặc kép hay xuống dòng được đặt trong ngoặc kép). Nút "Nạp CSV đã xuất" đọc lại một file đã
+xuất để làm tiếp trên máy khác.
+
+**Trang không tự gán.** Gợi ý chỉ được hiển thị; mọi nhãn đều do người gán bấm chọn. Đây là điều kiện để
+nhãn vẫn là nhãn tay theo đề.
+
+**Đánh giá trên 10 bài (Range 2508.02872–2508.07871 và 2412.08848–2412.13847, 397 dòng đã gán):**
+
+| Điểm gợi ý 1 | Dòng | Chọn gợi ý 1 | Chọn gợi ý 2/3 | Rỗng |
+|---|---|---|---|---|
+| ≥ 0,9 | 219 | 217 | 0 | 2 |
+| 0,5–0,9 | 41 | 27 | 6 | 8 |
+| < 0,5 | 111 | 21 | 13 | 77 |
+| không có gợi ý | 26 | 0 | 0 | 26 |
+
+- Gợi ý từ 0,9 trở lên gần như luôn đúng (217/219). Phần lớn thời gian gán nằm ở 152 dòng điểm dưới 0,9.
+- Ở nhóm dưới 0,5 vẫn có 34/111 dòng khớp, trong đó 13 dòng là gợi ý 2 hoặc 3. Không được coi điểm thấp là
+  "không khớp"; matcher tự động (mục 7) cũng không nên dùng ngưỡng điểm này để gán rỗng.
+- Không dòng nào phải chọn ứng viên ngoài 3 gợi ý, nên ô tìm kiếm chủ yếu dùng để kiểm tra.
+- Rủi ro: người gán có thể chấp nhận gợi ý mà không đọc kỹ. Trang chỉ tô từ trùng, không đổi thứ tự quyết
+  định, nên vẫn cần kiểm chéo theo mục 6, nhất là các dòng chọn gợi ý 1 có điểm dưới 0,9.
+
+**Giới hạn.** Tiến độ chỉ nằm trong trình duyệt đang dùng; xóa dữ liệu trình duyệt là mất phần chưa xuất,
+nên xuất CSV sau mỗi bài. Trang không kiểm `ref_arxiv_id` có trong References (đã do `m3_check_labels`
+làm). Đoạn `entry` trong phiếu bị cắt ở 400 ký tự, nên đôi khi phải mở link arXiv để xem đủ.
+
 ## 4. Quy tắc quyết định
 
 Một entry **khớp** với một Reference khi cả hai chỉ **cùng một công trình**.
