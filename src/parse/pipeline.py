@@ -386,7 +386,14 @@ def parse_publication(
 
         try:
             review = reviews.get((arxiv_id, ver)) if assemble_fn is None else None
-            sb = _assemble_reviewed_root(vdir, review) if review is not None else assembler(vdir)
+            if review is not None:
+                sb = _assemble_reviewed_root(vdir, review)
+            elif assemble_fn is None:
+                # The metadata title is evidence for choosing among several roots
+                # (ADR 0005); metadata is already part of the checkpoint input hash.
+                sb = assembler(vdir, title_hint=publication.title)
+            else:
+                sb = assembler(vdir)
             if sb.status in ("empty_non_tex", "empty_unavailable"):
                 version_inputs.append(
                     VersionInput(
@@ -416,7 +423,11 @@ def parse_publication(
             else:
                 st_tree, bib_src = structure(sb, arxiv_id, ver)
             validate_B(st_tree)
-            extra_issues: list[str] = []
+            # Keep rule-based root choices auditable in log/versions.jsonl (ADR 0005).
+            extra_issues: list[str] = [
+                i.code for i in sb.issues
+                if i.code in ("root_selected_by_title", "root_selected_by_name")
+            ]
             if supplement_path is not None:
                 manifest = supplement_path / publication_key(arxiv_id) / f"v{ver}" / "manifest.json"
                 if manifest.is_file():
