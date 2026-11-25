@@ -293,6 +293,18 @@ def test_root_with_document_in_input_is_not_discarded(tmp_path):
         "body.tex": r"\begin{document}MAIN\end{document}",
         "supplement.tex": r"\documentclass{article}\begin{document}SUPPLEMENT\end{document}",
     }))
+    # The complete-document shortcut must not pick supplement.tex; the name rule
+    # (ADR 0005) picks main.tex instead.
+    assert result.root == "main.tex" and "MAIN" in result.text
+    assert "root_selected_by_name" in [i.code for i in result.issues]
+
+
+def test_root_with_document_in_input_stays_ambiguous_without_evidence(tmp_path):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": r"\documentclass{article}\input{body}",
+        "body.tex": r"\begin{document}MAIN\end{document}",
+        "other.tex": r"\documentclass{article}\begin{document}OTHER\end{document}",
+    }))
     assert result.status == "error"
     assert result.issues[0].code == "ambiguous_root"
 
@@ -363,3 +375,66 @@ def test_inline_listing_options_and_braced_input(tmp_path):
     bundle = assemble_source(tree(tmp_path, {"main.tex": source}))
     assert bundle.status == "ready"
     assert bundle.includes == []
+
+
+def _doc(title, body="Text."):
+    return ("\\documentclass{article}\n\\title{" + title + "}\n\\begin{document}\n"
+            + body + "\n\\end{document}\n")
+
+
+def _codes(result):
+    return [issue.code for issue in result.issues]
+
+
+def test_title_hint_selects_the_root_whose_title_matches_metadata(tmp_path):
+    root = tree(tmp_path, {
+        "paper.tex": _doc(r"Robust \textbf{Graph} Learning\\ at Scale", "Main."),
+        "notes.tex": _doc("Lab notes", "Other."),
+    })
+    assert "ambiguous_root" in _codes(assemble_source(root))
+    result = assemble_source(root, title_hint="Robust graph learning at scale")
+    # A rule-selected root is a warning, so the bundle is parsed as needs_review.
+    assert result.root == "paper.tex" and result.status == "needs_review"
+    assert "root_selected_by_title" in _codes(result)
+    assert all(i.severity == "warning" for i in result.issues if i.code == "root_selected_by_title")
+
+
+def test_title_hint_matching_two_roots_falls_back_to_auxiliary_names(tmp_path):
+    root = tree(tmp_path, {
+        "main.tex": _doc("Robust Graph Learning"),
+        "supplementary.tex": _doc("Robust Graph Learning"),
+    })
+    result = assemble_source(root, title_hint="Robust Graph Learning")
+    assert result.root == "main.tex"
+    assert "root_selected_by_name" in _codes(result)
+
+
+@pytest.mark.parametrize("auxiliary", [
+    "supp.tex", "supp_arxiv.tex", "SupplementaryMaterial.tex", "SI.tex", "appendix.tex",
+    "rebuttal.tex", "response_to_reviewers.tex", "cover_letter.tex",
+])
+def test_single_non_auxiliary_candidate_is_selected_by_name(tmp_path, auxiliary):
+    root = tree(tmp_path, {"main.tex": _doc("A"), auxiliary: _doc("B")})
+    result = assemble_source(root)
+    assert result.root == "main.tex"
+    assert "root_selected_by_name" in _codes(result)
+
+
+@pytest.mark.parametrize("files", [
+    ("Manuscript1.tex", "Manuscript2.tex"),
+    ("main.tex", "sub/main.tex"),
+    ("sample-sigconf.tex", "sample-acmsmall.tex"),
+    ("PRL_Letter.tex", "supplement.tex", "notes.tex"),
+])
+def test_no_unique_evidence_stays_ambiguous(tmp_path, files):
+    root = tree(tmp_path, {name: _doc("Same title") for name in files})
+    result = assemble_source(root, title_hint="Unrelated metadata title")
+    assert result.root is None
+    assert "ambiguous_root" in _codes(result)
+
+
+def test_explicit_root_file_overrides_rules(tmp_path):
+    root = tree(tmp_path, {"main.tex": _doc("A"), "supp.tex": _doc("B")})
+    result = assemble_source(root, root_file="supp.tex", title_hint="A")
+    assert result.root == "supp.tex"
+    assert not {"root_selected_by_title", "root_selected_by_name"} & set(_codes(result))

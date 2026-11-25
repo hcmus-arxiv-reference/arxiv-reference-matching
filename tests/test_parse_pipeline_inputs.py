@@ -230,3 +230,16 @@ def test_new_version_reparses_only_its_publication_and_keeps_old_ids(tmp_path: P
     assert second["publications_resumed"] == len(ids) - 1, "chỉ bài có Version mới được parse lại"
     new = {row["element_id"] for row in parse_publication(corpus, ID, parse_dir=out).result.elements}
     assert old < new, "Element của v1 giữ nguyên element_id; v2 chỉ thêm Element mới"
+
+
+def test_metadata_title_selects_root_and_is_logged(tmp_path: Path) -> None:
+    """ADR 0005: the metadata title picks the root; the rule is recorded in the Version log."""
+    body = r"\documentclass{article}\title{%s}\begin{document}\section{S}Text %s.\end{document}"
+    corpus, _ = _corpus(tmp_path, {"paper.tex": body % ("Fixture", "paper"),
+                                   "draft.tex": body % ("Old draft", "draft")})
+    result = parse_publication(corpus, ID, parse_dir=tmp_path / "out").result
+    log = result.version_logs[0]
+    assert log["status"] == "parsed"
+    assert "root_selected_by_title" in log["issues"]
+    assert any("Text paper." in row["content"] for row in result.elements)
+    assert not any("Text draft." in row["content"] for row in result.elements)
