@@ -181,6 +181,23 @@ def test_workers_must_be_positive(tmp_path: Path) -> None:
         run_batch(corpus, tmp_path / "out", arxiv_ids=[ID], workers=0)
 
 
+def test_sequential_run_reports_no_child_memory(tmp_path: Path) -> None:
+    """Chạy tuần tự không có tiến trình con parse, kể cả khi pipeline gọi `git rev-parse`."""
+    corpus, ids = _many(tmp_path)
+    serial = run_batch(corpus, tmp_path / "serial", arxiv_ids=ids, workers=1)
+    assert serial["peak_rss_children_mb"] == 0.0
+
+
+def test_cli_rejects_negative_workers(tmp_path: Path) -> None:
+    import pytest
+
+    from scripts.parse_range import main
+
+    with pytest.raises(SystemExit) as exc:
+        main(["--data-dir", str(tmp_path), "--out-dir", str(tmp_path / "out"), "--workers", "-1"])
+    assert exc.value.code == 2
+
+
 def _add_version(corpus: Path, number: str, version: int, files: dict[str, str]) -> None:
     """Ghi một Version đã xác minh như crawler: file trước, receipt sau."""
     directory = corpus / "raw" / number.replace(".", "-") / f"v{version}"

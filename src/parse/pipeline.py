@@ -598,7 +598,6 @@ def run_batch(
         raise ValueError(f"workers phải >= 1, nhận {workers}")
     start_time = time.perf_counter()
     corpus_path = Path(corpus_dir)
-    corpus = FileCorpus(corpus_path)
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
@@ -641,10 +640,13 @@ def run_batch(
     if workers > 1 and len(target_ids) > 1:
         # Mỗi Publication độc lập và có checkpoint riêng, nên chia cho nhiều tiến trình được.
         # executor.map trả kết quả theo đúng thứ tự target_ids, nên bảng gộp giống hệt bản tuần tự.
-        with ProcessPoolExecutor(max_workers=workers) as pool:
+        with ProcessPoolExecutor(max_workers=min(workers, len(target_ids))) as pool:
             outcomes = list(pool.map(parse_one, target_ids, chunksize=_chunksize(len(target_ids), workers)))
+        # Đo ngay sau khi pool đóng, trước lệnh `git rev-parse` ở dưới (cũng là tiến trình con).
+        children_peak_mb = peak_rss_children_mb() or 0.0
     else:
         outcomes = [parse_one(aid) for aid in target_ids]
+        children_peak_mb = 0.0
 
     results: list[ExportResult] = []
     resumed_count = 0
@@ -752,7 +754,7 @@ def run_batch(
         "peak_rss_mb": round(peak_rss_mb() or 0.0, 2),
         # Đỉnh RAM của tiến trình con lớn nhất (0 khi chạy tuần tự); RAM đỉnh toàn máy có thể tới
         # peak_rss_mb + workers * peak_rss_children_mb.
-        "peak_rss_children_mb": round(peak_rss_children_mb() or 0.0, 2),
+        "peak_rss_children_mb": round(children_peak_mb, 2),
         "tables_dir_size_mb": round(dir_size_mb(tables_dir), 4),
         "output_dir_size_mb": round(dir_size_mb(out_path), 4),
     }
