@@ -93,7 +93,9 @@ def main(argv: list[str] | None = None) -> int:
         help="Số tiến trình parse song song theo Publication (mặc định 1; 0 = số CPU)",
     )
     args = parser.parse_args(argv)
-    workers = args.workers if args.workers > 0 else (os.cpu_count() or 1)
+    if args.workers < 0:
+        parser.error(f"--workers phải >= 0, nhận {args.workers}")
+    workers = args.workers or (os.cpu_count() or 1)
 
     try:
         target_ids: list[str] | None = None
