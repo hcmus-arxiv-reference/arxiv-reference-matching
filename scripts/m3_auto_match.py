@@ -248,6 +248,51 @@ def selected_rows(path, ids, columns):
                          filters=[("arxiv_id", "in", sorted(ids))]).to_pylist()
 
 
+def publication_splits(manual, available, owners, members, required, frozen=()):
+    """Reuse published assignments or draw reproducible holdouts by Publication."""
+    rng = random.Random(SEED)
+    assigned = {"manual": {}, "auto": {}}
+    seen = set()
+    for row in frozen:
+        pid, pool, part = row["arxiv_id"], row["pool"], row["partition"]
+        if pool not in assigned or part not in {"train", "valid", "test"} or pid in seen:
+            raise ValueError(f"Split không hợp lệ: {row}")
+        assigned[pool][pid] = part
+        seen.add(pid)
+
+    def assign(ids, pool, quota):
+        mapping = assigned[pool]
+        if mapping.keys() & ids:
+            if not ids <= mapping.keys() or any(
+                sum(mapping[pid] == part for pid in ids) != quota for part in ("valid", "test")
+            ):
+                raise ValueError(f"Sai số bài {pool} trong split đã chốt.")
+            return
+        ordered = sorted(ids)
+        rng.shuffle(ordered)
+        for idx, pid in enumerate(ordered):
+            mapping[pid] = "test" if idx < quota else "valid" if idx < 2 * quota else "train"
+
+    if assigned["manual"] and assigned["manual"].keys() != manual:
+        raise ValueError("Split đã chốt không phủ đúng pool manual.")
+    for member in sorted(members):
+        ids = {pid for pid in manual if owners[pid] == member}
+        if len(ids) < 5:
+            raise ValueError(f"{member}: thiếu bài gán tay.")
+        assign(ids, "manual", 1)
+
+    available = set(available) - manual
+    if assigned["auto"]:
+        selected = set(assigned["auto"])
+        if not selected <= available or len(selected) < required:
+            raise ValueError("Pool auto đã chốt không đủ độ phủ hoặc thiếu BibTeX.")
+    else:
+        selected = set(random.Random(SEED).sample(sorted(available), required))
+    assign(selected, "auto", 5)
+    return [dict(arxiv_id=pid, pool=pool, partition=mapping[pid])
+            for pool, mapping in assigned.items() for pid in sorted(mapping)]
+
+
 def team(output):
     from huggingface_hub import HfApi, hf_hub_download
 
@@ -276,24 +321,6 @@ def team(output):
     if missing or incomplete:
         raise ValueError(f"Thiếu bảng: {missing}\nRange chưa đủ 5 bài tay: {incomplete}")
 
-    evaluation = gold
-    eval_pool = "all manual before split"
-    if "labels/splits.csv" in present:
-        split = {}
-        for row in read_csv(download("labels/splits.csv")):
-            if row["pool"] != "manual":
-                continue
-            pid = row["arxiv_id"]
-            if pid in split or row["partition"] not in {"train", "valid", "test"}:
-                raise ValueError(f"Split manual không hợp lệ cho {pid}")
-            split[pid] = row["partition"]
-        if set(split) != manual:
-            raise ValueError("splits.csv không phủ đúng các bài manual.")
-        evaluation = {k: v for k, v in gold.items() if split[k[0]] == "train"}
-        if not evaluation:
-            raise ValueError("Không có nhãn manual/train để đánh giá.")
-        eval_pool = "manual/train"
-
     owners, with_entries, paths = {}, set(), {}
     for m in members:
         paths[m] = {t: download(table_path(m, t)) for t in ("papers", "bibtex", "references")}
@@ -311,7 +338,13 @@ def team(output):
     available = sorted(remaining & with_entries)
     if len(available) < required:
         raise ValueError(f"Cần {required} bài auto nhưng chỉ {len(available)} bài có entry M2.")
-    selected = set(random.Random(SEED).sample(available, required))
+    frozen = (read_csv(download("labels/splits.csv"))
+              if "labels/splits.csv" in present else [])
+    splits = publication_splits(manual, available, owners, members, required, frozen)
+    selected = {r["arxiv_id"] for r in splits if r["pool"] == "auto"}
+    train = {r["arxiv_id"] for r in splits if r["partition"] == "train"}
+    evaluation = {key: truth for key, truth in gold.items() if key[0] in train}
+    write_csv(output / "splits.csv", ["arxiv_id", "pool", "partition"], splits)
 
     entries, refs = {}, defaultdict(dict)
     for m in members:
@@ -364,7 +397,7 @@ def team(output):
     return dict(mode="team", dataset_revision=revision, labeler=labeler, seed=SEED,
                 manual_publications=len(manual), remaining_publications=len(remaining),
                 remaining_with_entries=len(available), auto_publications=len(selected),
-                auto_entries=sum(counts.values()), evaluation_pool=eval_pool, metrics=metrics,
+                auto_entries=sum(counts.values()), evaluation_pool="manual/train", metrics=metrics,
                 reasons=dict(counts), selected=sorted(selected))
 
 

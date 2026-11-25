@@ -62,3 +62,25 @@ def test_align_gold_rejects_conflicting_aliases():
 def test_align_gold_rejects_missing_target():
     with pytest.raises(ValueError, match="Thiếu khóa bibtex"):
         align_gold({("a", "old"): RID}, {}, lambda pid: {"old": "missing"})
+
+
+def test_publication_split_reproducible_and_frozen():
+    from collections import Counter
+    from scripts.m3_auto_match import publication_splits
+
+    members = list("abcde")
+    owners = {f"{m}{i}": m for m in members for i in range(5)}
+    manual = set(owners)
+    available = [f"auto{i}" for i in range(40)]
+    rows = publication_splits(manual, available, owners, members, 12)
+    assert rows == publication_splits(manual, reversed(available), owners, reversed(members), 12)
+    counts = Counter((r["pool"], r["partition"]) for r in rows)
+    assert counts == {("manual", "test"): 5, ("manual", "valid"): 5, ("manual", "train"): 15,
+                      ("auto", "test"): 5, ("auto", "valid"): 5, ("auto", "train"): 2}
+    for member in members:
+        parts = [r["partition"] for r in rows if owners.get(r["arxiv_id"]) == member]
+        assert sorted(parts) == ["test", "train", "train", "train", "valid"]
+    assert len({r["arxiv_id"] for r in rows}) == len(rows)
+    assert rows == publication_splits(manual, available, owners, members, 12, rows)
+    with pytest.raises(ValueError):
+        publication_splits(manual, available, owners, members, 12, rows + rows[:1])
