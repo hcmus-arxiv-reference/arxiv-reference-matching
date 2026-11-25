@@ -6,6 +6,7 @@ User-Agent. Original corpus files remain the checksum baseline for every archive
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import hashlib
 import io
 import json
@@ -16,7 +17,7 @@ import tempfile
 
 from scripts.m2_sample import verify_sample
 from src.common.config import get_settings
-from src.common.corpus import file_digest, safe_member, verified_source
+from src.common.corpus import FileCorpus, file_digest, safe_member, verified_source
 from src.common.json_io import write_json
 from src.common.schema import publication_key
 from src.crawl.http_client import HttpClient
@@ -74,6 +75,85 @@ def prepare_sidecar(archive: Path, directory: Path, destination: Path) -> dict:
     return manifest
 
 
+class _Fetcher:
+    """One paced client for the whole run, created only when a download is needed."""
+
+    def __init__(self, client=None):
+        self.client = client
+
+    def get(self, url):
+        if self.client is None:
+            self.client = HttpClient(get_settings().user_agent(), min_interval=3.0)
+        return self.client.get(url, resume=True)
+
+
+def _needs_recovery(bundle, source) -> bool:
+    return bool(source.missing_bib) or any(issue.code == "missing_bbl" for issue in bundle.issues)
+
+
+def _recover_version(aid: str, number: int, directory: Path, archive_dir: Path, output: Path,
+                     fetcher: _Fetcher, *, review: dict | None = None, strict: bool = True,
+                     skip_existing: bool = False, keep_archive: bool = True) -> dict | None:
+    """Recover one Version; ``None`` when its compilation path declares no missing bibliography.
+
+    ``strict`` raises on an archive that differs from the M1 receipt (sample mode);
+    otherwise the Version is recorded as ``archive_mismatch`` and the run continues.
+    """
+    destination = output / publication_key(aid) / f"v{number}"
+    if skip_existing and (destination / "manifest.json").is_file():
+        manifest = json.loads((destination / "manifest.json").read_text(encoding="utf-8"))
+        return {"arxiv_id": aid, "version": number, "status": "verified", "resumed": True,
+                "files": list(manifest["files"]), "archive_sha256": manifest["archive_sha256"]}
+    try:
+        bundle, source, _ = build_bib_source(aid, number, directory, root_review=review)
+    except Exception as error:   # Source/Structure rejects this Version; the M2 log records why
+        if strict:
+            raise
+        return {"arxiv_id": aid, "version": number, "status": "source_failed",
+                "error": f"{type(error).__name__}: {error}"[:300]}
+    if source is None:
+        return {"arxiv_id": aid, "version": number, "status": "source_failed"}
+    if not _needs_recovery(bundle, source):
+        return None
+    archive = archive_dir / f"{aid}v{number}.source"
+    if not archive.exists():
+        try:
+            response = fetcher.get(f"https://export.arxiv.org/src/{aid}v{number}")
+        except OSError as error:   # timeout/connection reset after the client's own retries
+            if strict:
+                raise
+            return {"arxiv_id": aid, "version": number, "status": "network_error",
+                    "error": f"{type(error).__name__}: {error}"[:300]}
+        if response.status != 200:
+            return {"arxiv_id": aid, "version": number, "status": "http_error", "http_status": response.status}
+        archive.write_bytes(response.body)
+    try:
+        manifest = prepare_sidecar(archive, directory, destination)
+    except ValueError as error:
+        if strict:
+            raise
+        return {"arxiv_id": aid, "version": number, "status": "archive_mismatch", "error": str(error)}
+    except tarfile.TarError as error:
+        # arXiv serves a one-file source as a bare gzip, not a tar: it holds no .bib/.bbl to recover.
+        if strict:
+            raise
+        return {"arxiv_id": aid, "version": number, "status": "archive_not_tar",
+                "error": f"{type(error).__name__}: {error}"[:300]}
+    if not keep_archive:
+        archive.unlink()
+    print(f"Recovered {aid}v{number}: {len(manifest['files'])} bibliography files", flush=True)
+    return {"arxiv_id": aid, "version": number, "status": "verified",
+            "files": list(manifest["files"]), "archive_sha256": manifest["archive_sha256"]}
+
+
+def _report(output: Path, records: list[dict]) -> dict:
+    report = {"verified": sum(row["status"] == "verified" for row in records),
+              "by_status": dict(sorted(Counter(row["status"] for row in records).items())),
+              "versions": records}
+    write_json(output / "recovery-report.json", report)
+    return report
+
+
 def recover(plan: dict, corpus: Path, archive_dir: Path, output: Path, *,
             roots: dict | None = None, client=None) -> dict:
     """Fetch only Versions whose compilation path declares missing bibliography."""
@@ -82,36 +162,57 @@ def recover(plan: dict, corpus: Path, archive_dir: Path, output: Path, *,
         raise ValueError("Verify the original sample before bibliography recovery")
     roots = roots or {}
     archive_dir.mkdir(parents=True, exist_ok=True)
+    fetcher = _Fetcher(client)
     records = []
     for paper in plan["publications"]:
         aid = paper["arxiv_id"]
         for version in paper["versions"]:
             number = version["version"]
             directory = corpus / "raw" / publication_key(aid) / f"v{number}"
-            bundle, source, _ = build_bib_source(aid, number, directory, root_review=roots.get((aid, number)))
-            if source is None:
-                records.append({"arxiv_id": aid, "version": number, "status": "source_failed"})
+            record = _recover_version(aid, number, directory, archive_dir, output, fetcher,
+                                      review=roots.get((aid, number)))
+            if record is not None:
+                records.append(record)
+    return _report(output, records)
+
+
+def recover_corpus(corpus: Path, archive_dir: Path, output: Path, *, ids: list[str] | None = None,
+                   roots: dict | None = None, client=None, keep_archives: bool = True) -> dict:
+    """Range mode: every Publication in ``corpus/metadata`` (or ``ids``), without a sample plan.
+
+    Each Version is still checked against its M1 receipt: ``verified_source`` must accept the
+    directory and every receipt file must match the archive (``prepare_sidecar``). Versions with
+    an existing sidecar are skipped, so an interrupted run resumes; a mismatching archive is
+    reported instead of stopping the Range.
+    """
+    files = FileCorpus(corpus)
+    roots = roots or {}
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    fetcher = _Fetcher(client)
+    if ids is None:
+        ids = sorted(json.loads(path.read_text(encoding="utf-8"))["publication"]["arxiv_id"]
+                     for path in sorted((corpus / "metadata").glob("*.json")))
+    records = []
+    for aid in ids:
+        try:
+            versions = files.read_publication(aid).versions
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            records.append({"arxiv_id": aid, "version": None, "status": "metadata_invalid",
+                            "error": f"{type(error).__name__}: {error}"[:300]})
+            continue
+        for number in range(1, versions + 1):
+            directory = files.version_path(aid, number)
+            if verified_source(directory) is None:
+                records.append({"arxiv_id": aid, "version": number, "status": "source_missing"})
                 continue
-            if not source.missing_bib and not any(issue.code == "missing_bbl" for issue in bundle.issues):
+            if verified_source(directory).status != "success":
                 continue
-            archive = archive_dir / f"{aid}v{number}.source"
-            if not archive.exists():
-                if client is None:
-                    client = HttpClient(get_settings().user_agent(), min_interval=3.0)
-                response = client.get(f"https://export.arxiv.org/src/{aid}v{number}", resume=True)
-                if response.status != 200:
-                    records.append({"arxiv_id": aid, "version": number,
-                                    "status": "http_error", "http_status": response.status})
-                    continue
-                archive.write_bytes(response.body)
-            destination = output / publication_key(aid) / f"v{number}"
-            manifest = prepare_sidecar(archive, directory, destination)
-            records.append({"arxiv_id": aid, "version": number, "status": "verified",
-                            "files": list(manifest["files"]), "archive_sha256": manifest["archive_sha256"]})
-            print(f"Recovered {aid}v{number}: {len(manifest['files'])} bibliography files", flush=True)
-    report = {"verified": sum(row["status"] == "verified" for row in records), "versions": records}
-    write_json(output / "recovery-report.json", report)
-    return report
+            record = _recover_version(aid, number, directory, archive_dir, output, fetcher,
+                                      review=roots.get((aid, number)), strict=False,
+                                      skip_existing=True, keep_archive=keep_archives)
+            if record is not None:
+                records.append(record)
+    return _report(output, records)
 
 
 def main():
@@ -122,11 +223,19 @@ def main():
     parser.add_argument("--archive-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--roots", type=Path)
+    parser.add_argument("--all", action="store_true",
+                        help="Range mode: every Publication in --data-dir/metadata, no sample plan")
+    parser.add_argument("--delete-archives", action="store_true",
+                        help="Range mode: remove each archive after its sidecar is written")
     args = parser.parse_args()
-    plan = json.loads(args.sample.read_text(encoding="utf-8"))
-    result = recover(plan, args.data_dir, args.archive_dir, args.output_dir,
-                     roots=load_root_reviews(args.roots))
-    print(json.dumps({"verified_supplements": result["verified"]}))
+    if args.all:
+        result = recover_corpus(args.data_dir, args.archive_dir, args.output_dir,
+                                roots=load_root_reviews(args.roots), keep_archives=not args.delete_archives)
+    else:
+        plan = json.loads(args.sample.read_text(encoding="utf-8"))
+        result = recover(plan, args.data_dir, args.archive_dir, args.output_dir,
+                         roots=load_root_reviews(args.roots))
+    print(json.dumps({"verified_supplements": result["verified"], "by_status": result.get("by_status")}))
 
 
 if __name__ == "__main__":

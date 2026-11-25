@@ -20,14 +20,28 @@ class PublicationBundle(TypedDict):
 
 
 def export_publications(corpus: CorpusReader, source_root: Path, ids: list[str], *,
-                        require_references: bool = True) -> tuple[list[PublicationBundle], dict[str, Path]]:
-    """Write only complete Publications; preserve the existing batch semantics."""
+                        require_references: bool = True,
+                        include_incomplete: bool = False) -> tuple[list[PublicationBundle], dict[str, Path]]:
+    """Write only complete Publications; preserve the existing batch semantics.
+
+    ``include_incomplete``: also write the ``papers`` row (and ``references`` rows when the
+    references cache is valid) of a Publication whose metadata is valid but some Version is not
+    verified yet, e.g. an archive that failed to download. Such a Publication gets no bundle, so
+    its unverified files are never uploaded; the missing Version stays visible in the M2 Version
+    log as ``missing``, and a later crawl that verifies it needs no change here.
+    """
     bundles, papers, references = [], [], []
     reader = CorpusReader(corpus.data_dir, corpus.manifest, source_root)
     for arxiv_id in dict.fromkeys(ids):
         try:
             state = reader.status(arxiv_id)
             if not (state.complete if require_references else state.sources_complete):
+                if include_incomplete and state.publication is not None:
+                    row = asdict(state.publication)
+                    row.pop("versions")
+                    papers.append(row)
+                    if require_references and state.references is not None:
+                        references.extend(state.references.references)
                 continue
             publication, sources = state.publication, state.sources()
             citations = state.references if require_references else None

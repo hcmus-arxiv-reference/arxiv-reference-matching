@@ -528,7 +528,8 @@ class CrawlPipeline:
     def crawl_range(self, arxiv_range: ArxivRange, *, refresh: bool = False) -> dict[str, int]:
         return self.crawl_ids(list(arxiv_range.ids()), refresh=refresh)
 
-    def export(self, ids: list[str], *, require_references: bool = True) -> tuple[list[PublicationBundle], dict[str, Path]]:
+    def export(self, ids: list[str], *, require_references: bool = True,
+               include_incomplete: bool = False) -> tuple[list[PublicationBundle], dict[str, Path]]:
         """Export the requested batch under the corpus lock.
 
         Callers that must keep the lock after export (for example to upload the
@@ -536,4 +537,5 @@ class CrawlPipeline:
         """
         with self.corpus_lock():
             return export_publications(self.corpus, self.sources.root, ids,
-                                       require_references=require_references)
+                                       require_references=require_references,
+                                       include_incomplete=include_incomplete)

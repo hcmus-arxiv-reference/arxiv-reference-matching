@@ -76,3 +76,17 @@ def test_inspect_publication_keeps_range_run_counts(tmp_path):
     assert inspect_publication(pipeline, PID) == {
         "metadata": False, "expected_versions": 0, "verified_versions": 0,
         "non_tex_versions": 0, "references": False, "complete": False}
+
+
+def test_incomplete_publication_keeps_its_rows_but_no_bundle(tmp_path):
+    """A Version that failed to download: keep the papers/references rows, upload nothing."""
+    import pyarrow.parquet as pq
+
+    pipeline = crawled(tmp_path)
+    tamper_source_record(pipeline, checksum="0" * 64)  # Version no longer verified
+    bundles, tables = pipeline.export([PID])
+    assert bundles == [] and pq.read_table(tables["papers"]).num_rows == 0
+
+    bundles, tables = pipeline.export([PID], include_incomplete=True)
+    assert bundles == [], "unverified files are never uploaded"
+    assert pq.read_table(tables["papers"])["arxiv_id"].to_pylist() == [PID]
