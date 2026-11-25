@@ -1,0 +1,40 @@
+version: 1
+
+project:
+  title: "arXiv Reference Matching — Nhóm 3 KHDL24"
+  description: "Báo cáo tái lập được của đồ án arXiv Reference Matching (HCMUS)."
+  authors:
+    - name: Nhóm 3 KHDL24, HCMUS
+  copyright: "2026 Nhóm 3 KHDL24"
+  github: hcmus-arxiv-reference/Jupyter-Notebook-report-for-mile1
+  exclude:
+    - README.md
+    - data/**
+  toc:
+    - file: index.md
+    - title: "Milestone 1: Thu thập dữ liệu"
+      children:
+        - file: m1/01-phuong-phap.md
+        - file: m1/02-ket-qua.md
+        - file: m1/03-hieu-nang.md
+        - file: m1/04-han-che.md
+        - file: m1/05-so-sanh-pipeline.md
+    - title: "Milestone 2: Parser"
+      children:
+        - file: m2/01-tong-quan.md
+        - file: m2/02-source-structure.md
+        - file: m2/03-leaves.md
+        - file: m2/04-normalize-bibtex.md
+        - file: m2/05-tich-hop.md
+        - file: m2/055-khoi-phuc-bibliography.md
+        - file: m2/06-han-che.md
+
+    - title: "Milestone 3: Ghép tài liệu tham khảo"
+      children:
+        - file: m3/01-gan-nhan.md
+
+site:
+  # Ghim theme: mystmd 1.5.0 không chạy được bản book-theme mới hơn 1.4.1 (build treo).
+  template: https://github.com/jupyter-book/myst-theme/releases/download/myst-to-react%401.4.1/book-theme.zip
+  options:
+    logo_text: "arXiv Reference Matching"
