@@ -5,7 +5,7 @@ import re
 
 from .source import _control
 
-NORMALIZE_VERSION = "1"
+NORMALIZE_VERSION = "2"
 
 # Course M2 cleanup and the group's M2.4a examples. The value is the argument
 # to discard along with the formatting command (if present for optional rules).
@@ -17,7 +17,18 @@ _FORMATTING = dict.fromkeys(
 _FORMATTING.update(dict.fromkeys(("toprule", "midrule", "bottomrule"), "optional"))
 _FORMATTING.update(dict.fromkeys(("vspace", "hspace"), "required"))
 _ENV = re.compile(r"\\(begin|end)\s*\{([A-Za-z]+\*?)\}")
-_DISPLAY = re.compile(r"\\begin\{(equation\*?|displaymath|align\*?|gather\*?)\}(.*)\\end\{\1\}", re.S)
+_DISPLAY = re.compile(
+    r"\\begin\{(equation\*?|displaymath|align\*?|gather\*?|eqnarray\*?|flalign\*?|alignat\*?|multline\*?)\}"
+    r"(.*)\\end\{\1\}",
+    re.S,
+)
+# Display environments that amsmath forbids inside `equation`, mapped to the inner
+# form with the same line structure (amsmath user guide, sections 3.5-3.7:
+# https://mirrors.ctan.org/macros/latex/required/amsmath/amsldoc.pdf).
+# Tokens such as the `&=&` of eqnarray are kept unchanged.
+_INNER = {"align": "aligned", "gather": "gathered", "eqnarray": "aligned",
+          "flalign": "aligned", "alignat": "alignedat", "multline": "gathered"}
+_COLUMNS = re.compile(r"\s*\{\s*(\d+)\s*\}")
 _LITERALS = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted"}
 _FLOATS = {"figure", "figure*", "table", "table*"}
 _PLACEMENT = re.compile(r"[!htbpH]+")
@@ -183,9 +194,14 @@ def normalize(kind: str, raw: str) -> str:
     if display:
         name, body = display.groups()
         body = body.strip()
-        nested = {"align": "aligned", "gather": "gathered"}.get(name.rstrip("*"))
+        nested = _INNER.get(name.rstrip("*"))
         if nested:
-            body = "\\begin{" + nested + "}" + body + "\\end{" + nested + "}"
+            argument = ""
+            if nested == "alignedat" and (columns := _COLUMNS.match(body)):
+                # alignat{n} keeps its column-pair count on alignedat{n}.
+                argument = "{" + columns.group(1) + "}"
+                body = body[columns.end():].strip()
+            body = "\\begin{" + nested + "}" + argument + body + "\\end{" + nested + "}"
     elif (clean.startswith("$$") and clean.endswith("$$")) or (
         clean.startswith(r"\[") and clean.endswith(r"\]")
     ):
