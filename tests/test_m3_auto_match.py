@@ -84,3 +84,20 @@ def test_publication_split_reproducible_and_frozen():
     assert rows == publication_splits(manual, available, owners, members, 12, rows)
     with pytest.raises(ValueError):
         publication_splits(manual, available, owners, members, 12, rows + rows[:1])
+
+
+@pytest.mark.parametrize("archive,expected", [("arXiv", "explicit_id"), ("", "explicit_id"),
+                                              ("HAL", "missing_title")])
+def test_pilot_eprint_uses_archive_prefix(archive, expected):
+    from scripts.m3_auto_match import pilot_entry
+
+    raw = '@article{paper, eprint="1706.03762v2", archivePrefix={' + archive + '}}'
+    assert match(pilot_entry(raw), {RID: ref("Attention Is All You Need")})[2] == expected
+
+
+def test_pilot_conflicting_eprint_and_url_abstains():
+    from scripts.m3_auto_match import pilot_entry
+
+    raw = '@misc{x, eprint={1706.03762}, url={https://arxiv.org/abs/1901.01234}}'
+    assert match(pilot_entry(raw), {RID: ref("Attention Is All You Need")})[:3] == (
+        "", "unsure", "conflicting_ids")

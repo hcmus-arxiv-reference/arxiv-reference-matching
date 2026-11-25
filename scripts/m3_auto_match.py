@@ -74,7 +74,11 @@ def candidate(row):
 
 
 def match(entry, candidates):
-    """Return ref_arxiv_id, confidence, reason and heuristic score."""
+    """Return ref_arxiv_id, confidence, reason and heuristic score.
+
+    An empty target with confidence=unsure is an abstention, not a confirmed
+    negative. Downstream scoring must distinguish it from empty sure labels.
+    """
     evidence = " ".join(str(entry.get(k) or "") for k in ("url", "doi", "journal", "title"))
     ids = {m.casefold() for m in ID_PATTERN.findall(evidence)}
     if len(ids) > 1:
@@ -209,9 +213,24 @@ def bib_field(text, name):
     return ""
 
 
-def pilot(sheet, labels, output):
-    from src.parse.bibtex import _bibitem_parts
+def pilot_entry(raw):
+    """Recover an arXiv eprint from the raw pilot sheet using M2's archive rules."""
+    from src.parse.bibtex import _arxiv_ref, _bibitem_parts
 
+    evidence = raw
+    if raw.lstrip().startswith("@"):
+        title = bib_field(raw, "title")
+        authors = re.split(r"\s+and\s+", bib_field(raw, "author"), flags=re.I)
+        fields = {name: bib_field(raw, name) for name in ("eprint", "archiveprefix")}
+        rid = _arxiv_ref(fields)
+        if rid:
+            evidence += f" arXiv:{rid}"
+    else:
+        title, authors = _bibitem_parts(raw)
+    return dict(title=title, authors=authors, year=bib_field(raw, "year"), url=evidence)
+
+
+def pilot(sheet, labels, output):
     gold = load_gold([labels])
     rows = read_csv(sheet)
     if len(rows) != len(gold) or {row_key(r) for r in rows} != set(gold):
@@ -226,13 +245,7 @@ def pilot(sheet, labels, output):
                 ref["ref_authors"] = [s.strip() for s in (ref.get("ref_authors") or "").split(";")
                                       if s.strip()]
                 refs[pid][ref["ref_arxiv_id"]] = candidate(ref)
-        raw = row["entry"]
-        if raw.lstrip().startswith("@"):
-            title = bib_field(raw, "title")
-            authors = re.split(r"\s+and\s+", bib_field(raw, "author"), flags=re.I)
-        else:
-            title, authors = _bibitem_parts(raw)
-        entries[pid, cite] = dict(title=title, authors=authors, year=bib_field(raw, "year"), url=raw)
+        entries[pid, cite] = pilot_entry(row["entry"])
     return dict(mode="pilot", publications=len(refs),
                 metrics=evaluate(gold, entries, refs, output))
 
@@ -394,7 +407,8 @@ def team(output):
             counts[reason] += 1
             writer.writerow(dict(arxiv_id=pid, citation_key=cite, ref_arxiv_id=rid,
                                  confidence=confidence, labeler=labeler, note=reason, score=score))
-    return dict(mode="team", dataset_revision=revision, labeler=labeler, seed=SEED,
+    return dict(mode="team", id_evidence_limit="M2 bibtex does not export raw eprint.",
+                dataset_revision=revision, labeler=labeler, seed=SEED,
                 manual_publications=len(manual), remaining_publications=len(remaining),
                 remaining_with_entries=len(available), auto_publications=len(selected),
                 auto_entries=sum(counts.values()), evaluation_pool="manual/train", metrics=metrics,
