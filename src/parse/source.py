@@ -16,7 +16,7 @@ import re
 
 from src.common.corpus import verified_source
 
-ASSEMBLER_VERSION = "6"
+ASSEMBLER_VERSION = "7"
 _VERBATIM = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"}
 _DEFINITIONS = {"newcommand", "renewcommand", "providecommand", "DeclareRobustCommand",
                 "DeclareMathOperator", "newenvironment", "renewenvironment"}
@@ -125,8 +125,14 @@ def _group(text: str, index: int, opening: str = "{") -> tuple[str, int]:
     raise ValueError("Unclosed argument")
 
 
-def _scan(text: str, file: str, tokens: list[_Command] | None = None) -> _Scan:
-    """Lex control words, skipping comments, verbatim and definition bodies."""
+def _scan(text: str, file: str, tokens: list[_Command] | None = None, *,
+          unknown_active: bool = False) -> _Scan:
+    """Lex control words, skipping comments, verbatim and definition bodies.
+
+    ``unknown_active``: treat a branch whose condition cannot be evaluated (e.g.
+    ``\\if1\\blind``) as active. Assembly keeps the default and skips such
+    branches; reading a ``\\title`` only needs to skip branches known to be off.
+    """
     result = _Scan([], [], len(text))
     cursor = 0
     conditions: list[bool | None] = []
@@ -145,7 +151,7 @@ def _scan(text: str, file: str, tokens: list[_Command] | None = None) -> _Scan:
             cursor += 1; continue
         start = cursor
         name, cursor = _control(text, cursor)
-        active = all(value is True for value in conditions)
+        active = all(value is True or (unknown_active and value is None) for value in conditions)
         try:
             if name in {"verb", "lstinline"}:
                 if cursor < len(text) and text[cursor] == "*":
@@ -323,7 +329,6 @@ _AUXILIARY_ROOT = re.compile(
     r"(?:^|[^a-z])(?:supp\w*|si|appendix|appendices|rebuttal|response\w*|reply|cover\w*)"
     r"(?:[^a-z]|$)"
 )
-_TITLE = re.compile(r"\\title\s*(?:\[[^\]]*\]\s*)?\{")
 
 
 def _title_words(text: str) -> tuple[str, ...]:
@@ -333,15 +338,33 @@ def _title_words(text: str) -> tuple[str, ...]:
 
 
 def _declared_title(text: str) -> tuple[str, ...]:
-    """Words of the first ``\\title{...}`` in a preamble, or () if absent or unbalanced."""
-    match = _TITLE.search(text)
-    if match is None:
-        return ()
+    """Words of the first effective ``\\title{...}``, or () if absent or unreadable.
+
+    Uses the same scanner as file assembly, so a ``\\title`` inside a comment, a
+    ``comment``/verbatim environment or a disabled ``\\iffalse`` branch is skipped
+    (e.g. an old title commented out above the real one). A branch whose condition
+    the scanner cannot evaluate (``\\if1\\blind`` in JASA-style templates) is read.
+    Comments inside the title argument are dropped before comparing words.
+    """
+    tokens: list[_Command] = []
     try:
-        title, _ = _group(text, match.end() - 1)
+        _scan(text, "", tokens, unknown_active=True)
     except ValueError:
         return ()
-    return _title_words(title)
+    command = next((token for token in tokens if token.name == "title"), None)
+    if command is None:
+        return ()
+    cursor = _space(text, command.end)
+    try:
+        if text.startswith("[", cursor):
+            _, cursor = _group(text, cursor, "[")
+            cursor = _space(text, cursor)
+        if not text.startswith("{", cursor):
+            return ()
+        title, _ = _group(text, cursor)
+    except ValueError:
+        return ()
+    return _title_words(re.sub(r"(?<!\\)%[^\n]*", " ", title))
 
 
 def _select_root(candidates: list[str], texts: dict[str, str],

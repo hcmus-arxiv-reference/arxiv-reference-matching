@@ -438,3 +438,50 @@ def test_explicit_root_file_overrides_rules(tmp_path):
     result = assemble_source(root, root_file="supp.tex", title_hint="A")
     assert result.root == "supp.tex"
     assert not {"root_selected_by_title", "root_selected_by_name"} & set(_codes(result))
+
+
+def test_commented_title_does_not_hide_the_effective_title(tmp_path):
+    # Shape of 2410.08025 v1: an old title commented out right above the real one.
+    main = ("\\documentclass{article}\n%\\title{An Older Working Title}\n"
+            "\\title{Robust Graph Learning}\n\\begin{document}\nMain.\n\\end{document}\n")
+    root = tree(tmp_path, {"main.tex": main, "notes.tex": _doc("Lab notes")})
+    result = assemble_source(root, title_hint="Robust Graph Learning")
+    assert result.root == "main.tex"
+    assert "root_selected_by_title" in _codes(result)
+
+
+def test_commented_empty_title_still_counts_the_real_title_as_a_match(tmp_path):
+    # Shape of 2410.09510 v2: both templates carry the metadata title, one after a
+    # commented-out \title{}. Two title matches means the title rule cannot decide.
+    neurips = ("\\documentclass{article}\n% \\title{}\n\\usepackage{neurips_2025}\n"
+               "\\title{Robust Graph Learning}\n\\begin{document}\nA.\n\\end{document}\n")
+    root = tree(tmp_path, {
+        "iclr_workshop/iclr2025_conference.tex": _doc("Robust Graph Learning"),
+        "neurips/neurips_2025.tex": neurips,
+    })
+    result = assemble_source(root, title_hint="Robust Graph Learning")
+    assert result.root is None
+    assert "ambiguous_root" in _codes(result)
+
+
+def test_title_in_disabled_branch_or_comment_environment_is_ignored(tmp_path):
+    hidden = ("\\documentclass{article}\n\\iffalse\n\\title{Robust Graph Learning}\n\\fi\n"
+              "\\begin{comment}\n\\title{Robust Graph Learning}\n\\end{comment}\n"
+              "\\title{Something Else}\n\\begin{document}\nB.\n\\end{document}\n")
+    main = ("\\documentclass{article}\n\\title{Robust Graph % line break kept\n"
+            "Learning}\n\\begin{document}\nA.\n\\end{document}\n")
+    root = tree(tmp_path, {"hidden.tex": hidden, "main.tex": main})
+    result = assemble_source(root, title_hint="Robust Graph Learning")
+    assert result.root == "main.tex"
+    assert "root_selected_by_title" in _codes(result)
+
+
+def test_title_inside_unevaluated_conditional_is_read(tmp_path):
+    # JASA-style blind switch: \if1\blind{...}\fi cannot be evaluated by the scanner,
+    # but the title inside it is the paper's title.
+    main = ("\\documentclass{article}\n\\def\\blind{0}\n\\if1\\blind\n{\n"
+            "\\title{\\bf Robust Graph Learning}\n}\\fi\n\\begin{document}\nA.\n\\end{document}\n")
+    root = tree(tmp_path, {"main.tex": main, "notes.tex": _doc("Lab notes")})
+    result = assemble_source(root, title_hint="Robust Graph Learning")
+    assert result.root == "main.tex"
+    assert "root_selected_by_title" in _codes(result)
