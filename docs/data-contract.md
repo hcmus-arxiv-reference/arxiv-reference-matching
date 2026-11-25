@@ -15,7 +15,7 @@ Nguồn đề:
 Thuật ngữ theo `CONTEXT.md`.
 
 Ký hiệu: **[Đề]** là yêu cầu của đề, không bàn lại. **[Đã chốt]** là quyết định của nhóm
-đã ghi trong `AGENTS.md`, ADR hoặc `schema.py`. **[Mở Cn]** là quyết định chưa chốt, xem
+đã ghi trong tài liệu này, ADR hoặc `schema.py`. **[Mở Cn]** là quyết định chưa chốt, xem
 mục 6.
 
 ## 1. Luồng dữ liệu
@@ -146,7 +146,7 @@ Ngoại lệ: chế độ `references=False` của `run_crawl` bỏ điều ki�
   Element giống hệt nhau sau chuẩn hóa dùng chung một `element_id` **[Đề]**.
 - `element_id` = `<publication key>#<discriminant>`, discriminant duy nhất trong Publication
   **[Đề]**. Phải tất định: chạy lại Parser trên cùng input cho cùng ID (yêu cầu tái lập của
-  `AGENTS.md`). Discriminant là `<kind>-<16 hex đầu của sha256>`, băm theo cây con
+  `CONTRIBUTING.md` mục 7). Discriminant là `<kind>-<16 hex đầu của sha256>`, băm theo cây con
   **[Đã chốt C1, 2026-11-05]**:
   - lá (Sentence, Block formula, Figure): băm `(kind, content)`;
   - nút cấu trúc (Section…, `item`, `itemize`, `document`): băm `(kind, content, danh sách ID
@@ -257,7 +257,7 @@ Không còn mục mở. C8 (file nhãn) và C12 (phạm vi bảng `bibtex`) đư
 ## 7. Thay đổi hợp đồng
 
 - Đổi cột, kiểu, khóa hoặc enum: sửa `src/common/schema.py` và mục tương ứng ở đây trong
-  cùng một commit, sau khi nhóm trưởng duyệt (`AGENTS.md` mục 4.4).
+  cùng một commit, sau khi nhóm trưởng duyệt (`CONTRIBUTING.md` mục 5–6).
 - Khi một mục **[Mở]** được chốt: chuyển sang **[Đã chốt]**, ghi ngày, xóa dòng ở mục 6.
 - 2026-11-15 (C10, Bảo duyệt): thêm `s2_status: "not_found"` cho file references và status
   `unavailable` của task `references` khi S2 trả 404 (mục 3.3). File cũ không có trường này
