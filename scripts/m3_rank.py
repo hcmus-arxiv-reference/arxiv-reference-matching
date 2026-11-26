@@ -10,6 +10,7 @@ import argparse
 import csv
 import json
 import math
+import os
 import re
 import tempfile
 import unicodedata
@@ -56,12 +57,19 @@ def run(source, output):
             raise ValueError(f"Invalid split: {r}")
         splits[pid] = r
     gold = {}
+    abstentions = set()
     for pool in ("manual", "auto"):
         for path in sorted((source / "labels" / pool).glob("*.csv")):
             for r in read_csv(path):
                 key = r["arxiv_id"], r["citation_key"]
                 if key in gold or splits.get(key[0], {}).get("pool") != pool:
                     raise ValueError(f"Conflicting label or split: {key} in {path}")
+                if pool == "auto":
+                    confidence = r.get("confidence")
+                    if confidence not in {"unsure", "sure"} or (confidence == "unsure" and r["ref_arxiv_id"]):
+                        raise ValueError(f"Invalid automatic label: {key}, confidence={confidence}")
+                    if confidence == "unsure":
+                        abstentions.add(key)
                 gold[key] = r["ref_arxiv_id"] or None
     refs = defaultdict(dict)
     entries = {}
@@ -88,7 +96,7 @@ def run(source, output):
         pid = key[0]
         if gold[key] and gold[key] not in refs[pid]:
             raise ValueError(f"Reference outside Publication: {key} -> {gold[key]}")
-        if splits[pid]["partition"] == "train":
+        if splits[pid]["partition"] == "train" and key not in abstentions:
             for rid, ref in refs[pid].items():
                 y = int(gold[key] == rid)
                 totals[y] += 1
@@ -102,7 +110,7 @@ def run(source, output):
             weights[j,value] = math.log((counts[1][j,value]+1)/(totals[1]+len(domain))) - math.log(
                 (counts[0][j,value]+1)/(totals[0]+len(domain)))
     rows = defaultdict(list)
-    metrics = defaultdict(lambda: {"entries": 0, "rr_sum": 0.0})
+    metrics = defaultdict(lambda: {"entries": 0, "rr_sum": 0.0, "n_with_target": 0, "n_with_empty": 0})
     for key, entry in sorted(entries.items()):
         pid, cite = key
         part = splits[pid]["partition"]
@@ -112,6 +120,10 @@ def run(source, output):
         top = sorted(scores, key=lambda rid: (-scores[rid], rid))[:5]
         stat = metrics[part]
         stat["entries"] += 1
+        if gold[key] is not None:
+            stat["n_with_target"] += 1
+        if gold[key] is not None or splits[pid]["pool"] == "manual":
+            stat["n_with_empty"] += 1
         if gold[key] in top:
             stat["rr_sum"] += 1 / (1 + top.index(gold[key]))
         rows[owners[pid]].append(dict(arxiv_id=pid, citation_key=cite, partition=part,
@@ -119,7 +131,8 @@ def run(source, output):
     if set(metrics) != {"train","valid","test"}:
         raise ValueError("Expected non-empty train, valid and test")
     for stat in metrics.values():
-        stat["mrr_at_5"] = stat["rr_sum"] / stat["entries"]
+        stat["mrr_at_5"] = stat["rr_sum"] / stat["n_with_target"] if stat["n_with_target"] else None
+        stat["mrr_at_5_with_empty"] = stat["rr_sum"] / stat["n_with_empty"] if stat["n_with_empty"] else None
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists():
         raise FileExistsError(output)
@@ -141,13 +154,27 @@ def main():
     args = parser.parse_args()
     source = args.source
     if args.hf:
-        from huggingface_hub import snapshot_download
-        from src.common.config import get_settings
+        os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "60")
+        from huggingface_hub import HfApi, hf_hub_download
+        from src.common.config import get_settings, load_ranges
         settings = get_settings()
-        source = Path(snapshot_download(settings.hf_repo_id, repo_type="dataset", token=settings.hf_token,
-            allow_patterns=["labels/splits.csv","labels/manual/*.csv","labels/auto/*.csv",
-                            "tables/*/bibtex.parquet","tables/*/references.parquet"]))
-        print("Dataset revision:", source.name)
+        api = HfApi(token=settings.hf_token)
+        repo = settings.hf_repo_id
+        revision = api.dataset_info(repo).sha
+        files = ["labels/splits.csv"]
+        for pool in ("manual", "auto"):
+            files.extend(item.path for item in api.list_repo_tree(
+                repo, f"labels/{pool}", repo_type="dataset", revision=revision)
+                if item.path.endswith(".csv"))
+        files.extend(f"tables/{member}/{table}.parquet" for member in load_ranges()
+                     for table in ("references", "bibtex"))
+        with tempfile.TemporaryDirectory() as directory:
+            for name in files:
+                hf_hub_download(repo, name, repo_type="dataset", revision=revision,
+                                token=settings.hf_token, local_dir=directory)
+            print("Dataset revision:", revision)
+            print(json.dumps(run(Path(directory), args.out), indent=2))
+        return
     print(json.dumps(run(source,args.out), indent=2))
 
 

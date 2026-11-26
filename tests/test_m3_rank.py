@@ -8,7 +8,7 @@ from scripts.m3_rank import run
 from src.common.schema import from_records, write_table
 
 
-def test_train_only_ranking_and_empty_gold(tmp_path):
+def test_train_only_ranking_and_empty_gold(tmp_path, monkeypatch):
     root = tmp_path / "input"
     ids = ["2410.00001", "2410.00002", "2410.00003"]
     targets = ["2301.00001", "2301.00002"]
@@ -33,9 +33,49 @@ def test_train_only_ranking_and_empty_gold(tmp_path):
     output = tmp_path/"out"
     metrics = run(root,output)
     assert metrics["valid"]["mrr_at_5"] == 1
-    assert metrics["test"]["mrr_at_5"] == 0.5
+    assert metrics["test"]["mrr_at_5"] == 1
+    assert metrics["test"]["mrr_at_5_with_empty"] == 0.5
+    assert metrics["test"]["n_with_target"] == 1
+    assert metrics["test"]["n_with_empty"] == 2
     result = pq.read_table(output/"tables/lieu/predictions.parquet").to_pylist()
     assert len(result)==6 and all(r["cand_3"] is None for r in result)
     assert result[-1]["cand_1"] == targets[1] and result[-1]["groundtruth_arxiv_id"] is None
     with pytest.raises(FileExistsError):
         run(root,output)
+
+
+    # Reclassify the test Publication as automatic: its empty label is an abstention.
+    for row in splits:
+        if row["partition"] == "test":
+            row["pool"] = "auto"
+    def rewrite(name, rows):
+        file = root / "labels" / name
+        file.parent.mkdir(exist_ok=True)
+        with file.open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=rows[0])
+            writer.writeheader()
+            writer.writerows(rows)
+
+    rewrite("splits.csv", splits)
+    rewrite("manual/lieu.csv", labels[:-2])
+    rewrite("auto/run.csv", [dict(row, confidence="sure" if row["ref_arxiv_id"] else "unsure")
+                             for row in labels[-2:]])
+    stat = run(root, tmp_path / "auto-out")["test"]
+    assert stat["entries"] == 2 and stat["n_with_empty"] == stat["n_with_target"] == 1
+    assert stat["mrr_at_5_with_empty"] == stat["mrr_at_5"] == 1
+
+
+    # Swap train and test, then count candidate pairs used to fit the model.
+    from scripts import m3_rank
+    from unittest.mock import Mock
+    splits[0]["partition"], splits[-1]["partition"] = "test", "train"
+    rewrite("splits.csv", splits)
+    observed = Mock(wraps=m3_rank.features)
+    monkeypatch.setattr(m3_rank, "features", observed)
+    run(root, tmp_path / "auto-train")
+    # Six predictions x two candidates, plus one known train target x two candidates.
+    assert observed.call_count == 14
+    observed.reset_mock()
+    rewrite("auto/run.csv", [dict(row, confidence="sure") for row in labels[-2:]])
+    run(root, tmp_path / "sure-train")
+    assert observed.call_count == 16
