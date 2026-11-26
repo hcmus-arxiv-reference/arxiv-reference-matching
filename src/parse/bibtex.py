@@ -21,12 +21,13 @@ from pylatexenc.macrospec import MacroSpec
 
 from src.common.schema import require_id
 from .normalize import _group_end, _space_end, normalize
+from .types import normalize_cite_key
 
 if TYPE_CHECKING:
     from src.parse.types import BibResult, BibSource
 
 
-BIBTEX_VERSION = "6"
+BIBTEX_VERSION = "7"
 # pylatexenc 2.10 has a text replacement for href, but no default argument
 # specification. Register both so linked titles and missing arguments are safe.
 _BIB_PARSER = get_parser_context()
@@ -425,7 +426,7 @@ def _bibitem_candidate(version: int, text: str) -> _Candidate | None:
     start = _group_end(text, head.end(), "[") or head.end()
     start = _space_end(text, start)
     end = _group_end(text, start, "{")
-    if end is None or not (key := text[start + 1:end - 1].strip()):
+    if end is None or not (key := normalize_cite_key(text[start + 1:end - 1])):
         return None
     body = normalize("sentence", text[end:])
     doi, url = _first_match(_DOI, body), _first_match(_URL, body)

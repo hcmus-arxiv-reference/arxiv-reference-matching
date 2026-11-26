@@ -43,13 +43,14 @@ from src.parse.types import (
     Section,
     SourceBundle,
     StructureTree,
+    normalize_cite_key,
     compute_element_id,
     source_bundle_from_dict,
     validate_C,
     validate_D,
 )
 
-EXPORT_VERSION = "3"
+EXPORT_VERSION = "4"
 
 # Danh sách lệnh trích dẫn khớp với src/parse/structure.py (không nhận nhầm \citestyle, \setcitestyle, ...)
 _CITE_COMMANDS: tuple[str, ...] = (
@@ -96,8 +97,8 @@ def rewrite_citations(raw: str, version_key_map: Mapping[str, str] | None) -> st
             if not stripped:
                 mapped.append(part)
                 continue
-            tokens = [version_key_map.get(tok, tok) for tok in stripped.split()]
-            new_key = " ".join(tokens)
+            key = normalize_cite_key(stripped)
+            new_key = version_key_map.get(key, key)
             if len(parts) == 1:
                 mapped.append(new_key)
             else:
@@ -116,9 +117,8 @@ def extract_cite_keys(text: str) -> list[str]:
     keys: list[str] = []
     for match in _CITE_COMMAND_RE.finditer(text):
         for part in match.group(2).split(","):
-            for key in part.strip().split():
-                if key:
-                    keys.append(key)
+            if key := normalize_cite_key(part):
+                keys.append(key)
     return keys
 
 
@@ -144,6 +144,8 @@ class VersionInput:
     issues: list[str] = field(default_factory=list)
     fallbacks: list[str] = field(default_factory=list)
     seconds: float | None = None
+    # Why a failed Version failed (stage and message), written to versions.jsonl.
+    error: str | None = None
 
 
 @dataclass
@@ -305,6 +307,8 @@ def export_publication(
                 "duplicate_sibling_edges": 0,
                 "no_bibliography": False,
             }
+            if v_in.error:
+                log_row["error"] = v_in.error
             if v_in.fallbacks:
                 log_row["fallbacks"] = sorted(set(v_in.fallbacks))
             if include_seconds and v_in.seconds is not None:
@@ -448,6 +452,13 @@ def export_publication(
                 "journal": entry.get("journal"),
                 "url": entry.get("url"),
             })
+
+    # A \\cite left in element content whose key has no bibtex row (e.g. a citation
+    # the structure scanner could not see, inside a conditional it cannot evaluate)
+    # is an unresolved key, like a missing_entry, not a reason to drop the whole
+    # Publication. Use the same extractor as I5 so the two always agree.
+    cited_keys = {key for row in elements_list for key in extract_cite_keys(row["content"])}
+    unresolved_keys = unresolved_keys | (cited_keys - {row["citation_key"] for row in bibtex_rows})
 
     stats = {
         "versions_total": expected_count,
@@ -611,9 +622,9 @@ def validate_E(
                     f"[I3] Section {row['element_id']!r} có tiêu đề References/Bibliography: {row['content']!r}"
                 )
 
-    # I5: Mọi \cite{k} trong elements.content có (arxiv_id, k) trong bibtex. Key thiếu entry
-    # mà M2.4b đã ghi missing_entry không có dòng bibtex; I5 chấp nhận chúng thay vì loại
-    # cả Publication (data-contract mục 4.2).
+    # I5: Mọi \cite{k} trong elements.content có (arxiv_id, k) trong bibtex, hoặc nằm trong
+    # unresolved_keys: key missing_entry của M2.4b và key cite trong content không có dòng
+    # bibtex mà export đã gom lại; không loại cả Publication (data-contract mục 4.2).
     bib_keys = {
         (row["arxiv_id"], row["citation_key"]) for row in result.bibtex
     }

@@ -202,7 +202,9 @@ Ngoại lệ: chế độ `references=False` của `run_crawl` bỏ điều ki�
   `reason = "missing_entry"`. Mọi đích trong `key_map` phải tồn tại trong `entries`.
   Validator chấp nhận key cite thiếu trong map khi có đúng bản ghi log tương ứng.
   Pipeline đọc log để báo độ phủ trích dẫn và xử lý Publication còn thiếu entry
-  **[Đã chốt ngoại lệ missing_entry, 20/11/2026]**.
+  **[Đã chốt ngoại lệ missing_entry, 20/11/2026]**. Từ 26/11/2026, Export còn gộp vào
+  `unresolved_keys` mọi key `\cite` trong `elements.content` không có dòng `bibtex` (ví dụ cite trong
+  nhánh điều kiện không tính được), thay vì loại cả Publication.
 
 ### 4.3 M3 dùng gì
 

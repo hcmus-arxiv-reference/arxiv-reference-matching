@@ -16,7 +16,7 @@ import re
 
 from src.common.corpus import verified_source
 
-ASSEMBLER_VERSION = "7"
+ASSEMBLER_VERSION = "8"
 _VERBATIM = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"}
 _DEFINITIONS = {"newcommand", "renewcommand", "providecommand", "DeclareRobustCommand",
                 "DeclareMathOperator", "newenvironment", "renewenvironment"}
@@ -79,6 +79,10 @@ class _Scan:
     stop: int
     ends_document: bool = False
     begins_document: bool = False
+    # Half-open spans inside a branch known to be off (\\iffalse, the \\else of
+    # \\iftrue, a decided \\ifnum), including the conditional words that open
+    # and close the off part. Text there never reaches the PDF.
+    inactive: list[tuple[int, int]] = field(default_factory=list)
 
 
 def _control(text: str, start: int) -> tuple[str, int]:
@@ -136,6 +140,7 @@ def _scan(text: str, file: str, tokens: list[_Command] | None = None, *,
     result = _Scan([], [], len(text))
     cursor = 0
     conditions: list[bool | None] = []
+    off_since: int | None = None
 
     def issue(code: str, position: int, message: str, severity: str = "warning"):
         result.issues.append(Issue(code, severity, file, text.count("\n", 0, position) + 1, message))
@@ -269,17 +274,29 @@ def _scan(text: str, file: str, tokens: list[_Command] | None = None, *,
                         cursor += match.end()
                 if active and value is None:
                     issue("unsupported_conditional", start, f"\\{name}: neither branch is expanded")
-                conditions.append(value); continue
+                was_off = off_since is not None
+                conditions.append(value)
+                if not was_off and value is False:
+                    off_since = start
+                continue
             if name == "else":
                 if not conditions:
                     raise ValueError("Unmatched else")
                 if conditions[-1] is not None:
                     conditions[-1] = not conditions[-1]
+                    outer_off = any(v is False for v in conditions[:-1])
+                    if not outer_off and conditions[-1] is False:
+                        off_since = start
+                    elif not outer_off and off_since is not None:
+                        result.inactive.append((off_since, cursor)); off_since = None
                 continue
             if name == "fi":
                 if not conditions:
                     raise ValueError("Unmatched fi")
-                conditions.pop(); continue
+                conditions.pop()
+                if off_since is not None and not any(v is False for v in conditions):
+                    result.inactive.append((off_since, cursor)); off_since = None
+                continue
             if not active:
                 continue
             if name in {"AtBeginDocument", "AtEndDocument"}:
@@ -319,6 +336,8 @@ def _scan(text: str, file: str, tokens: list[_Command] | None = None, *,
             break  # Do not infer active commands after malformed syntax.
     if conditions and not result.ends_document:
         issue("unclosed_conditional", cursor, "Conditional block was not closed", "error")
+    if off_since is not None:
+        result.inactive.append((off_since, min(cursor, len(text))))
     return result
 
 
@@ -519,6 +538,9 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
         chunks.append(chunk); size += len(chunk)
 
     def resolve(argument, name, line):
+        # \input{"./sections/intro.tex"}: TeX accepts a quoted file name.
+        if len(argument) > 1 and argument[0] == argument[-1] == '"':
+            argument = argument[1:-1]
         if any(ch in argument for ch in "\\#{}~$"):
             raise ValueError("Dynamic filename is unsupported")
         requested = Path(argument)
@@ -605,6 +627,12 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
                 if isinstance(error, FileNotFoundError) and Path(command.argument).suffix.lower() == ".bbl":
                     entry["status"] = "missing_bbl"
                     problem("missing_bbl", name, str(error), "warning", line=line)
+                elif isinstance(error, FileNotFoundError):
+                    # arXiv compiled this Version, so the file existed: a TeX
+                    # distribution file (epsf, xy, amssym.def) or a non-TeX asset
+                    # that M1 does not keep (.tikz, .pgf, .sty). Neither is prose.
+                    entry["status"] = "missing"
+                    problem("missing_input", name, str(error), "warning", line=line)
                 else:
                     problem("include_error", name, str(error), line=line)
                 emit(name, command.start, command.end)

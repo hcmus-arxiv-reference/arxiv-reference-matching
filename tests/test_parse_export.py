@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 import json
 from pathlib import Path
 from unittest.mock import Mock
@@ -326,7 +327,7 @@ def test_pipeline_batch_determinism_and_checkpoint_resume(
     )
     assert rc == 0
     assert cli_metrics.is_file()
-    assert EXPORT_VERSION == "3" and PIPELINE_VERSION == "6"
+    assert EXPORT_VERSION == "4" and PIPELINE_VERSION == "7"
     versions = get_module_versions(allow_fallback=True)
     assert "export" in versions
 
@@ -542,8 +543,8 @@ def _cite_tree(raw: str) -> LeafTree:
     )
 
 
-def test_i5_accepts_logged_missing_entry_but_rejects_other_unknown_keys() -> None:
-    """Key thiếu entry đã ghi missing_entry (data-contract 4.2) không làm hỏng cả Publication."""
+def test_i5_accepts_unresolved_keys_and_rejects_unreported_ones() -> None:
+    """Key cite không có dòng bibtex (đã ghi missing_entry hay không) không làm hỏng cả Publication."""
     entry = {"citation_key": "known", "entry_type": "article", "title": "Known", "authors": [],
              "year": 2020, "doi": None, "journal": None, "url": None}
     logged = BibResult(
@@ -564,14 +565,22 @@ def test_i5_accepts_logged_missing_entry_but_rejects_other_unknown_keys() -> Non
     assert res.stats["bibtex_unresolved_keys"] == 1
     assert [row["citation_key"] for row in res.bibtex] == ["known"]
 
+    # A cite the structure scanner never logged (e.g. inside a conditional it cannot
+    # evaluate) is gathered from element content by the same extractor I5 uses.
     unlogged = BibResult(arxiv_id="2508.02872", entries=[entry], key_map={"1": {"known": "known"}})
+    res = export_publication(
+        "2508.02872",
+        [VersionInput(version=1, status="parsed", leaf_tree=_cite_tree(r"See \cite{known,ghost}."))],
+        unlogged,
+        normalize_fn=default_normalize,
+    )
+    assert res.unresolved_keys == frozenset({"ghost"})
+    assert res.stats["bibtex_unresolved_keys"] == 1
+
+    # I5 still rejects a result that cites a key it neither has nor reports.
+    broken = replace(res, unresolved_keys=frozenset())
     with pytest.raises(ValueError, match=r"\[I5\].*ghost"):
-        export_publication(
-            "2508.02872",
-            [VersionInput(version=1, status="parsed", leaf_tree=_cite_tree(r"See \cite{known,ghost}."))],
-            unlogged,
-            normalize_fn=default_normalize,
-        )
+        validate_E(broken, raise_on_error=True)
 
 
 

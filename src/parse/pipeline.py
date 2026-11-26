@@ -13,6 +13,7 @@ import inspect
 import json
 from pathlib import Path
 import time
+import traceback
 from typing import Any, Callable, Mapping, Sequence
 
 from src.common.corpus import FileCorpus, file_digest, verified_source
@@ -47,7 +48,22 @@ from src.parse.types import (
     validate_D,
 )
 
-PIPELINE_VERSION = "6"
+PIPELINE_VERSION = "7"
+
+
+def _short(message: str, limit: int = 300) -> str:
+    """First line of a message, cut to ``limit`` characters."""
+    text = str(message).strip()
+    line = text.splitlines()[0] if text else ""
+    return line if len(line) <= limit else line[:limit - 1] + "…"
+
+
+def _describe(exc: BaseException) -> str:
+    """``<module>.<function>: <Type>: <first line>`` of an exception, for versions.jsonl."""
+    frames = [f for f in traceback.extract_tb(exc.__traceback__)
+              if "/src/" in f.filename.replace("\\", "/")]
+    where = f"{Path(frames[-1].filename).stem}.{frames[-1].name}" if frames else "unknown"
+    return f"{where}: {type(exc).__name__}: {_short(exc)}"
 
 
 def _function_version_tag(fn: Callable[..., Any]) -> str:
@@ -414,6 +430,8 @@ def parse_publication(
                         issues=[i.code for i in sb.issues] or ["assemble_failed"],
                         fallbacks=list(active_fallbacks),
                         seconds=time.perf_counter() - v_start,
+                        error=next((f"assemble: {i.code}: {_short(i.message)}" for i in sb.issues
+                                    if i.severity == "error"), None),
                     )
                 )
                 continue
@@ -458,6 +476,7 @@ def parse_publication(
                     issues=[f"parse_error:{type(exc).__name__}"],
                     fallbacks=list(active_fallbacks),
                     seconds=time.perf_counter() - v_start,
+                    error=_describe(exc),
                 )
             )
 
@@ -526,6 +545,7 @@ def _failed_publication_result(
             "edges": 0,
             "duplicate_sibling_edges": 0,
             "no_bibliography": False,
+            "error": _describe(exc),
         }
         if active_fallbacks:
             row["fallbacks"] = sorted(set(active_fallbacks))

@@ -111,7 +111,7 @@ class Section:                       # node cấu trúc
 class Block:                         # đoạn chưa tách lá
     type: str                        # text | env | display_math
     env: str | None                  # tên môi trường nếu type == env (figure, table, itemize, equation, ...)
-    raw: str                         # đúng chuỗi con text[span], comment đã thay bằng khoảng trắng
+    raw: str                         # đúng chuỗi con text[span], comment và nhánh chắc chắn tắt đã thay bằng khoảng trắng
     span: tuple[int, int]
 
 @dataclass
@@ -133,6 +133,9 @@ Bất biến:
   trong cây. Nó nằm ở `dropped` với `reason = "references"`, và nội dung chuyển sang [B'].
 - Acknowledgements, Appendix (kể cả sau `\appendix` và `\section*`) **có** trong cây.
 - Comment không bao giờ thành nội dung. Lệnh nằm trong comment không mở node.
+- Nhánh điều kiện chắc chắn tắt (`\iffalse … \fi`, nhánh `\else` của `\iftrue`, `\ifnum` tính được) được
+  thay bằng khoảng trắng như comment, giữ dấu xuống dòng; câu và `\cite` trong đó không vào `elements`.
+  Nhánh có điều kiện không tính được (`\if1\blind`) giữ nguyên văn bản, kèm issue `unsupported_conditional`.
 - Các `Block` con của một node không chồng lấn nhau và nằm theo thứ tự đọc.
 - `itemize`/`enumerate`, `figure`/`table`, `equation`/`align`/…, `$$…$$`, `\[…\]` là `Block`
   nguyên khối. M2.2 không tách bên trong chúng.
@@ -153,7 +156,8 @@ class BibSource:
 Bất biến:
 - `bib_files` chỉ chứa file trong receipt của Version.
 - `cite_keys_used` gồm mọi biến thể `\cite`, `\citep`, `\citet`, `\citeauthor`, … và tách đúng
-  danh sách nhiều key (`\cite{a,b}`).
+  danh sách nhiều key (`\cite{a,b}`). Key được chuẩn hóa như TeX đọc: chuỗi khoảng trắng thành một dấu cách
+  (`normalize_cite_key`), nên `\cite{pavia university}` và `\bibitem{H. Triebel}` là một key có dấu cách.
 - Version không có `.bib` lẫn `\bibitem`: hai trường đều rỗng, và M2.5 ghi `no_bibliography`
   vào log. Đây không phải lỗi.
 
@@ -258,7 +262,9 @@ tự anh em của từng Version (C3).
  "duplicate_sibling_edges": 0, "no_bibliography": false, "seconds": 0.41}
 ```
 `status` ∈ `parsed`, `empty_non_tex`, `failed`, `missing` (C4). Độ phủ Version trong báo cáo
-đọc từ file này.
+đọc từ file này. Dòng `failed` có thêm `error`: stage và dòng đầu của thông điệp lỗi, ví dụ
+`"types._finish: ValueError: [C.root.children[2]] Mất hoặc lệch chữ …"` hay
+`"assemble: unclosed_conditional: Conditional block was not closed"`.
 
 **Checkpoint:** mỗi Publication ghi `data/parse/<key>/done.json` gồm sha256 của input (các
 receipt) và phiên bản của từng module. Chạy lại thì bỏ qua khi cả hai khớp, và làm lại khi một
@@ -272,7 +278,7 @@ trong hai đổi.
 | I2 | Mỗi Version có đúng một root `document`, không chu trình, mọi node đi tới được root | M2.2, M2.5 |
 | I3 | Không có Element nào có tiêu đề khớp References/Bibliography | M2.2 |
 | I4 | `kind` của cha hợp lệ: `sentence` không phải cha; cha của `item` luôn là `itemize` | M2.3 |
-| I5 | Mọi `\cite{k}` trong `elements.content` có `(arxiv_id, k)` trong `bibtex`, trừ key thiếu entry đã ghi `missing_entry` trong `stats.unresolved_keys` | M2.4b, M2.5 |
+| I5 | Mọi `\cite{k}` trong `elements.content` có `(arxiv_id, k)` trong `bibtex` hoặc nằm trong `unresolved_keys` (key `missing_entry` của M2.4b, cộng key cite trong content không có dòng `bibtex` mà export gom lại bằng cùng bộ trích key). Không loại cả Publication vì một key | M2.4b, M2.5 |
 | I6 | Hai Version giống hệt nhau cho cùng một tập cạnh, và không sinh Element mới | M2.4a, M2.5 |
 | I7 | Chạy hai lần trên cùng input cho ra file giống hệt từng byte | mọi module |
 | I8 | Số dòng log = tổng số Version theo metadata; mọi Version `non_tex` có log `empty_non_tex` | M2.5 |

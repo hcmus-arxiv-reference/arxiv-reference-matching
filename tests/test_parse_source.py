@@ -106,8 +106,9 @@ def test_literal_integer_comparison(tmp_path, condition, expected):
         assert result.files == ["main.tex"]
 
 
+# A missing \input is a warning, not an error: see
+# test_missing_input_is_a_warning_and_the_version_still_assembles.
 @pytest.mark.parametrize("name,body", [
-    ("missing", r"\input{absent}"),
     ("cycle", r"\input{main}"),
     ("escape", r"\input{../outside}"),
     ("absolute", r"\input{/etc/passwd}"),
@@ -485,3 +486,23 @@ def test_title_inside_unevaluated_conditional_is_read(tmp_path):
     result = assemble_source(root, title_hint="Robust Graph Learning")
     assert result.root == "main.tex"
     assert "root_selected_by_title" in _codes(result)
+
+
+def test_missing_input_is_a_warning_and_the_version_still_assembles(tmp_path):
+    # epsf comes from the TeX distribution; figure.tikz is an asset M1 does not keep.
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": "\\documentclass{article}\\input epsf\n\\begin{document}A\\input{figure.tikz}B\\end{document}",
+    }))
+    assert result.status == "needs_review"
+    assert [i.code for i in result.issues] == ["missing_input", "missing_input"]
+    assert all(i.severity == "warning" for i in result.issues)
+    assert [entry["status"] for entry in result.includes] == ["missing", "missing"]
+    assert "A" in result.text and "B" in result.text
+
+
+def test_quoted_input_name_is_resolved(tmp_path):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": '\\documentclass{article}\\begin{document}\\input{"./sections/intro.tex"}\\end{document}',
+        "sections/intro.tex": "INTRO",
+    }))
+    assert result.status == "ready" and "INTRO" in result.text

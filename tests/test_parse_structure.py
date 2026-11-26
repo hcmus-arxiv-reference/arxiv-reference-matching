@@ -177,3 +177,44 @@ def test_nested_bibliography_is_extracted_before_wrapper_becomes_a_block():
     assert "Before" in blocks and "After" in blocks and "Entry." not in blocks
     assert bib.bibitems_raw == [r"\bibitem{a}Entry."]
     assert bib.cite_keys_used == ["a"]
+
+
+def _structure(tmp_path, body):
+    from src.parse.source import assemble_source
+    from src.parse.structure import build_structure
+    (tmp_path / "main.tex").write_text(
+        "\\documentclass{article}\n\\begin{document}\n" + body + "\n\\end{document}\n", encoding="utf-8")
+    bundle = assemble_source(tmp_path)
+    tree, bib = build_structure(bundle, "2508.00001", 1)
+
+    def raws(node):
+        for child in node.children:
+            yield from ([child.raw] if hasattr(child, "raw") else raws(child))
+    return bundle, "".join(raws(tree.root)), bib
+
+
+def test_iffalse_branch_is_blanked_with_its_citations(tmp_path):
+    body = "Kept \\cite{a}.\n\\iffalse\nDropped draft \\cite{b}.\n\\fi\nAfter."
+    bundle, text, bib = _structure(tmp_path, body)
+    assert "Kept" in text and "After." in text
+    assert "Dropped" not in text and "\\iffalse" not in text and "\\fi" not in text
+    assert bib.cite_keys_used == ["a"]
+    # Blanking keeps offsets and newlines: only the off span becomes spaces.
+    off = body[body.index("\\iffalse"):body.index("\\fi") + len("\\fi")]
+    assert text == body.replace(off, "".join(c if c == "\n" else " " for c in off)) + "\n"
+
+
+def test_iftrue_else_keeps_the_true_branch_and_nested_conditionals(tmp_path):
+    body = ("\\iftrue\nShown \\cite{a}.\n\\else\nHidden \\cite{b}.\n\\fi\n"
+            "\\iffalse\nOuter \\iftrue inner \\fi tail \\cite{c}.\n\\fi\nEnd.")
+    _, text, bib = _structure(tmp_path, body)
+    assert "Shown" in text and "End." in text
+    assert not any(word in text for word in ("Hidden", "Outer", "inner", "tail"))
+    assert bib.cite_keys_used == ["a"]
+
+
+def test_unevaluated_conditional_keeps_text(tmp_path):
+    # Neither branch of \if1\blind can be decided without TeX; keep the text as before.
+    body = "\\if1\\blind\nAuthor version.\n\\fi\nEnd."
+    _, text, _ = _structure(tmp_path, body)
+    assert "Author version." in text
