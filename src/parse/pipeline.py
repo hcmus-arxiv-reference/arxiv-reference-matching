@@ -48,7 +48,7 @@ from src.parse.types import (
     validate_D,
 )
 
-PIPELINE_VERSION = "7"
+PIPELINE_VERSION = "8"
 
 
 def _short(message: str, limit: int = 300) -> str:
@@ -396,6 +396,7 @@ def parse_publication(
                         issues=[f"assemble_error:{type(exc).__name__}"],
                         fallbacks=list(active_fallbacks),
                         seconds=time.perf_counter() - v_start,
+                        error=_describe(exc),
                     )
                 )
             continue
