@@ -16,7 +16,7 @@ import re
 
 from src.common.corpus import verified_source
 
-ASSEMBLER_VERSION = "9"
+ASSEMBLER_VERSION = "10"
 _VERBATIM = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"}
 # A missing \\input of these is not prose: assets that M1 does not keep (TikZ/PGF
 # pictures, \\pdf_tex overlays, data, style files) or files of a TeX distribution
@@ -43,7 +43,9 @@ def _missing_is_content(argument: str, in_body: bool) -> bool:
     suffix = path.suffix.lower()
     if suffix in _RESOURCE_SUFFIXES:
         return False
-    if path.name.removesuffix(".tex").removesuffix(".TEX") in _DISTRIBUTION_INPUTS:
+    # Only a bare name is a distribution file: sections/physics is the author's.
+    if (len(path.parts) == 1
+            and path.name.removesuffix(".tex").removesuffix(".TEX") in _DISTRIBUTION_INPUTS):
         return False
     return in_body
 
@@ -688,6 +690,10 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
                 emit(name, command.start, command.end)
             position = command.end
         emit(name, position, scan.stop)
+        if scan.begin_at is not None:
+            # \\begin{document} sat in this file (start.tex), so what follows
+            # in the including file is body text.
+            in_body = True
         return scan.ends_document
 
     try:

@@ -49,7 +49,8 @@ thì API cũng từ chối, không tự hạ mức kiểm tra.
 - Ngoại lệ: file **nội dung** bị thiếu vẫn là lỗi `missing_content` (Version `failed`), vì gom tiếp sẽ
   làm mất cả một mục mà không ai biết. File nội dung là file TeX được đọc **sau** `\begin{document}`
   (kể cả `\input` nằm trong một file thân bài khác), trừ đuôi tài nguyên (`.pgf`, `.tikz`, `.pdf_tex`,
-  `.txt`, `.sty`, `.def`, …) và tên file của bản phân phối TeX (`xy`, `epsf`, `psfig`, …). File macro
+  `.txt`, `.sty`, `.def`, …) và tên file trần của bản phân phối TeX (`xy`, `epsf`, `psfig`, …; `sections/physics` không tính).
+  Thân bài bắt đầu cả khi `\begin{document}` nằm trong file con (`\input{start}`). File macro
   đọc trong preamble chỉ là warning `missing_input`. Đo trên 5 Range (26/11): 1.562/1.777 input thiếu là
   tài nguyên hoặc macro preamble; 215 input còn lại là file mục (introduction, method, appendix, …)
   của 50 Version, các Version này `failed` với lý do `missing_content`.

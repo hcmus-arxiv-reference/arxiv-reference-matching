@@ -539,3 +539,20 @@ def test_missing_input_inside_an_included_body_file_is_content(tmp_path):
         "body.tex": "Intro. \\input{sec/method}",
     }))
     assert "missing_content" in _codes(result) and result.status == "error"
+
+
+def test_body_started_in_an_included_file_makes_later_inputs_content(tmp_path):
+    # start.tex opens the document; the missing section is read back in main.tex.
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": "\\documentclass{article}\\input{start}\\include{sections/results}\\end{document}",
+        "start.tex": "\\begin{document}Intro.",
+    }))
+    assert "missing_content" in _codes(result) and result.status == "error"
+
+
+def test_distribution_name_inside_a_directory_is_the_authors_file(tmp_path):
+    # physics is also a package name, but sections/physics is a section file.
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": "\\documentclass{article}\\begin{document}A\\include{sections/physics}\\end{document}",
+    }))
+    assert "missing_content" in _codes(result) and result.status == "error"
