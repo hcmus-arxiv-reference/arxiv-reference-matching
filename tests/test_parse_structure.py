@@ -183,7 +183,8 @@ def _structure(tmp_path, body):
     from src.parse.source import assemble_source
     from src.parse.structure import build_structure
     (tmp_path / "main.tex").write_text(
-        "\\documentclass{article}\n\\begin{document}\n" + body + "\n\\end{document}\n", encoding="utf-8")
+        "\\documentclass{article}\n\\begin{document}\n" + body + "\n\\end{document}\n",
+        encoding="utf-8", newline="\n")  # LF on Windows too: the test compares offsets
     bundle = assemble_source(tmp_path)
     tree, bib = build_structure(bundle, "2508.00001", 1)
 
@@ -218,3 +219,36 @@ def test_unevaluated_conditional_keeps_text(tmp_path):
     body = "\\if1\\blind\nAuthor version.\n\\fi\nEnd."
     _, text, _ = _structure(tmp_path, body)
     assert "Author version." in text
+
+
+def _sentences(tmp_path, body):
+    """Normalized sentences of a one-file Version, as they reach ``elements``."""
+    from src.parse.leaves import build_leaves
+    from src.parse.normalize import normalize
+    from src.parse.source import assemble_source
+    from src.parse.structure import build_structure
+    (tmp_path / "main.tex").write_text(
+        "\\documentclass{article}\n\\begin{document}\n" + body + "\n\\end{document}\n",
+        encoding="utf-8", newline="\n")
+    tree, _ = build_structure(assemble_source(tmp_path), "2508.00001", 1)
+
+    def walk(node):
+        for child in node.children:
+            if hasattr(child, "kind") and hasattr(child, "raw"):
+                if child.kind == "sentence":
+                    yield normalize("sentence", child.raw)
+            else:
+                yield from walk(child)
+    return list(walk(build_leaves(tree).root))
+
+
+@pytest.mark.parametrize("body", [
+    "\\ifnum 1<2 Visible.\\else Secret.\\fi",
+    "\\iffalse Secret.\\else Visible.\\fi",
+    "\\iftrue Visible.\\else Secret.\\fi",
+    "\\iftrue Visible.\\fi",
+    "Visible.",
+])
+def test_decided_conditional_leaves_only_the_text_of_its_branch(tmp_path, body):
+    # Every spelling must give the same Element, so Versions deduplicate.
+    assert _sentences(tmp_path, body) == ["Visible."]

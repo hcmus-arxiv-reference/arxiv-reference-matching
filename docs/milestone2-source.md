@@ -46,6 +46,13 @@ thì API cũng từ chối, không tự hạ mức kiểm tra.
   `xy`, `amssym.def`) hoặc file không phải `.tex` mà M1 không giữ (`.tikz`, `.pgf`, `.sty`). Đo trên
   5 Range, 506 Version trước đây bị loại cả Version chỉ vì một file như vậy. Tên file trong
   ngoặc kép (`\input{"./sections/intro.tex"}`) được bỏ ngoặc trước khi tìm.
+- Ngoại lệ: file **nội dung** bị thiếu vẫn là lỗi `missing_content` (Version `failed`), vì gom tiếp sẽ
+  làm mất cả một mục mà không ai biết. File nội dung là file TeX được đọc **sau** `\begin{document}`
+  (kể cả `\input` nằm trong một file thân bài khác), trừ đuôi tài nguyên (`.pgf`, `.tikz`, `.pdf_tex`,
+  `.txt`, `.sty`, `.def`, …) và tên file của bản phân phối TeX (`xy`, `epsf`, `psfig`, …). File macro
+  đọc trong preamble chỉ là warning `missing_input`. Đo trên 5 Range (26/11): 1.562/1.777 input thiếu là
+  tài nguyên hoặc macro preamble; 215 input còn lại là file mục (introduction, method, appendix, …)
+  của 50 Version, các Version này `failed` với lý do `missing_content`.
 - Phát hiện vòng lặp theo stack đang mở, đường dẫn thoát
   thư mục Version, symlink, root lồng, lỗi ngoặc, giới hạn độ sâu và độ
   dài đầu ra. Include lặp hợp lệ vẫn xuất hiện nhiều lần trong văn bản.

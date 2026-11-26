@@ -16,8 +16,38 @@ import re
 
 from src.common.corpus import verified_source
 
-ASSEMBLER_VERSION = "8"
+ASSEMBLER_VERSION = "9"
 _VERBATIM = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"}
+# A missing \\input of these is not prose: assets that M1 does not keep (TikZ/PGF
+# pictures, \\pdf_tex overlays, data, style files) or files of a TeX distribution
+# that authors load with \\input (\\input epsf). On the five Ranges (26/11), 1.562 of
+# the 1.777 missing inputs are such files or preamble macros; the other 215 are
+# section files missing from 50 Versions.
+_RESOURCE_SUFFIXES = {".pgf", ".tikz", ".pdf_tex", ".pdf_t", ".pstex_t", ".eps_tex", ".ps_tex",
+                      ".txt", ".dat", ".csv", ".sty", ".cls", ".clo", ".def", ".fd", ".cfg",
+                      ".ldf", ".aux", ".tikzstyles", ".tikzdefs", ".rty", ".bblx", ".inp",
+                      ".tpx", ".set", ".conf"}
+_DISTRIBUTION_INPUTS = {"xy", "xypic", "diagxy", "epsf", "epsfig", "psfig", "amssym", "mssymb",
+                        "txdtools", "glyphtounicode", "pdf-trans", "tcilatex", "rotate", "insbox",
+                        "pictex", "prepictex", "postpictex", "texdraw", "eplain", "miniltx",
+                        "todonotes", "physics", "cite"}
+
+
+def _missing_is_content(argument: str, in_body: bool) -> bool:
+    """Whether a missing ``\\input``/``\\include`` held document text.
+
+    Only a TeX file read after ``\\begin{document}`` counts: a missing macro file in
+    the preamble or a missing picture costs no sentence, a missing section does.
+    """
+    path = Path(argument.strip().strip('"'))
+    suffix = path.suffix.lower()
+    if suffix in _RESOURCE_SUFFIXES:
+        return False
+    if path.name.removesuffix(".tex").removesuffix(".TEX") in _DISTRIBUTION_INPUTS:
+        return False
+    return in_body
+
+
 _DEFINITIONS = {"newcommand", "renewcommand", "providecommand", "DeclareRobustCommand",
                 "DeclareMathOperator", "newenvironment", "renewenvironment"}
 _FLOW = re.compile(r"\\(?:input|include|documentclass|endinput|includeonly)\b")
@@ -79,6 +109,8 @@ class _Scan:
     stop: int
     ends_document: bool = False
     begins_document: bool = False
+    # Offset of the active \\begin{document}; inputs after it are in the body.
+    begin_at: int | None = None
     # Half-open spans inside a branch known to be off (\\iffalse, the \\else of
     # \\iftrue, a decided \\ifnum), including the conditional words that open
     # and close the off part. Text there never reaches the PDF.
@@ -203,6 +235,8 @@ def _scan(text: str, file: str, tokens: list[_Command] | None = None, *,
                     break
                 if name == "begin" and environment == "document" and active:
                     result.begins_document = True
+                    if result.begin_at is None:
+                        result.begin_at = start
                 cursor = end; continue
             if name in _DEFINITIONS or name in {"def", "gdef", "edef", "xdef"}:
                 if cursor < len(text) and text[cursor] == "*":
@@ -278,6 +312,9 @@ def _scan(text: str, file: str, tokens: list[_Command] | None = None, *,
                 conditions.append(value)
                 if not was_off and value is False:
                     off_since = start
+                elif not was_off and value is True:
+                    # The test words of a decided conditional are not text either.
+                    result.inactive.append((start, cursor))
                 continue
             if name == "else":
                 if not conditions:
@@ -293,9 +330,12 @@ def _scan(text: str, file: str, tokens: list[_Command] | None = None, *,
             if name == "fi":
                 if not conditions:
                     raise ValueError("Unmatched fi")
-                conditions.pop()
+                closed = conditions.pop()
                 if off_since is not None and not any(v is False for v in conditions):
                     result.inactive.append((off_since, cursor)); off_since = None
+                elif off_since is None and closed is not None:
+                    # \\fi closing an active branch of a decided conditional.
+                    result.inactive.append((start, cursor))
                 continue
             if not active:
                 continue
@@ -581,8 +621,10 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
             problem("relative_to_includer", name, f"Resolved {argument} relative to including file", "info")
         return chosen
 
+    in_body = False  # an active \\begin{document} was emitted before this command
+
     def expand(name, stack):
-        nonlocal include_only
+        nonlocal include_only, in_body
         if name in stack:
             raise ValueError("Include cycle: " + " -> ".join([*stack, name]))
         if len(stack) >= max_depth:
@@ -608,6 +650,8 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
                                 for value in command.argument.split(",") if value.strip()}
                 continue
             emit(name, position, command.start)
+            if scan.begin_at is not None and scan.begin_at < command.start:
+                in_body = True
             line = texts[name].count("\n", 0, command.start) + 1
             entry = {"file": name, "line": line, "command": command.name,
                      "argument": command.argument, "target": None, "status": "error"}
@@ -627,6 +671,12 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
                 if isinstance(error, FileNotFoundError) and Path(command.argument).suffix.lower() == ".bbl":
                     entry["status"] = "missing_bbl"
                     problem("missing_bbl", name, str(error), "warning", line=line)
+                elif isinstance(error, FileNotFoundError) and _missing_is_content(
+                        command.argument, in_body):
+                    # A section file is gone: parsing on would drop its text
+                    # silently, so the Version fails with a clear reason.
+                    entry["status"] = "missing"
+                    problem("missing_content", name, str(error), line=line)
                 elif isinstance(error, FileNotFoundError):
                     # arXiv compiled this Version, so the file existed: a TeX
                     # distribution file (epsf, xy, amssym.def) or a non-TeX asset

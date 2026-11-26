@@ -135,6 +135,8 @@ Bất biến:
 - Comment không bao giờ thành nội dung. Lệnh nằm trong comment không mở node.
 - Nhánh điều kiện chắc chắn tắt (`\iffalse … \fi`, nhánh `\else` của `\iftrue`, `\ifnum` tính được) được
   thay bằng khoảng trắng như comment, giữ dấu xuống dòng; câu và `\cite` trong đó không vào `elements`.
+  Lệnh điều kiện của nhánh đang bật (`\ifnum 1<2`, `\iftrue`, `\fi`) cũng được thay bằng khoảng trắng,
+  nên `\ifnum 1<2 A.\else B.\fi` và `\iffalse B.\else A.\fi` đều cho đúng câu `A.` như khi viết `A.`.
   Nhánh có điều kiện không tính được (`\if1\blind`) giữ nguyên văn bản, kèm issue `unsupported_conditional`.
 - Các `Block` con của một node không chồng lấn nhau và nằm theo thứ tự đọc.
 - `itemize`/`enumerate`, `figure`/`table`, `equation`/`align`/…, `$$…$$`, `\[…\]` là `Block`

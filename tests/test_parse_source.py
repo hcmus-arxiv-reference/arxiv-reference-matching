@@ -506,3 +506,36 @@ def test_quoted_input_name_is_resolved(tmp_path):
         "sections/intro.tex": "INTRO",
     }))
     assert result.status == "ready" and "INTRO" in result.text
+
+
+def test_missing_section_file_fails_the_version(tmp_path):
+    # Parsing on would silently drop the Results section.
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": "\\documentclass{article}\\begin{document}A\\include{sections/results}B\\end{document}",
+    }))
+    assert result.status == "error"
+    assert [(i.code, i.severity) for i in result.issues] == [("missing_content", "error")]
+    assert [entry["status"] for entry in result.includes] == ["missing"]
+
+
+@pytest.mark.parametrize("main", [
+    # A macro file read in the preamble holds no sentence.
+    "\\documentclass{article}\\input{macros}\\begin{document}A\\end{document}",
+    # TeX distribution file loaded in the body.
+    "\\documentclass{article}\\begin{document}\\input xy\nA\\end{document}",
+    # Picture and overlay assets that M1 does not keep.
+    "\\documentclass{article}\\begin{document}\\input{fig/plot.pgf}\\input{a.pdf_tex}A\\end{document}",
+])
+def test_missing_resource_is_only_a_warning(tmp_path, main):
+    result = assemble_source(tree(tmp_path, {"main.tex": main}))
+    assert result.status == "needs_review"
+    assert {i.code for i in result.issues} == {"missing_input"}
+
+
+def test_missing_input_inside_an_included_body_file_is_content(tmp_path):
+    # body.tex is read after \\begin{document}, so its own \\input is body text too.
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": "\\documentclass{article}\\begin{document}\\input{body}\\end{document}",
+        "body.tex": "Intro. \\input{sec/method}",
+    }))
+    assert "missing_content" in _codes(result) and result.status == "error"
