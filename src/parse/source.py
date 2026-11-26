@@ -16,7 +16,7 @@ import re
 
 from src.common.corpus import verified_source
 
-ASSEMBLER_VERSION = "10"
+ASSEMBLER_VERSION = "11"
 _VERBATIM = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"}
 # A missing \\input of these is not prose: assets that M1 does not keep (TikZ/PGF
 # pictures, \\pdf_tex overlays, data, style files) or files of a TeX distribution
@@ -39,12 +39,14 @@ def _missing_is_content(argument: str, in_body: bool) -> bool:
     Only a TeX file read after ``\\begin{document}`` counts: a missing macro file in
     the preamble or a missing picture costs no sentence, a missing section does.
     """
-    path = Path(argument.strip().strip('"'))
+    raw = argument.strip().strip('"')
+    path = Path(raw)
     suffix = path.suffix.lower()
     if suffix in _RESOURCE_SUFFIXES:
         return False
     # Only a bare name is a distribution file: sections/physics is the author's.
-    if (len(path.parts) == 1
+    # Check the raw text: Path("./physics").parts drops the "./" of a local file.
+    if ("/" not in raw and "\\" not in raw
             and path.name.removesuffix(".tex").removesuffix(".TEX") in _DISTRIBUTION_INPUTS):
         return False
     return in_body

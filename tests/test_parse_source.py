@@ -550,9 +550,16 @@ def test_body_started_in_an_included_file_makes_later_inputs_content(tmp_path):
     assert "missing_content" in _codes(result) and result.status == "error"
 
 
-def test_distribution_name_inside_a_directory_is_the_authors_file(tmp_path):
-    # physics is also a package name, but sections/physics is a section file.
+@pytest.mark.parametrize("argument,code", [
+    # physics is also a package name, but a path makes it the author's file.
+    ("sections/physics", "missing_content"),
+    ("./physics", "missing_content"),
+    ("./physics.tex", "missing_content"),
+    ('"./physics.tex"', "missing_content"),
+    ("physics", "missing_input"),
+])
+def test_distribution_name_counts_only_as_a_bare_name(tmp_path, argument, code):
     result = assemble_source(tree(tmp_path, {
-        "main.tex": "\\documentclass{article}\\begin{document}A\\include{sections/physics}\\end{document}",
+        "main.tex": "\\documentclass{article}\\begin{document}A\\include{" + argument + "}\\end{document}",
     }))
-    assert "missing_content" in _codes(result) and result.status == "error"
+    assert [i.code for i in result.issues if i.code.startswith("missing_")] == [code]
