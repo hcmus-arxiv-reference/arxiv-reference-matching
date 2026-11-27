@@ -80,6 +80,21 @@ def test_train_only_ranking_and_empty_gold(tmp_path, monkeypatch):
     run(root, tmp_path / "sure-train")
     assert observed.call_count == 16
 
+    # Alias in the manual sheet and an M2 entry from outside that sheet.
+    manual = [dict(row) for row in labels[:-2]]
+    manual[0]["citation_key"] = "old-a"
+    rewrite("manual/lieu.csv", manual[1:] + [manual[0]])
+    extra = dict(entries[0], citation_key="other-version")
+    write_table(from_records([*entries, extra], "bibtex"), "bibtex", root/"tables/lieu/bibtex.parquet")
+    metrics = run(root, tmp_path/"aligned", key_maps={ids[0]: {"old-a": "a"}})
+    assert metrics["test"]["entries"] == 3
+    assert metrics["test"]["unlabeled_manual_entries"] == 1
+    assert metrics["test"]["n_with_empty"] == 2
+    assert metrics["test"]["n_with_target"] == 2
+    result = pq.read_table(tmp_path/"aligned/tables/lieu/predictions.parquet").to_pylist()
+    assert next(row for row in result if row["citation_key"] == "other-version")["groundtruth_arxiv_id"] is None
+
+
 def test_group_split_counts_publications_across_ranges():
     from scripts.m3_rank import check_evaluation_split
 

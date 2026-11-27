@@ -58,7 +58,7 @@ def check_evaluation_split(splits, group_size):
                 raise ValueError(f"{part}/{pool}: expected {group_size} Publications, got {actual}")
 
 
-def run(source, output, *, group_size=None, auto_file=None):
+def run(source, output, *, group_size=None, auto_file=None, key_maps=None):
     """Fit only on train pairs, score within Publication and write one shard per Range."""
     splits = {}
     for r in read_csv(source / "labels/splits.csv"):
@@ -105,13 +105,31 @@ def run(source, output, *, group_size=None, auto_file=None):
             if rid in refs[pid]:
                 raise ValueError(f"Duplicate reference: {pid}/{rid}")
             refs[pid][rid] = r
-    if entries.keys() != gold.keys() or owners.keys() != splits.keys():
-        raise ValueError(f"Coverage mismatch: {len(gold.keys()-entries.keys())} labels without BibTeX, "
-                         f"{len(entries.keys()-gold.keys())} entries without labels; check M2 key_map and splits")
+    # Manual sheets cover one Version; M2 also keeps entries from other Versions.
+    # Resolve manual aliases using M2's per-Publication key_map for the sheet Version.
+    aligned = {}
+    for (pid, cite), truth in gold.items():
+        target = cite
+        if splits[pid]["pool"] == "manual":
+            target = (key_maps or {}).get(pid, {}).get(cite, cite)
+        key = pid, target
+        if key not in entries:
+            raise ValueError(f"Missing M2 citation_key for {pid}/{cite}; supply the sheet Version key_map")
+        if key in aligned and aligned[key] != truth:
+            raise ValueError(f"Conflicting ground truth after alias resolution: {key}")
+        aligned[key] = truth
+    gold = aligned
+    unlabeled = entries.keys() - gold.keys()
+    if any(splits[pid]["pool"] == "auto" for pid, _ in unlabeled):
+        raise ValueError("Automatic labels do not cover all BibTeX entries")
+    if {pid for pid, _ in gold} != splits.keys() or owners.keys() != splits.keys():
+        raise ValueError("Missing Publication in labels or M2 tables")
     counts = [Counter(), Counter()]
     totals = [0, 0]
     for key, entry in entries.items():
         pid = key[0]
+        if key in unlabeled:
+            continue
         if gold[key] and gold[key] not in refs[pid]:
             raise ValueError(f"Reference outside Publication: {key} -> {gold[key]}")
         if splits[pid]["partition"] == "train" and key not in abstentions:
@@ -138,14 +156,17 @@ def run(source, output, *, group_size=None, auto_file=None):
         top = sorted(scores, key=lambda rid: (-scores[rid], rid))[:5]
         stat = metrics[part]
         stat["entries"] += 1
-        if gold[key] is not None:
+        truth = gold.get(key)
+        if key in unlabeled:
+            stat["unlabeled_manual_entries"] = stat.get("unlabeled_manual_entries", 0) + 1
+        if truth is not None:
             stat["n_with_target"] += 1
-        if gold[key] is not None or splits[pid]["pool"] == "manual":
+        if truth is not None or (key in gold and splits[pid]["pool"] == "manual"):
             stat["n_with_empty"] += 1
-        if gold[key] in top:
-            stat["rr_sum"] += 1 / (1 + top.index(gold[key]))
+        if truth in top:
+            stat["rr_sum"] += 1 / (1 + top.index(truth))
         rows[owners[pid]].append(dict(arxiv_id=pid, citation_key=cite, partition=part,
-            groundtruth_arxiv_id=gold[key], **{f"cand_{i}": rid for i,rid in enumerate(top,1)}))
+            groundtruth_arxiv_id=truth, **{f"cand_{i}": rid for i,rid in enumerate(top,1)}))
     if set(metrics) != {"train","valid","test"}:
         raise ValueError("Expected non-empty train, valid and test")
     for stat in metrics.values():
@@ -171,7 +192,9 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--auto-file", help="Active CSV filename under labels/auto/")
     parser.add_argument("--revision", help="HF dataset revision to evaluate with --hf")
+    parser.add_argument("--key-maps", type=Path, help="JSON mapping Publication to sheet-Version M2 citation aliases")
     args = parser.parse_args()
+    key_maps = json.loads(args.key_maps.read_text(encoding="utf-8")) if args.key_maps else {}
     if args.auto_file and (Path(args.auto_file).name != args.auto_file or not args.auto_file.endswith(".csv")):
         parser.error("--auto-file must name one CSV under labels/auto/")
     if args.revision and not args.hf:
@@ -198,9 +221,9 @@ def main():
                 hf_hub_download(repo, name, repo_type="dataset", revision=revision,
                                 token=settings.hf_token, local_dir=directory)
             print("Dataset revision:", revision)
-            print(json.dumps(run(Path(directory), args.out, group_size=5, auto_file=args.auto_file), indent=2))
+            print(json.dumps(run(Path(directory), args.out, group_size=5, auto_file=args.auto_file, key_maps=key_maps), indent=2))
         return
-    print(json.dumps(run(source, args.out, group_size=5, auto_file=args.auto_file), indent=2))
+    print(json.dumps(run(source, args.out, group_size=5, auto_file=args.auto_file, key_maps=key_maps), indent=2))
 
 
 if __name__ == "__main__":
