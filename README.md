@@ -39,9 +39,16 @@ Báo cáo (Jupyter Book):
   Bàn giao mốc 19/11 (trước khi có sidecar): [2026-11-23-m2-integration](docs/handoff/2026-11-23-m2-integration.md).
   Phân công và interface:
   [m2-cong-viec](docs/m2-cong-viec.md), [m2-interfaces](docs/m2-interfaces.md).
-- **M3 – Matching:** chưa bắt đầu.
+- **M3 – Matching:** đã có quy trình gán và kiểm tra nhãn tay. Matcher tự động
+  và công cụ chia tập đang được review trong [PR #80](https://github.com/hcmus-arxiv-reference/arxiv-reference-matching/pull/80).
 - Tag đã chốt: `m1-crawl-v1` (Engine M1), `m1-bench-v5` (code benchmark Colab;
   `m1-bench-v1` đến `m1-bench-v4` đã thay thế).
+
+## Gán nhãn và chia tập (M3)
+
+[Hướng dẫn gán nhãn M3](docs/m3-gan-nhan.md) mô tả cách tạo phiếu, định dạng CSV,
+cách kiểm tra nhãn tay, quy tắc của matcher và cách chia `train`, `valid`, `test`
+theo Publication.
 
 ## Cài đặt và kiểm thử
 
