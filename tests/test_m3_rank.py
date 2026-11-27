@@ -79,3 +79,13 @@ def test_train_only_ranking_and_empty_gold(tmp_path, monkeypatch):
     rewrite("auto/run.csv", [dict(row, confidence="sure") for row in labels[-2:]])
     run(root, tmp_path / "sure-train")
     assert observed.call_count == 16
+
+def test_group_split_counts_publications_across_ranges():
+    from scripts.m3_rank import check_evaluation_split
+
+    splits = {(part, pool, i): dict(partition=part, pool=pool)
+              for part in ("valid", "test") for pool in ("manual", "auto") for i in range(5)}
+    check_evaluation_split(splits, 5)
+    splits.pop(("valid", "auto", 0))
+    with pytest.raises(ValueError, match="valid/auto"):
+        check_evaluation_split(splits, 5)

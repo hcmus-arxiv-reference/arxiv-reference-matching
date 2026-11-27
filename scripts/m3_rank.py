@@ -48,7 +48,17 @@ def features(entry, ref):
             int(ref["ref_arxiv_id"].lower() in ids) if ids else -1)
 
 
-def run(source, output):
+def check_evaluation_split(splits, group_size):
+    """Check the agreed Publication counts before an official evaluation."""
+    counts = Counter((row["partition"], row["pool"]) for row in splits.values())
+    for part in ("valid", "test"):
+        for pool in ("manual", "auto"):
+            actual = counts[part, pool]
+            if actual != group_size:
+                raise ValueError(f"{part}/{pool}: expected {group_size} Publications, got {actual}")
+
+
+def run(source, output, *, group_size=None, auto_file=None):
     """Fit only on train pairs, score within Publication and write one shard per Range."""
     splits = {}
     for r in read_csv(source / "labels/splits.csv"):
@@ -56,10 +66,18 @@ def run(source, output):
         if pid in splits or r["partition"] not in {"train","valid","test"} or r["pool"] not in {"auto","manual"}:
             raise ValueError(f"Invalid split: {r}")
         splits[pid] = r
+    if group_size is not None:
+        check_evaluation_split(splits, group_size)
     gold = {}
     abstentions = set()
     for pool in ("manual", "auto"):
-        for path in sorted((source / "labels" / pool).glob("*.csv")):
+        directory = source / "labels" / pool
+        paths = sorted(directory.glob("*.csv"))
+        if pool == "auto" and auto_file:
+            paths = [directory / auto_file]
+        elif pool == "auto" and len(paths) > 1:
+            raise ValueError("Multiple automatic runs found. Select the active CSV with --auto-file.")
+        for path in paths:
             for r in read_csv(path):
                 key = r["arxiv_id"], r["citation_key"]
                 if key in gold or splits.get(key[0], {}).get("pool") != pool:
@@ -151,7 +169,13 @@ def main():
     inputs.add_argument("--source", type=Path)
     inputs.add_argument("--hf", action="store_true")
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--auto-file", help="Active CSV filename under labels/auto/")
+    parser.add_argument("--revision", help="HF dataset revision to evaluate with --hf")
     args = parser.parse_args()
+    if args.auto_file and (Path(args.auto_file).name != args.auto_file or not args.auto_file.endswith(".csv")):
+        parser.error("--auto-file must name one CSV under labels/auto/")
+    if args.revision and not args.hf:
+        parser.error("--revision requires --hf")
     source = args.source
     if args.hf:
         os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "60")
@@ -160,12 +184,13 @@ def main():
         settings = get_settings()
         api = HfApi(token=settings.hf_token)
         repo = settings.hf_repo_id
-        revision = api.dataset_info(repo).sha
+        revision = api.dataset_info(repo, revision=args.revision).sha
         files = ["labels/splits.csv"]
         for pool in ("manual", "auto"):
             files.extend(item.path for item in api.list_repo_tree(
                 repo, f"labels/{pool}", repo_type="dataset", revision=revision)
-                if item.path.endswith(".csv"))
+                if item.path.endswith(".csv") and (pool != "auto" or not args.auto_file
+                    or item.path == f"labels/auto/{args.auto_file}"))
         files.extend(f"tables/{member}/{table}.parquet" for member in load_ranges()
                      for table in ("references", "bibtex"))
         with tempfile.TemporaryDirectory() as directory:
@@ -173,9 +198,9 @@ def main():
                 hf_hub_download(repo, name, repo_type="dataset", revision=revision,
                                 token=settings.hf_token, local_dir=directory)
             print("Dataset revision:", revision)
-            print(json.dumps(run(Path(directory), args.out), indent=2))
+            print(json.dumps(run(Path(directory), args.out, group_size=5, auto_file=args.auto_file), indent=2))
         return
-    print(json.dumps(run(source,args.out), indent=2))
+    print(json.dumps(run(source, args.out, group_size=5, auto_file=args.auto_file), indent=2))
 
 
 if __name__ == "__main__":
