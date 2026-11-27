@@ -2,7 +2,7 @@
 
 Resumable downloads, the per-file time budget and the 429/5xx wait table are
 ported from Lieu's standalone crawler (commits 6d435fd, 1b45e47; tag
-lieu-standalone-final) per decision Q12 in docs/handoff/2026-11-01-merge-lieu.md.
+lieu-standalone-final) per decision Q12 of the 01/11/2026 merge review (ADR 0001).
 """
 from __future__ import annotations
 

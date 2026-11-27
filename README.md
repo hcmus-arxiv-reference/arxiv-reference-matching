@@ -23,10 +23,9 @@ Báo cáo (Jupyter Book):
   ([ADR 0001](docs/adr/0001-src-crawl-la-khung-duy-nhat.md)); mọi lệnh crawl
   (`src.milestone1_crawler`, `scripts.crawl_range`, `scripts.crawl`) đều chạy `CrawlPipeline`.
   Discovery theo lô (`BatchedDiscovery`) và tải references song song với source là
-  đóng góp của Liễu (`langtucod0n`), nay là cách cài đặt mặc định.
+  đóng góp của Liệu (`langtucod0n`), nay là cách cài đặt mặc định.
   - Range của Bảo (`2508.02872`–`2508.07871`): snapshot 25/10 có 4.941/5.000
-    Publication hoàn chỉnh; 59 Publication còn thiếu, phần lớn do arXiv trả HTTP 404
-    ([lượt thử](docs/m1-standalone-trial.md)). Từ C11 (19/11) Version 404 có bản ghi rỗng:
+    Publication hoàn chỉnh; 59 Publication còn thiếu, phần lớn do arXiv trả HTTP 404. Từ C11 (19/11) Version 404 có bản ghi rỗng:
     chạy bù trên bản sao 59 bài đó cho 59/59 hoàn chỉnh.
   - Benchmark chính thức: mỗi thành viên chạy notebook Colab trên Range của mình ở tag
     `m1-bench-v5` (Range đã chạy với v4 chỉ cần chạy bù v5). Kết quả được chép vào repo báo cáo.
@@ -35,11 +34,10 @@ Báo cáo (Jupyter Book):
   bibliography và root đã review (thuật ngữ trong `CONTEXT.md`).
   Bộ mẫu 100 Publication / 148 Version: 95 Publication thành công, độ phủ Version
   95,95%; còn 6 Version lỗi và 5 citation key thiếu entry (key vắng trong `.bib` của
-  tác giả). Cả 5 Range: 21.911/24.977 Publication parse đủ (87,7%).
-  Bàn giao mốc 19/11 (trước khi có sidecar): [2026-11-23-m2-integration](docs/handoff/2026-11-23-m2-integration.md).
-  Phân công và interface:
-  [m2-cong-viec](docs/m2-cong-viec.md), [m2-interfaces](docs/m2-interfaces.md).
-- **M3 – Matching:** chưa bắt đầu.
+  tác giả). Cả 5 Range (24/11, commit `c813d20`, có chọn file gốc theo ADR 0005):
+  22.833/24.977 Publication parse đủ (91,4%). Interface: [m2-interfaces](docs/m2-interfaces.md).
+- **M3 – Matching:** đang làm. Việc còn lại, người phụ trách và hạn nằm trong
+  milestone ["Nộp bài 27/11"](https://github.com/hcmus-arxiv-reference/arxiv-reference-matching/milestone/2).
 - Tag đã chốt: `m1-crawl-v1` (Engine M1), `m1-bench-v5` (code benchmark Colab;
   `m1-bench-v1` đến `m1-bench-v4` đã thay thế).
 
@@ -158,8 +156,7 @@ Ba bảng nằm ở `tables/`, log nằm ở `log/versions.jsonl` dưới thư m
 
 - [`CONTEXT.md`](CONTEXT.md): thuật ngữ (Publication, Version, Range, Stage, Engine).
 - [`docs/adr/`](docs/adr/): quyết định kiến trúc đã chốt.
-- [`docs/handoff/`](docs/handoff/): biên bản các buổi chốt kiến trúc và kế hoạch merge.
-- [Smoke test crawl thật 03/11](docs/m1-smoke-2026-11-03.md): 3 ID qua ranh giới tháng, resume và tải tiếp file bị cắt trên mạng thật.
+- Việc còn mở và phân công: GitHub Issues, milestone ["Nộp bài 27/11"](https://github.com/hcmus-arxiv-reference/arxiv-reference-matching/milestone/2).
 - Nhánh thành viên (`Hai`, `feat/Minh-crawler`, `feat/nghiem-crawler`) và tag
   `lieu-standalone-final` giữ nguyên làm case study, không merge vào `main`.
 

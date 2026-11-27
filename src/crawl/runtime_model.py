@@ -1,6 +1,6 @@
 """Dự đoán thời gian crawl một Range và kiểm dự đoán bằng log của chính lượt chạy.
 
-Mô hình (đo và lập ngày 14/11/2026, ``docs/handoff/2026-11-13-benchmark-colab.md``):
+Mô hình (đo và lập ngày 14/11/2026 từ benchmark Colab):
 
 - arXiv là nút cổ chai: một kết nối, request sau bắt đầu ít nhất ``GAP_SECONDS``
   sau lúc request trước *bắt đầu* (``HttpClient._send``). Một request vì vậy chiếm

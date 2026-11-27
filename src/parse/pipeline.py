@@ -1,4 +1,4 @@
-"""Pipeline tích hợp M2 (docs/m2-cong-viec.md mục 4.4):
+"""Pipeline tích hợp M2:
 Ghép các gói [A] Source -> [B, B'] Structure & BibSource -> [C] Leaves -> [D] BibTeX -> [E] Export,
 hỗ trợ checkpoint/resume theo SHA-256 đầu vào và phiên bản các module, ghi log Version (C4),
 lưu thứ tự anh em (C3), xuất 3 bảng Parquet và tổng hợp số liệu báo cáo.

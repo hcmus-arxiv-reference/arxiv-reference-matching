@@ -1,7 +1,7 @@
 # Hướng dẫn đóng góp
 
 Cách làm việc chung với repo này: cài đặt, lấy dữ liệu, tạo nhánh, commit, mở PR, review.
-Việc cụ thể của M2: [`docs/m2-cong-viec.md`](docs/m2-cong-viec.md).
+Việc của từng người: GitHub Issues → *Assigned to me*, gom trong milestone ["Nộp bài 27/11"](https://github.com/hcmus-arxiv-reference/arxiv-reference-matching/milestone/2).
 
 ## 1. Cài đặt lần đầu
 
@@ -37,8 +37,7 @@ thô, `tables/<member>/` cho bảng. Cần được mời vào organization trê
   git fetch origin
   git switch -c feat/m2-<gói> origin/main
   ```
-  Tên gói: `structure` (Liễu), `leaves` (Nghiêm), `bibtex` (Hải), `types` và `export` (Minh).
-  Ai được sửa file nào, cách xử lý xung đột và CI đỏ: `docs/m2-cong-viec.md` mục 8.
+  Đặt tên nhánh theo issue, ví dụ `feat/m3-matcher`.
   Việc nhỏ ngoài gói: `fix/<mô tả>`, `docs/<mô tả>`.
 - Không push thẳng lên `main`. Mọi thay đổi vào `main` đi qua PR.
 - Cập nhật nhánh với `main` ít nhất mỗi ngày làm việc:
@@ -82,8 +81,8 @@ thô, `tables/<member>/` cho bảng. Cần được mời vào organization trê
 
 ## 6. Issue và tiến độ
 
-- Mỗi gói có một issue, checklist là mục "Xong khi" trong `docs/m2-cong-viec.md`.
-- Tích ô khi PR chứng minh được ô đó đã merge, không tích trước.
+- Mỗi việc là một issue có người được giao, hạn và mục **Xong khi**.
+- PR ghi `Closes #<số issue>` để issue tự đóng khi PR được merge.
 - Trễ mốc: comment vào issue **trước** ngày mốc, ghi lý do và ngày dự kiến.
 - Gặp vấn đề cần quyết định chung (đổi kiểu dữ liệu, thêm thư viện): mở issue riêng, gắn nhãn
   `decision`, không tự quyết trong PR.
