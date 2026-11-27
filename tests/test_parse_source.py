@@ -106,8 +106,9 @@ def test_literal_integer_comparison(tmp_path, condition, expected):
         assert result.files == ["main.tex"]
 
 
+# A missing \input is a warning, not an error: see
+# test_missing_input_is_a_warning_and_the_version_still_assembles.
 @pytest.mark.parametrize("name,body", [
-    ("missing", r"\input{absent}"),
     ("cycle", r"\input{main}"),
     ("escape", r"\input{../outside}"),
     ("absolute", r"\input{/etc/passwd}"),
@@ -293,6 +294,18 @@ def test_root_with_document_in_input_is_not_discarded(tmp_path):
         "body.tex": r"\begin{document}MAIN\end{document}",
         "supplement.tex": r"\documentclass{article}\begin{document}SUPPLEMENT\end{document}",
     }))
+    # The complete-document shortcut must not pick supplement.tex; the name rule
+    # (ADR 0005) picks main.tex instead.
+    assert result.root == "main.tex" and "MAIN" in result.text
+    assert "root_selected_by_name" in [i.code for i in result.issues]
+
+
+def test_root_with_document_in_input_stays_ambiguous_without_evidence(tmp_path):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": r"\documentclass{article}\input{body}",
+        "body.tex": r"\begin{document}MAIN\end{document}",
+        "other.tex": r"\documentclass{article}\begin{document}OTHER\end{document}",
+    }))
     assert result.status == "error"
     assert result.issues[0].code == "ambiguous_root"
 
@@ -363,3 +376,190 @@ def test_inline_listing_options_and_braced_input(tmp_path):
     bundle = assemble_source(tree(tmp_path, {"main.tex": source}))
     assert bundle.status == "ready"
     assert bundle.includes == []
+
+
+def _doc(title, body="Text."):
+    return ("\\documentclass{article}\n\\title{" + title + "}\n\\begin{document}\n"
+            + body + "\n\\end{document}\n")
+
+
+def _codes(result):
+    return [issue.code for issue in result.issues]
+
+
+def test_title_hint_selects_the_root_whose_title_matches_metadata(tmp_path):
+    root = tree(tmp_path, {
+        "paper.tex": _doc(r"Robust \textbf{Graph} Learning\\ at Scale", "Main."),
+        "notes.tex": _doc("Lab notes", "Other."),
+    })
+    assert "ambiguous_root" in _codes(assemble_source(root))
+    result = assemble_source(root, title_hint="Robust graph learning at scale")
+    # A rule-selected root is a warning, so the bundle is parsed as needs_review.
+    assert result.root == "paper.tex" and result.status == "needs_review"
+    assert "root_selected_by_title" in _codes(result)
+    assert all(i.severity == "warning" for i in result.issues if i.code == "root_selected_by_title")
+
+
+def test_title_hint_matching_two_roots_falls_back_to_auxiliary_names(tmp_path):
+    root = tree(tmp_path, {
+        "main.tex": _doc("Robust Graph Learning"),
+        "supplementary.tex": _doc("Robust Graph Learning"),
+    })
+    result = assemble_source(root, title_hint="Robust Graph Learning")
+    assert result.root == "main.tex"
+    assert "root_selected_by_name" in _codes(result)
+
+
+@pytest.mark.parametrize("auxiliary", [
+    "supp.tex", "supp_arxiv.tex", "SupplementaryMaterial.tex", "SI.tex", "appendix.tex",
+    "rebuttal.tex", "response_to_reviewers.tex", "cover_letter.tex",
+])
+def test_single_non_auxiliary_candidate_is_selected_by_name(tmp_path, auxiliary):
+    root = tree(tmp_path, {"main.tex": _doc("A"), auxiliary: _doc("B")})
+    result = assemble_source(root)
+    assert result.root == "main.tex"
+    assert "root_selected_by_name" in _codes(result)
+
+
+@pytest.mark.parametrize("files", [
+    ("Manuscript1.tex", "Manuscript2.tex"),
+    ("main.tex", "sub/main.tex"),
+    ("sample-sigconf.tex", "sample-acmsmall.tex"),
+    ("PRL_Letter.tex", "supplement.tex", "notes.tex"),
+])
+def test_no_unique_evidence_stays_ambiguous(tmp_path, files):
+    root = tree(tmp_path, {name: _doc("Same title") for name in files})
+    result = assemble_source(root, title_hint="Unrelated metadata title")
+    assert result.root is None
+    assert "ambiguous_root" in _codes(result)
+
+
+def test_explicit_root_file_overrides_rules(tmp_path):
+    root = tree(tmp_path, {"main.tex": _doc("A"), "supp.tex": _doc("B")})
+    result = assemble_source(root, root_file="supp.tex", title_hint="A")
+    assert result.root == "supp.tex"
+    assert not {"root_selected_by_title", "root_selected_by_name"} & set(_codes(result))
+
+
+def test_commented_title_does_not_hide_the_effective_title(tmp_path):
+    # Shape of 2410.08025 v1: an old title commented out right above the real one.
+    main = ("\\documentclass{article}\n%\\title{An Older Working Title}\n"
+            "\\title{Robust Graph Learning}\n\\begin{document}\nMain.\n\\end{document}\n")
+    root = tree(tmp_path, {"main.tex": main, "notes.tex": _doc("Lab notes")})
+    result = assemble_source(root, title_hint="Robust Graph Learning")
+    assert result.root == "main.tex"
+    assert "root_selected_by_title" in _codes(result)
+
+
+def test_commented_empty_title_still_counts_the_real_title_as_a_match(tmp_path):
+    # Shape of 2410.09510 v2: both templates carry the metadata title, one after a
+    # commented-out \title{}. Two title matches means the title rule cannot decide.
+    neurips = ("\\documentclass{article}\n% \\title{}\n\\usepackage{neurips_2025}\n"
+               "\\title{Robust Graph Learning}\n\\begin{document}\nA.\n\\end{document}\n")
+    root = tree(tmp_path, {
+        "iclr_workshop/iclr2025_conference.tex": _doc("Robust Graph Learning"),
+        "neurips/neurips_2025.tex": neurips,
+    })
+    result = assemble_source(root, title_hint="Robust Graph Learning")
+    assert result.root is None
+    assert "ambiguous_root" in _codes(result)
+
+
+def test_title_in_disabled_branch_or_comment_environment_is_ignored(tmp_path):
+    hidden = ("\\documentclass{article}\n\\iffalse\n\\title{Robust Graph Learning}\n\\fi\n"
+              "\\begin{comment}\n\\title{Robust Graph Learning}\n\\end{comment}\n"
+              "\\title{Something Else}\n\\begin{document}\nB.\n\\end{document}\n")
+    main = ("\\documentclass{article}\n\\title{Robust Graph % line break kept\n"
+            "Learning}\n\\begin{document}\nA.\n\\end{document}\n")
+    root = tree(tmp_path, {"hidden.tex": hidden, "main.tex": main})
+    result = assemble_source(root, title_hint="Robust Graph Learning")
+    assert result.root == "main.tex"
+    assert "root_selected_by_title" in _codes(result)
+
+
+def test_title_inside_unevaluated_conditional_is_read(tmp_path):
+    # JASA-style blind switch: \if1\blind{...}\fi cannot be evaluated by the scanner,
+    # but the title inside it is the paper's title.
+    main = ("\\documentclass{article}\n\\def\\blind{0}\n\\if1\\blind\n{\n"
+            "\\title{\\bf Robust Graph Learning}\n}\\fi\n\\begin{document}\nA.\n\\end{document}\n")
+    root = tree(tmp_path, {"main.tex": main, "notes.tex": _doc("Lab notes")})
+    result = assemble_source(root, title_hint="Robust Graph Learning")
+    assert result.root == "main.tex"
+    assert "root_selected_by_title" in _codes(result)
+
+
+def test_missing_input_is_a_warning_and_the_version_still_assembles(tmp_path):
+    # epsf comes from the TeX distribution; figure.tikz is an asset M1 does not keep.
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": "\\documentclass{article}\\input epsf\n\\begin{document}A\\input{figure.tikz}B\\end{document}",
+    }))
+    assert result.status == "needs_review"
+    assert [i.code for i in result.issues] == ["missing_input", "missing_input"]
+    assert all(i.severity == "warning" for i in result.issues)
+    assert [entry["status"] for entry in result.includes] == ["missing", "missing"]
+    assert "A" in result.text and "B" in result.text
+
+
+def test_quoted_input_name_is_resolved(tmp_path):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": '\\documentclass{article}\\begin{document}\\input{"./sections/intro.tex"}\\end{document}',
+        "sections/intro.tex": "INTRO",
+    }))
+    assert result.status == "ready" and "INTRO" in result.text
+
+
+def test_missing_section_file_fails_the_version(tmp_path):
+    # Parsing on would silently drop the Results section.
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": "\\documentclass{article}\\begin{document}A\\include{sections/results}B\\end{document}",
+    }))
+    assert result.status == "error"
+    assert [(i.code, i.severity) for i in result.issues] == [("missing_content", "error")]
+    assert [entry["status"] for entry in result.includes] == ["missing"]
+
+
+@pytest.mark.parametrize("main", [
+    # A macro file read in the preamble holds no sentence.
+    "\\documentclass{article}\\input{macros}\\begin{document}A\\end{document}",
+    # TeX distribution file loaded in the body.
+    "\\documentclass{article}\\begin{document}\\input xy\nA\\end{document}",
+    # Picture and overlay assets that M1 does not keep.
+    "\\documentclass{article}\\begin{document}\\input{fig/plot.pgf}\\input{a.pdf_tex}A\\end{document}",
+])
+def test_missing_resource_is_only_a_warning(tmp_path, main):
+    result = assemble_source(tree(tmp_path, {"main.tex": main}))
+    assert result.status == "needs_review"
+    assert {i.code for i in result.issues} == {"missing_input"}
+
+
+def test_missing_input_inside_an_included_body_file_is_content(tmp_path):
+    # body.tex is read after \\begin{document}, so its own \\input is body text too.
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": "\\documentclass{article}\\begin{document}\\input{body}\\end{document}",
+        "body.tex": "Intro. \\input{sec/method}",
+    }))
+    assert "missing_content" in _codes(result) and result.status == "error"
+
+
+def test_body_started_in_an_included_file_makes_later_inputs_content(tmp_path):
+    # start.tex opens the document; the missing section is read back in main.tex.
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": "\\documentclass{article}\\input{start}\\include{sections/results}\\end{document}",
+        "start.tex": "\\begin{document}Intro.",
+    }))
+    assert "missing_content" in _codes(result) and result.status == "error"
+
+
+@pytest.mark.parametrize("argument,code", [
+    # physics is also a package name, but a path makes it the author's file.
+    ("sections/physics", "missing_content"),
+    ("./physics", "missing_content"),
+    ("./physics.tex", "missing_content"),
+    ('"./physics.tex"', "missing_content"),
+    ("physics", "missing_input"),
+])
+def test_distribution_name_counts_only_as_a_bare_name(tmp_path, argument, code):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": "\\documentclass{article}\\begin{document}A\\include{" + argument + "}\\end{document}",
+    }))
+    assert [i.code for i in result.issues if i.code.startswith("missing_")] == [code]

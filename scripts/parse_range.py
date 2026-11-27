@@ -1,18 +1,21 @@
-"""CLI chạy pipeline Parser M2 trên bộ mẫu hoặc toàn Range (docs/m2-cong-viec.md mục 4.4).
+"""CLI chạy pipeline Parser M2 trên bộ mẫu hoặc toàn Range.
 
 Ví dụ:
     python -m scripts.parse_range --data-dir data/m2-sample --plan configs/m2-sample-100.json \\
         --out-dir data/parse --metrics metrics/export.json \\
-        --supplement-dir data/m2-bibtex-supplement --roots configs/m2-reviewed-roots.json
+        --supplement-dir data/m2-bibtex-supplement --roots configs/m2-reviewed-roots.json \\
+        --workers 0
 
 ``--supplement-dir`` là sidecar bibliography do ``scripts.recover_bibtex_sources`` tạo (khôi phục
-``.bib/.bbl`` mà M1 đã lọc); ``--roots`` là file gốc đã review cho các Version ``ambiguous_root``.
+``.bib/.bbl`` mà M1 đã lọc); ``--roots`` là file gốc đã review cho các Version ``ambiguous_root``. ``--workers 0`` dùng mọi CPU; bảng
+xuất ra giống hệt bản tuần tự.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from src.common.config import member_ids
@@ -83,7 +86,16 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="File gốc đã review, ví dụ configs/m2-reviewed-roots.json",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Số tiến trình parse song song theo Publication (mặc định 1; 0 = số CPU)",
+    )
     args = parser.parse_args(argv)
+    if args.workers < 0:
+        parser.error(f"--workers phải >= 0, nhận {args.workers}")
+    workers = args.workers or (os.cpu_count() or 1)
 
     try:
         target_ids: list[str] | None = None
@@ -109,6 +121,7 @@ def main(argv: list[str] | None = None) -> int:
             allow_fallback=args.allow_fallback,
             supplement_dir=args.supplement_dir,
             root_reviews=load_root_reviews(args.roots),
+            workers=workers,
         )
         print(json.dumps(summary, ensure_ascii=False))
         return 0

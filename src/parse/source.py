@@ -16,8 +16,42 @@ import re
 
 from src.common.corpus import verified_source
 
-ASSEMBLER_VERSION = "5"
+ASSEMBLER_VERSION = "11"
 _VERBATIM = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"}
+# A missing \\input of these is not prose: assets that M1 does not keep (TikZ/PGF
+# pictures, \\pdf_tex overlays, data, style files) or files of a TeX distribution
+# that authors load with \\input (\\input epsf). On the five Ranges (26/11), 1.562 of
+# the 1.777 missing inputs are such files or preamble macros; the other 215 are
+# section files missing from 50 Versions.
+_RESOURCE_SUFFIXES = {".pgf", ".tikz", ".pdf_tex", ".pdf_t", ".pstex_t", ".eps_tex", ".ps_tex",
+                      ".txt", ".dat", ".csv", ".sty", ".cls", ".clo", ".def", ".fd", ".cfg",
+                      ".ldf", ".aux", ".tikzstyles", ".tikzdefs", ".rty", ".bblx", ".inp",
+                      ".tpx", ".set", ".conf"}
+_DISTRIBUTION_INPUTS = {"xy", "xypic", "diagxy", "epsf", "epsfig", "psfig", "amssym", "mssymb",
+                        "txdtools", "glyphtounicode", "pdf-trans", "tcilatex", "rotate", "insbox",
+                        "pictex", "prepictex", "postpictex", "texdraw", "eplain", "miniltx",
+                        "todonotes", "physics", "cite"}
+
+
+def _missing_is_content(argument: str, in_body: bool) -> bool:
+    """Whether a missing ``\\input``/``\\include`` held document text.
+
+    Only a TeX file read after ``\\begin{document}`` counts: a missing macro file in
+    the preamble or a missing picture costs no sentence, a missing section does.
+    """
+    raw = argument.strip().strip('"')
+    path = Path(raw)
+    suffix = path.suffix.lower()
+    if suffix in _RESOURCE_SUFFIXES:
+        return False
+    # Only a bare name is a distribution file: sections/physics is the author's.
+    # Check the raw text: Path("./physics").parts drops the "./" of a local file.
+    if ("/" not in raw and "\\" not in raw
+            and path.name.removesuffix(".tex").removesuffix(".TEX") in _DISTRIBUTION_INPUTS):
+        return False
+    return in_body
+
+
 _DEFINITIONS = {"newcommand", "renewcommand", "providecommand", "DeclareRobustCommand",
                 "DeclareMathOperator", "newenvironment", "renewenvironment"}
 _FLOW = re.compile(r"\\(?:input|include|documentclass|endinput|includeonly)\b")
@@ -79,6 +113,12 @@ class _Scan:
     stop: int
     ends_document: bool = False
     begins_document: bool = False
+    # Offset of the active \\begin{document}; inputs after it are in the body.
+    begin_at: int | None = None
+    # Half-open spans inside a branch known to be off (\\iffalse, the \\else of
+    # \\iftrue, a decided \\ifnum), including the conditional words that open
+    # and close the off part. Text there never reaches the PDF.
+    inactive: list[tuple[int, int]] = field(default_factory=list)
 
 
 def _control(text: str, start: int) -> tuple[str, int]:
@@ -125,11 +165,18 @@ def _group(text: str, index: int, opening: str = "{") -> tuple[str, int]:
     raise ValueError("Unclosed argument")
 
 
-def _scan(text: str, file: str, tokens: list[_Command] | None = None) -> _Scan:
-    """Lex control words, skipping comments, verbatim and definition bodies."""
+def _scan(text: str, file: str, tokens: list[_Command] | None = None, *,
+          unknown_active: bool = False) -> _Scan:
+    """Lex control words, skipping comments, verbatim and definition bodies.
+
+    ``unknown_active``: treat a branch whose condition cannot be evaluated (e.g.
+    ``\\if1\\blind``) as active. Assembly keeps the default and skips such
+    branches; reading a ``\\title`` only needs to skip branches known to be off.
+    """
     result = _Scan([], [], len(text))
     cursor = 0
     conditions: list[bool | None] = []
+    off_since: int | None = None
 
     def issue(code: str, position: int, message: str, severity: str = "warning"):
         result.issues.append(Issue(code, severity, file, text.count("\n", 0, position) + 1, message))
@@ -145,7 +192,7 @@ def _scan(text: str, file: str, tokens: list[_Command] | None = None) -> _Scan:
             cursor += 1; continue
         start = cursor
         name, cursor = _control(text, cursor)
-        active = all(value is True for value in conditions)
+        active = all(value is True or (unknown_active and value is None) for value in conditions)
         try:
             if name in {"verb", "lstinline"}:
                 if cursor < len(text) and text[cursor] == "*":
@@ -192,6 +239,8 @@ def _scan(text: str, file: str, tokens: list[_Command] | None = None) -> _Scan:
                     break
                 if name == "begin" and environment == "document" and active:
                     result.begins_document = True
+                    if result.begin_at is None:
+                        result.begin_at = start
                 cursor = end; continue
             if name in _DEFINITIONS or name in {"def", "gdef", "edef", "xdef"}:
                 if cursor < len(text) and text[cursor] == "*":
@@ -263,17 +312,35 @@ def _scan(text: str, file: str, tokens: list[_Command] | None = None) -> _Scan:
                         cursor += match.end()
                 if active and value is None:
                     issue("unsupported_conditional", start, f"\\{name}: neither branch is expanded")
-                conditions.append(value); continue
+                was_off = off_since is not None
+                conditions.append(value)
+                if not was_off and value is False:
+                    off_since = start
+                elif not was_off and value is True:
+                    # The test words of a decided conditional are not text either.
+                    result.inactive.append((start, cursor))
+                continue
             if name == "else":
                 if not conditions:
                     raise ValueError("Unmatched else")
                 if conditions[-1] is not None:
                     conditions[-1] = not conditions[-1]
+                    outer_off = any(v is False for v in conditions[:-1])
+                    if not outer_off and conditions[-1] is False:
+                        off_since = start
+                    elif not outer_off and off_since is not None:
+                        result.inactive.append((off_since, cursor)); off_since = None
                 continue
             if name == "fi":
                 if not conditions:
                     raise ValueError("Unmatched fi")
-                conditions.pop(); continue
+                closed = conditions.pop()
+                if off_since is not None and not any(v is False for v in conditions):
+                    result.inactive.append((off_since, cursor)); off_since = None
+                elif off_since is None and closed is not None:
+                    # \\fi closing an active branch of a decided conditional.
+                    result.inactive.append((start, cursor))
+                continue
             if not active:
                 continue
             if name in {"AtBeginDocument", "AtEndDocument"}:
@@ -313,18 +380,90 @@ def _scan(text: str, file: str, tokens: list[_Command] | None = None) -> _Scan:
             break  # Do not infer active commands after malformed syntax.
     if conditions and not result.ends_document:
         issue("unclosed_conditional", cursor, "Conditional block was not closed", "error")
+    if off_since is not None:
+        result.inactive.append((off_since, min(cursor, len(text))))
     return result
+
+
+# Root selection when several files declare \documentclass (ADR 0005). File names that
+# mark a document as companion material rather than the paper itself. A bare "letter"
+# is not listed: journals publish papers called Letters (e.g. PoP_Letter_open.tex).
+_AUXILIARY_ROOT = re.compile(
+    r"(?:^|[^a-z])(?:supp\w*|si|appendix|appendices|rebuttal|response\w*|reply|cover\w*)"
+    r"(?:[^a-z]|$)"
+)
+
+
+def _title_words(text: str) -> tuple[str, ...]:
+    """Letters and digits of a title, lowercased, with commands and braces dropped."""
+    text = re.sub(r"\\(?:[A-Za-z]+|.)", " ", text)
+    return tuple(re.findall(r"[^\W_]+", text.lower()))
+
+
+def _declared_title(text: str) -> tuple[str, ...]:
+    """Words of the first effective ``\\title{...}``, or () if absent or unreadable.
+
+    Uses the same scanner as file assembly, so a ``\\title`` inside a comment, a
+    ``comment``/verbatim environment or a disabled ``\\iffalse`` branch is skipped
+    (e.g. an old title commented out above the real one). A branch whose condition
+    the scanner cannot evaluate (``\\if1\\blind`` in JASA-style templates) is read.
+    Comments inside the title argument are dropped before comparing words.
+    """
+    tokens: list[_Command] = []
+    try:
+        _scan(text, "", tokens, unknown_active=True)
+    except ValueError:
+        return ()
+    command = next((token for token in tokens if token.name == "title"), None)
+    if command is None:
+        return ()
+    cursor = _space(text, command.end)
+    try:
+        if text.startswith("[", cursor):
+            _, cursor = _group(text, cursor, "[")
+            cursor = _space(text, cursor)
+        if not text.startswith("{", cursor):
+            return ()
+        title, _ = _group(text, cursor)
+    except ValueError:
+        return ()
+    return _title_words(re.sub(r"(?<!\\)%[^\n]*", " ", title))
+
+
+def _select_root(candidates: list[str], texts: dict[str, str],
+                 title_hint: str | None) -> tuple[str, str] | None:
+    """Pick one root by evidence, or None when no rule gives a unique answer.
+
+    1. Exactly one candidate's ``\\title`` equals the Publication title (words only).
+    2. Exactly one candidate's file name does not mark companion material
+       (supplement, SI, appendix, rebuttal, response, cover letter).
+    """
+    wanted = _title_words(title_hint or "")
+    if wanted:
+        by_title = [name for name in candidates if _declared_title(texts[name]) == wanted]
+        if len(by_title) == 1:
+            return by_title[0], "root_selected_by_title"
+        if by_title:
+            candidates = by_title
+    primary = [name for name in candidates
+               if not _AUXILIARY_ROOT.search(Path(name).stem.lower())]
+    if len(primary) == 1:
+        return primary[0], "root_selected_by_name"
+    return None
 
 
 def assemble_source(directory: str | Path, *, root_file: str | None = None,
                     require_receipt: bool = False, max_depth: int = 64,
-                    max_chars: int = 16 * 1024 * 1024) -> SourceBundle:
+                    max_chars: int = 16 * 1024 * 1024,
+                    title_hint: str | None = None) -> SourceBundle:
     """Assemble one Version, retain provenance, and never mutate source files.
 
     Literal paths first resolve against the root document's directory, as with
     a TeX working directory; a unique includer-relative fallback is reported.
     Repeated inclusion is preserved, cycles are rejected using the active stack.
     ``ready`` concerns this layer only, not successful hierarchy/BibTeX parsing.
+    ``title_hint`` (the Publication title from metadata) is only used to choose
+    among several root candidates; ``root_file`` always takes precedence.
     """
     result = SourceBundle()
     base = Path(directory).absolute()
@@ -416,6 +555,11 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
             if len(classes) == len(complete) and len(primary) == 1:
                 candidates = primary
         selected = candidates[0] if len(candidates) == 1 else None
+        if selected is None and len(candidates) > 1:
+            chosen = _select_root(candidates, texts, title_hint)
+            if chosen is not None:
+                selected, rule = chosen
+                problem(rule, selected, f"Selected among candidates: {candidates}", "warning")
     if selected is None:
         problem("ambiguous_root" if candidates else "missing_root", "",
                 f"Expected one root; candidates: {candidates}")
@@ -438,6 +582,9 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
         chunks.append(chunk); size += len(chunk)
 
     def resolve(argument, name, line):
+        # \input{"./sections/intro.tex"}: TeX accepts a quoted file name.
+        if len(argument) > 1 and argument[0] == argument[-1] == '"':
+            argument = argument[1:-1]
         if any(ch in argument for ch in "\\#{}~$"):
             raise ValueError("Dynamic filename is unsupported")
         requested = Path(argument)
@@ -478,8 +625,10 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
             problem("relative_to_includer", name, f"Resolved {argument} relative to including file", "info")
         return chosen
 
+    in_body = False  # an active \\begin{document} was emitted before this command
+
     def expand(name, stack):
-        nonlocal include_only
+        nonlocal include_only, in_body
         if name in stack:
             raise ValueError("Include cycle: " + " -> ".join([*stack, name]))
         if len(stack) >= max_depth:
@@ -505,6 +654,8 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
                                 for value in command.argument.split(",") if value.strip()}
                 continue
             emit(name, position, command.start)
+            if scan.begin_at is not None and scan.begin_at < command.start:
+                in_body = True
             line = texts[name].count("\n", 0, command.start) + 1
             entry = {"file": name, "line": line, "command": command.name,
                      "argument": command.argument, "target": None, "status": "error"}
@@ -524,11 +675,27 @@ def assemble_source(directory: str | Path, *, root_file: str | None = None,
                 if isinstance(error, FileNotFoundError) and Path(command.argument).suffix.lower() == ".bbl":
                     entry["status"] = "missing_bbl"
                     problem("missing_bbl", name, str(error), "warning", line=line)
+                elif isinstance(error, FileNotFoundError) and _missing_is_content(
+                        command.argument, in_body):
+                    # A section file is gone: parsing on would drop its text
+                    # silently, so the Version fails with a clear reason.
+                    entry["status"] = "missing"
+                    problem("missing_content", name, str(error), line=line)
+                elif isinstance(error, FileNotFoundError):
+                    # arXiv compiled this Version, so the file existed: a TeX
+                    # distribution file (epsf, xy, amssym.def) or a non-TeX asset
+                    # that M1 does not keep (.tikz, .pgf, .sty). Neither is prose.
+                    entry["status"] = "missing"
+                    problem("missing_input", name, str(error), "warning", line=line)
                 else:
                     problem("include_error", name, str(error), line=line)
                 emit(name, command.start, command.end)
             position = command.end
         emit(name, position, scan.stop)
+        if scan.begin_at is not None:
+            # \\begin{document} sat in this file (start.tex), so what follows
+            # in the including file is body text.
+            in_body = True
         return scan.ends_document
 
     try:

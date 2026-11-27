@@ -41,7 +41,16 @@ LEAF_KINDS: tuple[str, ...] = ("sentence", "formula", "figure")
 LIST_KINDS: tuple[str, ...] = ("itemize", "item")
 
 _SOURCE_STATUSES = {"ready", "needs_review", "error", "empty_non_tex", "empty_unavailable"}
-_ISSUE_SEVERITIES = {"warning", "error"}
+_ISSUE_SEVERITIES = {"info", "warning", "error"}
+
+
+def normalize_cite_key(key: str) -> str:
+    """A citation key as TeX reads it: runs of whitespace become one space.
+
+    ``\\cite{pavia university}`` and ``\\bibitem{H. Triebel}`` are single keys with an
+    inner space; a line break inside a key reads as one space too.
+    """
+    return " ".join(str(key).split())
 _REFERENCES_TITLES = {
     "references",
     "reference",
@@ -671,9 +680,9 @@ def validate_B_prime(
             if not isinstance(key, str) or not key.strip():
                 errors.append(f"[B'] cite_keys_used[{idx}] phải là chuỗi khác rỗng")
                 continue
-            if "," in key or any(ch.isspace() for ch in key):
+            if "," in key or key != normalize_cite_key(key):
                 errors.append(
-                    f"[B'] cite_keys_used[{idx}]={key!r} chưa tách danh sách nhiều key hoặc còn khoảng trắng"
+                    f"[B'] cite_keys_used[{idx}]={key!r} chưa tách danh sách nhiều key hoặc chưa chuẩn hóa khoảng trắng"
                 )
 
     return _finish(errors, raise_on_error)
