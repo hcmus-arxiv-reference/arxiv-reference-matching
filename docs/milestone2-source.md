@@ -41,7 +41,20 @@ thì API cũng từ chối, không tự hạ mức kiểm tra.
 - Input `.bbl` thiếu được giữ nguyên và ghi `missing_bbl` mức warning
   (`needs_review`), không biến thành lỗi thiếu TeX. Kiểm đường dẫn/symlink
   vẫn áp dụng; file có thật nhưng ngoài inventory TeX vẫn bị từ chối.
-- Phát hiện thiếu file, vòng lặp theo stack đang mở, đường dẫn thoát
+- Input khác bị thiếu (từ 26/11/2026) cũng chỉ ghi `missing_input` mức warning, giữ nguyên lệnh và
+  gom tiếp. arXiv đã biên dịch được Version, nên file đó có thật: file của bản phân phối TeX (`epsf`,
+  `xy`, `amssym.def`) hoặc file không phải `.tex` mà M1 không giữ (`.tikz`, `.pgf`, `.sty`). Đo trên
+  5 Range, 506 Version trước đây bị loại cả Version chỉ vì một file như vậy. Tên file trong
+  ngoặc kép (`\input{"./sections/intro.tex"}`) được bỏ ngoặc trước khi tìm.
+- Ngoại lệ: file **nội dung** bị thiếu vẫn là lỗi `missing_content` (Version `failed`), vì gom tiếp sẽ
+  làm mất cả một mục mà không ai biết. File nội dung là file TeX được đọc **sau** `\begin{document}`
+  (kể cả `\input` nằm trong một file thân bài khác), trừ đuôi tài nguyên (`.pgf`, `.tikz`, `.pdf_tex`,
+  `.txt`, `.sty`, `.def`, …) và tên file trần của bản phân phối TeX (`xy`, `epsf`, `psfig`, …; `sections/physics` không tính).
+  Thân bài bắt đầu cả khi `\begin{document}` nằm trong file con (`\input{start}`). File macro
+  đọc trong preamble chỉ là warning `missing_input`. Đo trên 5 Range (26/11): 1.562/1.777 input thiếu là
+  tài nguyên hoặc macro preamble; 215 input còn lại là file mục (introduction, method, appendix, …)
+  của 50 Version, các Version này `failed` với lý do `missing_content`.
+- Phát hiện vòng lặp theo stack đang mở, đường dẫn thoát
   thư mục Version, symlink, root lồng, lỗi ngoặc, giới hạn độ sâu và độ
   dài đầu ra. Include lặp hợp lệ vẫn xuất hiện nhiều lần trong văn bản.
 - Giữ danh sách file dùng/không dùng, SHA-256, từng lần include và vị trí
