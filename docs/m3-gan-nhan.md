@@ -62,20 +62,21 @@ Lý do: bảng `predictions` có một dòng cho mỗi entry, và MRR trên tậ
 Chọn trong Range của mình (Bảo chọn thêm 5 bài trong Range của Hải), từ các Publication thỏa đủ:
 
 1. Là Publication hoàn chỉnh (có trong `tables/<member>/papers.parquet`).
-2. Version mới nhất có `.bib` hoặc `\bibitem`, với **20 đến 60** entry được cite. Từ 20 trở lên
-   là yêu cầu của đề; tối đa 60 để mỗi bài gán hết trong khoảng một giờ.
-3. Có **ít nhất 10** dòng trong `references`. Bài quá ít ứng viên thì gần như mọi nhãn đều rỗng,
-   không giúp gì cho việc huấn luyện.
+2. Version mới nhất có `.bib` hoặc `\bibitem` và ít nhất 20 entry được cite.
+   Gán hết các entry của Publication đã chọn.
+3. Ưu tiên bài được matcher dự đoán có **ít nhất 25 cặp khớp**. Khi chưa có
+   kết quả matcher, có thể dùng **ít nhất 30 dòng `references`** để sàng lọc.
+   Sau khi gán tay, đếm ít nhất 20 cặp có `ref_arxiv_id` khác rỗng cho mỗi bài.
 
-Trong danh sách thỏa điều kiện, **chọn ngẫu nhiên với seed `20261120`**, lấy 5 bài và thêm 1 bài
-dự phòng. Không được tự chọn bài dễ: tập test phải đại diện cho dữ liệu thật, và báo cáo phải nói
-được là bài được chọn thế nào. Nếu một bài hóa ra có lỗi nguồn (ví dụ `\bibitem` viết tay, không
-tách được entry) thì thay bằng bài dự phòng và ghi lý do vào cột `note`.
+Sắp xếp danh sách ứng viên theo arXiv ID rồi xáo với seed `20261120`.
+Khi thay bài theo [#87](https://github.com/hcmus-arxiv-reference/arxiv-reference-matching/issues/87),
+chọn bài trong cùng Range và ngoài pool gán tay lẫn pool tự động hiện tại.
+Bài thay giữ partition của bài cũ.
 
 ### Tạo file nhãn
 
-`scripts/m3_label_sheet.py` lọc theo các điều kiện trên, xáo thứ tự với seed cố định, rồi tạo sẵn
-file nhãn cho 5 bài được chọn:
+`scripts/m3_label_sheet.py` có bộ lọc sơ bộ riêng để tạo phiếu theo seed cố định.
+Khi chọn bài thay, đối chiếu thêm tiêu chí ở trên và `labels/splits.csv`:
 
 ```bash
 # Range đã có trên HF (token đọc từ .env); chỉ tải thư mục raw của các bài được thử
