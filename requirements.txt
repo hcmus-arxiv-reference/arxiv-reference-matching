@@ -5,3 +5,4 @@ pytest>=8
 filelock>=3.10
 psutil>=5.9
 bibtexparser==2.1.0
+rapidfuzz>=3.9,<4
