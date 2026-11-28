@@ -10,13 +10,17 @@ Nguồn yêu cầu: đề M3, mục *Data Labelling* và *Data Modeling*
 
 | Loại | Yêu cầu của đề | Chia cho mỗi người |
 |---|---|---|
-| Gán tay | ≥ 25 Publication; mỗi bài ≥ 20 BibTeX entry được gán; tổng ≥ 500 entry | Liệu, Nghiêm, Minh mỗi người 5 bài; Bảo 10 bài (gán thay Hải, vì Hải dồn sức cho bảng `bibtex`) |
+| Gán tay | ≥ 25 Publication; mỗi bài ≥ 20 cặp BibTeX entry–Reference; tổng ≥ 500 cặp | Liệu, Nghiêm, Minh mỗi người 5 bài; Bảo 10 bài (gán thay Hải, vì Hải dồn sức cho bảng `bibtex`) |
 | Gán tự động | ≥ 10% số Publication ngoài pool gán tay, và ≥ 10 bài | Matcher chung, Nghiêm phụ trách (mục 7) |
 | Test | 5 bài gán tay + 5 bài gán tự động | xem mục 8 |
 | Valid | 5 bài gán tay + 5 bài gán tự động | xem mục 8 |
 | Train | phần còn lại | |
 
 Hạn: chọn bài xong **21/11**, gán xong **tối 23/11**, kiểm chéo xong **24/11**.
+
+Theo [rà soát M3 tại #87](https://github.com/hcmus-arxiv-reference/arxiv-reference-matching/issues/87),
+ngưỡng 20 nhãn mỗi bài tính trên số cặp BibTeX entry–Reference ghép được. Khi kiểm
+ngưỡng này, đếm các dòng có `ref_arxiv_id` khác rỗng.
 
 ## 2. Gán cái gì
 
@@ -58,20 +62,21 @@ Lý do: bảng `predictions` có một dòng cho mỗi entry, và MRR trên tậ
 Chọn trong Range của mình (Bảo chọn thêm 5 bài trong Range của Hải), từ các Publication thỏa đủ:
 
 1. Là Publication hoàn chỉnh (có trong `tables/<member>/papers.parquet`).
-2. Version mới nhất có `.bib` hoặc `\bibitem`, với **20 đến 60** entry được cite. Từ 20 trở lên
-   là yêu cầu của đề; tối đa 60 để mỗi bài gán hết trong khoảng một giờ.
-3. Có **ít nhất 10** dòng trong `references`. Bài quá ít ứng viên thì gần như mọi nhãn đều rỗng,
-   không giúp gì cho việc huấn luyện.
+2. Version mới nhất có `.bib` hoặc `\bibitem` và ít nhất 20 entry được cite.
+   Gán hết các entry của Publication đã chọn.
+3. Ưu tiên bài được matcher dự đoán có **ít nhất 25 cặp khớp**. Khi chưa có
+   kết quả matcher, có thể dùng **ít nhất 30 dòng `references`** để sàng lọc.
+   Sau khi gán tay, đếm ít nhất 20 cặp có `ref_arxiv_id` khác rỗng cho mỗi bài.
 
-Trong danh sách thỏa điều kiện, **chọn ngẫu nhiên với seed `20261120`**, lấy 5 bài và thêm 1 bài
-dự phòng. Không được tự chọn bài dễ: tập test phải đại diện cho dữ liệu thật, và báo cáo phải nói
-được là bài được chọn thế nào. Nếu một bài hóa ra có lỗi nguồn (ví dụ `\bibitem` viết tay, không
-tách được entry) thì thay bằng bài dự phòng và ghi lý do vào cột `note`.
+Sắp xếp danh sách ứng viên theo arXiv ID rồi xáo với seed `20261120`.
+Khi thay bài theo [#87](https://github.com/hcmus-arxiv-reference/arxiv-reference-matching/issues/87),
+chọn bài trong cùng Range và ngoài pool gán tay lẫn pool tự động hiện tại.
+Bài thay giữ partition của bài cũ.
 
 ### Tạo file nhãn
 
-`scripts/m3_label_sheet.py` lọc theo các điều kiện trên, xáo thứ tự với seed cố định, rồi tạo sẵn
-file nhãn cho 5 bài được chọn:
+`scripts/m3_label_sheet.py` có bộ lọc sơ bộ riêng để tạo phiếu theo seed cố định.
+Khi chọn bài thay, đối chiếu thêm tiêu chí ở trên và `labels/splits.csv`:
 
 ```bash
 # Range đã có trên HF (token đọc từ .env); chỉ tải thư mục raw của các bài được thử
@@ -181,9 +186,10 @@ Script kiểm:
 - đủ cột; `confidence` hợp lệ;
 - mỗi `(arxiv_id, citation_key)` xuất hiện đúng một lần;
 - mọi `ref_arxiv_id` khác rỗng có trong `references` của cùng `arxiv_id`;
-- mỗi bài có ≥ 20 dòng, và mọi dòng đã có `confidence`; vì file nhãn đã có sẵn mọi entry được
-  cite, điều này nghĩa là đã gán hết;
+- mỗi bài có ≥ 20 dòng và mọi dòng đã có `confidence`;
 - in tổng số entry, số khớp, số rỗng, số `unsure` để báo trong nhóm.
+
+Dùng thêm số cặp ghép được của từng bài để đối chiếu ngưỡng tại mục 1.
 
 Không còn lỗi thì `--out` ghi ra file sạch chỉ gồm 6 cột nhãn. File này là file để upload.
 
@@ -208,6 +214,30 @@ Nghiêm phụ trách. Matcher dùng công cụ cổ điển như đề yêu cầ
 - **Đo matcher trên nhãn tay** trước khi dùng nó gán hàng loạt, báo precision và recall. Nhãn tự
   động sai nhiều thì mô hình học theo cái sai, và test trên bài tự động cũng mất ý nghĩa.
 
+Matcher ở [PR #80](https://github.com/hcmus-arxiv-reference/arxiv-reference-matching/pull/80)
+chỉ xét Reference thuộc cùng Publication. Nếu mã arXiv tường minh trùng một ứng viên,
+matcher dùng mã đó. Nếu thiếu mã, matcher chuẩn hóa tiêu đề, tính độ tương đồng Levenshtein
+và điều chỉnh điểm theo họ tác giả và năm. Tiêu đề cần đạt độ tương đồng tối thiểu
+`0.90`, điểm tổng tối thiểu `0.93`, và ứng viên đứng đầu phải hơn ứng viên thứ hai
+ít nhất `0.035` nếu có ứng viên thứ hai.
+
+Khi thiếu bằng chứng hoặc hai ứng viên có điểm quá sát nhau, matcher ghi
+`confidence=unsure` và để trống `ref_arxiv_id`. Các dòng này thể hiện matcher
+chưa chọn được đáp án. Xem quy ước tính MRR@5 ở
+[#68](https://github.com/hcmus-arxiv-reference/arxiv-reference-matching/issues/68).
+
+Chạy trên nhánh có matcher và cấu hình dataset nhóm trong `.env`:
+
+```bash
+python scripts/m3_auto_match.py --hf --out outputs/m3-group
+
+```
+
+Script đọc nhãn tay và các bảng `papers`, `bibtex`, `references` từ cùng một
+revision của dataset. Kết quả gồm `auto.csv`, `splits.csv`, `manual-eval.csv`
+và `report.json`. Precision và recall của lượt chạy nhóm được tính trên các
+nhãn tay thuộc tập `train`.
+
 ## 8. Chia tập
 
 `labels/splits.csv`, cột `arxiv_id,pool,partition`, trong đó `pool` là `manual` hoặc `auto`, và
@@ -220,6 +250,10 @@ Nghiêm phụ trách. Matcher dùng công cụ cổ điển như đề yêu cầ
   quy định như vậy, và nó tránh rò thông tin giữa các entry của cùng một bài.
 - Chốt `splits.csv` **trước** khi làm đặc trưng. Sau đó không xem tập test cho đến lần đánh giá
   cuối.
+
+- Nếu đã có `labels/splits.csv` trên dataset nhóm, matcher dùng lại cách chia đó khi
+  khớp với dữ liệu đầu vào. Khi nhóm thay Publication trong pool gán tay, cần chốt
+  lại file chia tập trước khi chạy lượt đánh giá chính thức.
 
 ## 9. Ước lượng công sức
 
