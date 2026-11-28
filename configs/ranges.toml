@@ -10,7 +10,7 @@ ids_per_member = 5000
 name = "bao"
 github = "NTBao-coder"
 verified = true
-note = "AGENTS.md mục 1"
+note = "Range của nhóm trưởng, Bảo xác nhận"
 segments = [{ prefix = "2508", start = 2872, end = 7871 }]
 
 [[members]]

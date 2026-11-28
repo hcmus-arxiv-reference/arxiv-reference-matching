@@ -125,6 +125,113 @@ def test_stale_root_review_fails_the_version_instead_of_guessing(tmp_path: Path)
     assert result.version_logs[0]["status"] == "failed"
 
 
+def _many(tmp_path: Path) -> tuple[Path, list[str]]:
+    """Corpus ba Publication, bài giữa có Version lỗi (không có file gốc)."""
+    corpus, _ = _corpus(tmp_path, {"main.tex": MAIN})
+    ids = [ID]
+    for number, files in (("2508.02873", {"notes.tex": "no root here"}),
+                          ("2508.02874", {"main.tex": MAIN.replace("Intro", "Method")})):
+        other, _ = _corpus(tmp_path / number, files)
+        key = number.replace(".", "-")
+        for sub in ("metadata", "raw"):
+            for path in sorted((other / sub).rglob("*")):
+                if path.is_file():
+                    target = corpus / sub / path.relative_to(other / sub)
+                    target = Path(str(target).replace(KEY, key))
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(path.read_text(encoding="utf-8").replace(ID, number),
+                                      encoding="utf-8")
+        ids.append(number)
+    # Receipt và metadata của bài sao chép phải khớp ID mới: tính lại receipt.
+    for number in ids[1:]:
+        directory = corpus / "raw" / number.replace(".", "-") / "v1"
+        digests = {p.name: file_digest(p) for p in directory.iterdir()
+                   if p.suffix == ".tex"}
+        write_json(directory / "source.json", {
+            "format": 1, "arxiv_id": number, "version": 1, "status": "success", "files": digests,
+            "checksum": hashlib.sha256(json.dumps(digests, sort_keys=True).encode()).hexdigest(),
+        })
+    return corpus, ids
+
+
+def test_parallel_run_writes_the_same_tables_as_sequential(tmp_path: Path) -> None:
+    corpus, ids = _many(tmp_path)
+    serial = run_batch(corpus, tmp_path / "serial", arxiv_ids=ids, workers=1)
+    parallel = run_batch(corpus, tmp_path / "parallel", arxiv_ids=ids, workers=2)
+
+    for name in ("elements", "hierarchy", "bibtex"):
+        a = (tmp_path / "serial" / "tables" / f"{name}.parquet").read_bytes()
+        b = (tmp_path / "parallel" / "tables" / f"{name}.parquet").read_bytes()
+        assert a == b, name
+    assert ((tmp_path / "serial" / "log" / "versions.jsonl").read_text()
+            == (tmp_path / "parallel" / "log" / "versions.jsonl").read_text())
+    assert parallel["workers"] == 2
+    assert parallel["publications_failed"] == serial["publications_failed"] == 1
+    assert parallel["publications_succeeded"] == 2
+
+    resumed = run_batch(corpus, tmp_path / "parallel", arxiv_ids=ids, workers=2)
+    assert resumed["publications_resumed"] == 3
+
+
+def test_workers_must_be_positive(tmp_path: Path) -> None:
+    import pytest
+
+    corpus, _ = _corpus(tmp_path, {"main.tex": MAIN})
+    with pytest.raises(ValueError):
+        run_batch(corpus, tmp_path / "out", arxiv_ids=[ID], workers=0)
+
+
+def test_sequential_run_reports_no_child_memory(tmp_path: Path) -> None:
+    """Chạy tuần tự không có tiến trình con parse, kể cả khi pipeline gọi `git rev-parse`."""
+    corpus, ids = _many(tmp_path)
+    serial = run_batch(corpus, tmp_path / "serial", arxiv_ids=ids, workers=1)
+    assert serial["peak_rss_children_mb"] == 0.0
+
+
+def test_cli_rejects_negative_workers(tmp_path: Path) -> None:
+    import pytest
+
+    from scripts.parse_range import main
+
+    with pytest.raises(SystemExit) as exc:
+        main(["--data-dir", str(tmp_path), "--out-dir", str(tmp_path / "out"), "--workers", "-1"])
+    assert exc.value.code == 2
+
+
+def _add_version(corpus: Path, number: str, version: int, files: dict[str, str]) -> None:
+    """Ghi một Version đã xác minh như crawler: file trước, receipt sau."""
+    directory = corpus / "raw" / number.replace(".", "-") / f"v{version}"
+    for name, text in files.items():
+        (directory / name).parent.mkdir(parents=True, exist_ok=True)
+        (directory / name).write_text(text, encoding="utf-8")
+    digests = {name: file_digest(directory / name) for name in files}
+    write_json(directory / "source.json", {
+        "format": 1, "arxiv_id": number, "version": version, "status": "success", "files": digests,
+        "checksum": hashlib.sha256(json.dumps(digests, sort_keys=True).encode()).hexdigest(),
+    })
+
+
+def test_new_version_reparses_only_its_publication_and_keeps_old_ids(tmp_path: Path) -> None:
+    """Chạy M2 khi crawl còn dở: Version chưa về là ``missing``; lần sau chỉ parse lại bài đó."""
+    corpus, ids = _many(tmp_path)
+    meta = corpus / "metadata" / f"{KEY}.json"
+    data = json.loads(meta.read_text(encoding="utf-8"))
+    data["publication"].update(versions=2, revised_dates=["2025-09-01"])
+    write_json(meta, data)
+
+    out = tmp_path / "out"
+    first = run_batch(corpus, out, arxiv_ids=ids)
+    assert first["versions_missing"] == 1
+    old = {row["element_id"] for row in parse_publication(corpus, ID, parse_dir=out).result.elements}
+
+    _add_version(corpus, ID, 2, {"main.tex": MAIN.replace("Intro", "Introduction")})
+    second = run_batch(corpus, out, arxiv_ids=ids)
+    assert second["versions_missing"] == 0
+    assert second["publications_resumed"] == len(ids) - 1, "chỉ bài có Version mới được parse lại"
+    new = {row["element_id"] for row in parse_publication(corpus, ID, parse_dir=out).result.elements}
+    assert old < new, "Element của v1 giữ nguyên element_id; v2 chỉ thêm Element mới"
+
+
 def test_metadata_title_selects_root_and_is_logged(tmp_path: Path) -> None:
     """ADR 0005: the metadata title picks the root; the rule is recorded in the Version log."""
     body = r"\documentclass{article}\title{%s}\begin{document}\section{S}Text %s.\end{document}"

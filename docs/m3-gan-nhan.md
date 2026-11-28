@@ -130,7 +130,7 @@ trách M3) xem lại toàn bộ dòng `unsure`.
 ## 5. Định dạng file nhãn (chốt C8)
 
 **Nơi lưu:** dataset Hugging Face của nhóm (private), thư mục `labels/`. Nhãn là dữ liệu, không
-commit vào repo code (AGENTS.md quy tắc 1). Repo chỉ chứa tài liệu này và các script.
+commit vào repo code (`CONTRIBUTING.md` mục 4). Repo chỉ chứa tài liệu này và các script.
 
 ```
 labels/

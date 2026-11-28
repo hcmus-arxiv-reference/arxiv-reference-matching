@@ -32,6 +32,17 @@ def peak_rss_mb() -> float | None:
     return raw / (1024 * 1024) if sys.platform == "darwin" else raw / 1024
 
 
+def peak_rss_children_mb() -> float | None:
+    """RAM tối đa của tiến trình con lớn nhất đã kết thúc (MB), hoặc None nếu không đo được.
+
+    ``RUSAGE_CHILDREN`` trả đỉnh của một tiến trình con, không phải tổng các con chạy cùng lúc.
+    """
+    if resource is None:
+        return None
+    raw = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+    return raw / (1024 * 1024) if sys.platform == "darwin" else raw / 1024
+
+
 def dir_size_mb(path: str | Path) -> float:
     """Tổng dung lượng các file trong thư mục (MB); path là file thì trả dung lượng file."""
     path = Path(path)

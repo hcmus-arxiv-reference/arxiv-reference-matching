@@ -9,13 +9,26 @@ from src.common.corpus import verified_source
 from src.parse.source import SourceBundle, _group, _scan
 from src.parse.types import (
     SECTION_DEPTH, BibSource, Block, Section, StructureTree, _is_references_heading,
+    normalize_cite_key,
 )
 
-STRUCTURE_VERSION = "3"
+STRUCTURE_VERSION = "4"
 
 
-def _clean(text, tokens):
-    """Blank comments while preserving offsets and literal examples."""
+def _clean(text, tokens, inactive=()):
+    """Blank comments and known-off conditional branches, preserving offsets.
+
+    Literal examples (verbatim, ``\\verb``) keep their text. A branch the scanner
+    knows is off (``\\iffalse ... \\fi``) is blanked like a comment, keeping
+    newlines, so its sentences and citations never reach ``elements``.
+    """
+    if inactive:
+        chars = list(text)
+        for a, b in inactive:
+            for i in range(a, b):
+                if chars[i] != "\n":
+                    chars[i] = " "
+        text = "".join(chars)
     pieces = []
     cursor = 0
     pattern = re.compile(r"\\[^\n]|%[^\n]*")
@@ -60,7 +73,7 @@ def build_structure(bundle: SourceBundle, arxiv_id: str, version: int,
     tokens = []
     scan = _scan(bundle.text, bundle.root or "", tokens)
     tree.issues = [asdict(issue) for issue in scan.issues]
-    text = _clean(bundle.text, tokens)
+    text = _clean(bundle.text, tokens, scan.inactive)
     begin = next((t for t in tokens if (t.name, t.argument) == ("begin", "document")), None)
     if begin is None:
         raise ValueError("Missing active document environment")
@@ -119,7 +132,7 @@ def build_structure(bundle: SourceBundle, arxiv_id: str, version: int,
                 keys, _, _ = _argument(text, t.end)
             except ValueError:
                 continue
-            items[t.start] = [k.strip() for k in keys.split(",") if k.strip()]
+            items[t.start] = [normalize_cite_key(k) for k in keys.split(",") if k.strip()]
         elif t.name in {"$$", "[", "]"}:
             key = "$$" if t.name == "$$" else "["
             if key in math and t.name in {"$$", "]"}:

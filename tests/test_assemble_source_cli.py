@@ -37,7 +37,7 @@ def test_cli_refuses_output_inside_source(tmp_path):
 
 
 @pytest.mark.parametrize("payload,status", [(b"%PDF-1.7 fake", "empty_non_tex"),
-                                           (b"\\documentclass{article}\\input{missing}", "error")])
+                                           (b"\\documentclass{article}\\input{/etc/passwd}", "error")])
 def test_cli_distinguishes_empty_from_failure(tmp_path, payload, status):
     path = source(tmp_path, payload)
     output = tmp_path / "assembled.json"

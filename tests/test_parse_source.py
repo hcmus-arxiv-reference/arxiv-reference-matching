@@ -106,8 +106,9 @@ def test_literal_integer_comparison(tmp_path, condition, expected):
         assert result.files == ["main.tex"]
 
 
+# A missing \input is a warning, not an error: see
+# test_missing_input_is_a_warning_and_the_version_still_assembles.
 @pytest.mark.parametrize("name,body", [
-    ("missing", r"\input{absent}"),
     ("cycle", r"\input{main}"),
     ("escape", r"\input{../outside}"),
     ("absolute", r"\input{/etc/passwd}"),
@@ -485,3 +486,80 @@ def test_title_inside_unevaluated_conditional_is_read(tmp_path):
     result = assemble_source(root, title_hint="Robust Graph Learning")
     assert result.root == "main.tex"
     assert "root_selected_by_title" in _codes(result)
+
+
+def test_missing_input_is_a_warning_and_the_version_still_assembles(tmp_path):
+    # epsf comes from the TeX distribution; figure.tikz is an asset M1 does not keep.
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": "\\documentclass{article}\\input epsf\n\\begin{document}A\\input{figure.tikz}B\\end{document}",
+    }))
+    assert result.status == "needs_review"
+    assert [i.code for i in result.issues] == ["missing_input", "missing_input"]
+    assert all(i.severity == "warning" for i in result.issues)
+    assert [entry["status"] for entry in result.includes] == ["missing", "missing"]
+    assert "A" in result.text and "B" in result.text
+
+
+def test_quoted_input_name_is_resolved(tmp_path):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": '\\documentclass{article}\\begin{document}\\input{"./sections/intro.tex"}\\end{document}',
+        "sections/intro.tex": "INTRO",
+    }))
+    assert result.status == "ready" and "INTRO" in result.text
+
+
+def test_missing_section_file_fails_the_version(tmp_path):
+    # Parsing on would silently drop the Results section.
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": "\\documentclass{article}\\begin{document}A\\include{sections/results}B\\end{document}",
+    }))
+    assert result.status == "error"
+    assert [(i.code, i.severity) for i in result.issues] == [("missing_content", "error")]
+    assert [entry["status"] for entry in result.includes] == ["missing"]
+
+
+@pytest.mark.parametrize("main", [
+    # A macro file read in the preamble holds no sentence.
+    "\\documentclass{article}\\input{macros}\\begin{document}A\\end{document}",
+    # TeX distribution file loaded in the body.
+    "\\documentclass{article}\\begin{document}\\input xy\nA\\end{document}",
+    # Picture and overlay assets that M1 does not keep.
+    "\\documentclass{article}\\begin{document}\\input{fig/plot.pgf}\\input{a.pdf_tex}A\\end{document}",
+])
+def test_missing_resource_is_only_a_warning(tmp_path, main):
+    result = assemble_source(tree(tmp_path, {"main.tex": main}))
+    assert result.status == "needs_review"
+    assert {i.code for i in result.issues} == {"missing_input"}
+
+
+def test_missing_input_inside_an_included_body_file_is_content(tmp_path):
+    # body.tex is read after \\begin{document}, so its own \\input is body text too.
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": "\\documentclass{article}\\begin{document}\\input{body}\\end{document}",
+        "body.tex": "Intro. \\input{sec/method}",
+    }))
+    assert "missing_content" in _codes(result) and result.status == "error"
+
+
+def test_body_started_in_an_included_file_makes_later_inputs_content(tmp_path):
+    # start.tex opens the document; the missing section is read back in main.tex.
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": "\\documentclass{article}\\input{start}\\include{sections/results}\\end{document}",
+        "start.tex": "\\begin{document}Intro.",
+    }))
+    assert "missing_content" in _codes(result) and result.status == "error"
+
+
+@pytest.mark.parametrize("argument,code", [
+    # physics is also a package name, but a path makes it the author's file.
+    ("sections/physics", "missing_content"),
+    ("./physics", "missing_content"),
+    ("./physics.tex", "missing_content"),
+    ('"./physics.tex"', "missing_content"),
+    ("physics", "missing_input"),
+])
+def test_distribution_name_counts_only_as_a_bare_name(tmp_path, argument, code):
+    result = assemble_source(tree(tmp_path, {
+        "main.tex": "\\documentclass{article}\\begin{document}A\\include{" + argument + "}\\end{document}",
+    }))
+    assert [i.code for i in result.issues if i.code.startswith("missing_")] == [code]
