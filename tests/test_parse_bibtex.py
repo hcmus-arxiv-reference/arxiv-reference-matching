@@ -324,3 +324,32 @@ def test_bibitem_explicit_fields_and_quote_precedence():
     assert rows["quoted"]["title"] == "Quoted Title"
     assert rows["plain"]["title"] == "Comma-style Title"
     assert result.stats["issues"] == [{"version": 1, "key": "short", "code": "missing_bibitem_title"}]
+
+
+def test_bibitem_leading_newblock_keeps_author_title_and_distinct_parts():
+    # 2508.04688 opens every item with \newblock before the authors. The
+    # empty text before it is not the author block, and two parts of one
+    # series with the same author and year must stay separate entries.
+    result = merge_bibtex(ARXIV_ID, [_source(1, items=[
+        "\\bibitem{part1}\n \\newblock  G. Allaire,\n \\newblock Tiny holes I. Abstract framework,"
+        "\n \\newblock \\emph{Arch. Ration. Mech. Anal.}, \\textbf{113}, (1991), 209 -- 259.",
+        "\\bibitem{part2}\n \\newblock  G. Allaire,\n \\newblock Tiny holes II. Non-critical sizes,"
+        "\n \\newblock \\emph{Arch. Ration. Mech. Anal.}, \\textbf{113}, (1991), 261 -- 298.",
+    ], cites=["part1", "part2"])])
+    rows = {row["citation_key"]: row for row in result.entries}
+    assert set(rows) == {"part1", "part2"}
+    assert rows["part1"]["title"] == "Tiny holes I. Abstract framework"
+    assert rows["part2"]["title"] == "Tiny holes II. Non-critical sizes"
+    assert rows["part1"]["authors"] == ["G. Allaire"]
+
+
+def test_bibitem_leading_newblock_with_authors_and_title_in_one_block():
+    # 2409.20363: "\newblock Authors. Title. \newblock Journal" has only two
+    # blocks, so the first one holds both the authors and the title.
+    result = merge_bibtex(ARXIV_ID, [_source(1, items=[
+        "\\bibitem{st}\n\\newblock Stefano Serra-Capizzano and Eugene Tyrtyshnikov. Any circulant-like"
+        " preconditioner is not superlinear.\n\\newblock {\\em SIAM J. Matrix Anal. Appl.}, 21: 431--439, 1999.",
+    ], cites=["st"])])
+    row = result.entries[0]
+    assert row["title"] == "Any circulant-like preconditioner is not superlinear"
+    assert row["authors"] == ["Stefano Serra-Capizzano", "Eugene Tyrtyshnikov"]
