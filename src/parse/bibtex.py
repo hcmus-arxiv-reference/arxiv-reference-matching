@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from src.parse.types import BibResult, BibSource
 
 
-BIBTEX_VERSION = "7"
+BIBTEX_VERSION = "8"
 # pylatexenc 2.10 has a text replacement for href, but no default argument
 # specification. Register both so linked titles and missing arguments are safe.
 _BIB_PARSER = get_parser_context()
@@ -412,7 +412,21 @@ def _bibitem_parts(body: str) -> tuple[str | None, list[str] | None]:
         author_text = body[:quote.start()]
         title = next(group for group in quote.groups() if group is not None)
     elif len(blocks := re.split(r"\\newblock(?![A-Za-z@])", body)) > 1:
-        author_text, title = blocks[:2]
+        if blocks[0].strip():
+            author_text, title = blocks[:2]
+        elif len(blocks) > 3:
+            # Some styles open the item with \newblock before the authors
+            # (2508.04688): the empty text before it is not the author block.
+            author_text, title = blocks[1:3]
+        else:
+            # "\newblock Authors. Title. \newblock Journal": the first block
+            # holds both, so read it like an item without \newblock. When no
+            # title is found there (e.g. "Lance, E.C.: Title"), keep the whole
+            # block as the title, which still carries the title words.
+            remainder, authors = _plain_bibitem_fields(blocks[1])
+            if title := _title_text(_plain_title(remainder)):
+                return title, authors
+            author_text, title = blocks[:2]
     else:
         remainder, authors = _plain_bibitem_fields(body)
         return _title_text(_plain_title(remainder)), authors
